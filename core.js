@@ -141,7 +141,10 @@ class Engine {
             hide(introSectionClick);
             show(introSection);
             
-            this.Timeout(() => this._callback(), 6000);
+            const testAudio = new Audio("https://raw.githubusercontent.com/DonDejvo/Lancelot/main/empty.mp3");
+            testAudio.play();
+            
+            this.Timeout(() => this._callback(), 5000);
 
         }, { once: true });
 
