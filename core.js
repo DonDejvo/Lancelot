@@ -141,7 +141,7 @@ class Engine {
             hide(introSectionClick);
             show(introSection);
             
-            this.Timeout(() => this._callback(), 3000);
+            this.Timeout(() => this._callback(), 6000);
 
         }, { once: true });
 
