@@ -141,7 +141,7 @@ class Engine {
             hide(introSectionClick);
             show(introSection);
             
-            this.Timeout(() => this._callback(), 3000);
+            this.Timeout(() => this._callback(), 2000);
 
         }, { once: true });
 
@@ -532,7 +532,7 @@ class Scene {
         this._resources = params.resources;
         this._input = params.input;
         this._bounds = params.bounds;
-        this._cellDimension = (params.cellDimension || [32, 32]);
+        this._cellDimensions = (params.cellDimensions || [50, 50]);
         this._interactiveEntities = [];
 
         this._Init();
@@ -540,7 +540,7 @@ class Scene {
     _Init() {
         this._paused = true;
         this._entityManager = new EntityManager();
-        this._spatialGrid = new SpatialHashGrid(this._bounds, [Math.floor((this._bounds[1][0] - this._bounds[0][0]) / this._cellDimension[0]), Math.floor((this._bounds[1][1] - this._bounds[0][1]) / this._cellDimension[1])]);
+        this._spatialGrid = new SpatialHashGrid(this._bounds, [Math.floor((this._bounds[1][0] - this._bounds[0][0]) / this._cellDimensions[0]), Math.floor((this._bounds[1][1] - this._bounds[0][1]) / this._cellDimensions[1])]);
         this._camera = new Camera();
         this._drawable = [];
         this._eventHandlers = new Map();
@@ -1375,6 +1375,7 @@ class Body extends Component {
             x: (this._params.frictionX || 0),
             y: (this._params.frictionY || 0)
         };
+        this._bounce = (this._params.bounce || 0);
         this._decceleration = new Vector(-100 * this._friction.x, -100 * this._friction.y);
         this._mass = (this._params.mass || 0);
         this._collisions = {left: new Set(), right: new Set(), top: new Set(), bottom: new Set()};
@@ -1428,11 +1429,13 @@ class Body extends Component {
 
         const gridController = this.GetComponent("SpatialGridController");
         for(let obj of this._behavior) {
-            const entities = gridController.FindNearby(this.width * 4, this.height * 4).filter(e => e.groupList.has(obj.group));
+            const entities = gridController.FindNearby(this.width + Math.abs(this._pos.x - this._oldPos.x), this.height + Math.abs(this._pos.y - this._oldPos.y)).filter(e => e.groupList.has(obj.group));
             entities.sort((a, b) => Vector.Dist(this._pos, a.body._pos) / new Vector(this.width + a.body.width, this.height + a.body.height).Mag() - Vector.Dist(this._pos, b.body._pos) / new Vector(this.width + b.body.width, this.height + b.body.height).Mag());
             for(let e of entities) {
                 if(obj.type == "resolveCollision") {
-                    physics.ResolveCollision(this, e.body);
+                    if(physics.ResolveCollision(this, e.body)) {
+                        if(obj.action) obj.action();
+                    }
                 } else if(obj.type == "isCollision") {
                     if(physics.DetectCollision(this, e.body)) {
                         obj.action();
@@ -1515,18 +1518,6 @@ const ResolveCollisionBoxVsBox = (b1, b2) => {
     const vec1 = b1._pos.Clone().Sub(b1._oldPos);
     const vec2 = b2._pos.Clone().Sub(b2._oldPos);
 
-    if(Math.abs(b1._oldPos.x - b2._oldPos.x) < (b1._width + b2._width) / 2 && Math.abs(b1._oldPos.y - b2._oldPos.y) < (b1._height + b2._height) / 2) {
-        if(Math.abs(b2._oldPos.x - b1._oldPos.x) / (b1._width + b2._width) >= Math.abs(b2._oldPos.y - b1._oldPos.y) / (b1._height + b2._height)) {
-            const diff = ((b1._height + b2._height) / 2 - (b2._oldPos.y - b1._oldPos.y)) / (b1.inverseMass + b2.inverseMass);
-            b1._oldPos.y -= diff * b1.inverseMass;
-            b2._oldPos.y += diff * b2.inverseMass;
-        } else {
-            const diff = ((b1._width + b2._width) / 2 - (b2._oldPos.x - b1._oldPos.x)) / (b1.inverseMass + b2.inverseMass);
-            b1._oldPos.x -= diff * b1.inverseMass;
-            b2._oldPos.x += diff * b2.inverseMass;
-        }
-    }
-
     let relationX, relationY;
     if(b1.oldRight <= b2.oldLeft) relationX = 1;
     else if(b1.oldLeft >= b2.oldRight) relationX = -1;
@@ -1536,6 +1527,29 @@ const ResolveCollisionBoxVsBox = (b1, b2) => {
     else relationY = 0;
 
     let collided = false;
+
+    if(b1._mass != 0 && b2._mass != 0) {
+
+        if(Math.abs(b1._pos.x - b2._pos.x) < (b1._width + b2._width) / 2 && Math.abs(b1._pos.y - b2._pos.y) < (b1._height + b2._height) / 2) {
+            
+            collided = true;
+            
+            if(relationX == 0) {
+                const diff = ((b1._height + b2._height) / 2 - (b2._pos.y - b1._pos.y)) / (b1.inverseMass + b2.inverseMass);
+                b1._pos.y -= diff * b1.inverseMass;
+                b1._oldPos.y = b1._pos.y;
+                b2._pos.y += diff * b2.inverseMass;
+                b2._oldPos.y = b2._pos.y;
+            } else {
+                const diff = ((b1._width + b2._width) / 2 - (b2._pos.x - b1._pos.x)) / (b1.inverseMass + b2.inverseMass);
+                b1._pos.x -= diff * b1.inverseMass;
+                b1._oldPos.x = b1._pos.x;
+                b2._pos.x += diff * b2.inverseMass;
+                b2._oldPos.x = b2._pos.x;
+            }
+        }
+
+    }
 
     if(relationY != 0 && collided == false) {
 
@@ -1553,14 +1567,14 @@ const ResolveCollisionBoxVsBox = (b1, b2) => {
                 if(b._mass == 0) {
 
                     if((t._vel.y >= -t._passiveVel.y || t._vel.y >= 0)) {
-                        t._pos.y = b.top - t._height / 2;
-                        if(t._vel.y > 0) t._vel.y = 0;
+                        t._oldPos.y = t._pos.y = b.top - t._height / 2;
+                        if(t._vel.y > 0) t._vel.y = -t._bounce;
                     }
                 } else if(t._mass == 0) {
 
                     if((b._vel.y <= -b._passiveVel.y || b._vel.y <= 0)) {
-                        b._pos.y = t.bottom + b._height / 2;
-                        if(b._vel.y < 0) b._vel.y = 0;
+                        b._oldPos.y = b._pos.y = t.bottom + b._height / 2;
+                        if(b._vel.y < 0) b._vel.y = -b._bounce;
                     }
                 }
 
@@ -1589,14 +1603,14 @@ const ResolveCollisionBoxVsBox = (b1, b2) => {
                 if(r._mass == 0) {
 
                     if((l._vel.x >= -l._passiveVel.x || l._vel.x >= 0)) {
-                        l._pos.x = r.left - l._width / 2;
-                        if(l._vel.x > 0) l._vel.x = 0;
+                        l._oldPos.x = l._pos.x = r.left - l._width / 2;
+                        if(l._vel.x > 0) l._vel.x *= -l._bounce;
                     }
                 } else if(l._mass == 0) {
 
                     if((r._vel.x <= -r._passiveVel.x || r._vel.x <= 0)) {
-                        r._pos.x = l.right + r._width / 2;
-                        if(r._vel.x < 0) r._vel.x = 0;
+                        r._oldPos.x = r._pos.x = l.right + r._width / 2;
+                        if(r._vel.x < 0) r._vel.x *= -r._bounce;
                     }
                 }
 
@@ -1606,6 +1620,7 @@ const ResolveCollisionBoxVsBox = (b1, b2) => {
         }
     }
 
+    return collided;
     
 }
 

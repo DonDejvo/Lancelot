@@ -48,16 +48,6 @@
     display: flex;
     align-items: center;
     filter: drop-shadow(0px 0px 15px white);
-    animation: glow 4s infinite;
-}
-
-@keyframes glow {
-    50% {
-        filter: drop-shadow(0px 0px 15px black);
-    }
-    100% {
-        filter: drop-shadow(0px 0px 15px white);
-    }
 }
 
 .intro-section_label {
