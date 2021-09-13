@@ -68,8 +68,7 @@ class Game {{
     }}
 }}
 window.addEventListener("DOMContentLoaded", () => new Game());
-    """
-    content.format(width = width, height = height)
+    """.format(width = width, height = height)
     f.write(content)
     f.close()
 
