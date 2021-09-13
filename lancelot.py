@@ -110,7 +110,7 @@ def UpdateProject():
 
 argCount = len(sys.argv)
 
-if len(argCount) < 2:
+if argCount < 2:
     ShowHelp()
     exit(1)
 else:
