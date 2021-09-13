@@ -1568,13 +1568,13 @@ const ResolveCollisionBoxVsBox = (b1, b2) => {
 
                     if((t._vel.y >= -t._passiveVel.y || t._vel.y >= 0)) {
                         t._oldPos.y = t._pos.y = b.top - t._height / 2;
-                        if(t._vel.y > 0) t._vel.y = -t._bounce;
+                        if(t._vel.y > 0) t._vel.y *= -t._bounce;
                     }
                 } else if(t._mass == 0) {
 
                     if((b._vel.y <= -b._passiveVel.y || b._vel.y <= 0)) {
                         b._oldPos.y = b._pos.y = t.bottom + b._height / 2;
-                        if(b._vel.y < 0) b._vel.y = -b._bounce;
+                        if(b._vel.y < 0) b._vel.y *= -b._bounce;
                     }
                 }
 
