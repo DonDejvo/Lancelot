@@ -1407,7 +1407,7 @@ class Body extends Component {
         this._vel.Copy(vel);
     }
     AddBehavior(type, group, action) {
-        this._behavior.push({ type: type, action: action, group: group });
+        this._behavior.push({ type: type, action: action, groups: group });
     }
     Contains(p) {
         return false;
@@ -1434,11 +1434,11 @@ class Body extends Component {
             for(let e of entities) {
                 if(obj.type == "resolveCollision") {
                     if(physics.ResolveCollision(this, e.body)) {
-                        if(obj.action) obj.action();
+                        if(obj.action) obj.action(e);
                     }
-                } else if(obj.type == "isCollision") {
+                } else if(obj.type == "detectCollision") {
                     if(physics.DetectCollision(this, e.body)) {
-                        obj.action();
+                        obj.action(e);
                     }
                 }
             }
@@ -1626,8 +1626,9 @@ const ResolveCollisionBoxVsBox = (b1, b2) => {
 
 const ResolveCollision = (b1, b2) => {
     if(b1.constructor.name == "Box" && b2.constructor.name == "Box") {
-        ResolveCollisionBoxVsBox(b1, b2);
+        return ResolveCollisionBoxVsBox(b1, b2);
     }
+    return false;
 }
 
 const DetectCollisionBoxVsBox = (b1, b2) => {
