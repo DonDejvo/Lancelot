@@ -1362,7 +1362,7 @@ class Sprite extends Drawable {
     }
 }
 
-class TrailEffect extends Lancelot.drawable.Drawable {
+class TrailEffect extends Drawable {
     constructor(params) {
         super(params);
         this._count = (this._params.count || 45);
