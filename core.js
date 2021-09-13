@@ -1407,7 +1407,7 @@ class Body extends Component {
         this._vel.Copy(vel);
     }
     AddBehavior(type, group, action) {
-        this._behavior.push({ type: type, action: action, groups: group });
+        this._behavior.push({ type: type, action: action, group: group });
     }
     Contains(p) {
         return false;
