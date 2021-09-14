@@ -473,11 +473,11 @@ class Renderer {
         this._context.fillStyle = this._bgColor;
         this._context.fillRect(0, 0, this._width, this._height);
         this._context.save();
-        this._context.translate(-scene._camera._pos.x * scene._camera._scale + this._width / 2, -scene._camera._pos.y * scene._camera._scale + this._height / 2);
+        this._context.translate(-scene._camera.pos.x * scene._camera._scale + this._width / 2, -scene._camera.pos.y * scene._camera._scale + this._height / 2);
         this._context.scale(scene._camera._scale, scene._camera._scale);
         for(let elem of scene._drawable) {
             const pos = elem._pos.Clone();
-            pos.Sub(scene._camera._pos);
+            pos.Sub(scene._camera.pos);
             pos.Mult(scene._camera._scale);
             const [width, height] = [elem.width, elem.height].map((_) => _ * scene._camera._scale);
             if(
@@ -539,6 +539,7 @@ class Scene {
     }
     _Init() {
         this._paused = true;
+        this._speed = 1.0;
         this._entityManager = new EntityManager();
         this._spatialGrid = new SpatialHashGrid(this._bounds, [Math.floor((this._bounds[1][0] - this._bounds[0][0]) / this._cellDimensions[0]), Math.floor((this._bounds[1][1] - this._bounds[0][1]) / this._cellDimensions[1])]);
         this._camera = new Camera();
@@ -661,6 +662,7 @@ class Scene {
     }
     Update(elapsedTimeS) {
         if (this._paused) { return; }
+        elapsedTimeS *= this._speed;
         this._entityManager.Update(elapsedTimeS);
         this._camera.Update(elapsedTimeS);
     }
@@ -761,6 +763,20 @@ class Camera {
         this._vel = new Vector();
         this._scaling = null;
         this._moving = null;
+        this._shaking = null;
+        this._offset = new Vector();
+    }
+    get pos() {
+        return this._pos.Clone().Add(this._offset);
+    }
+    get shaking() {
+        return this._shaking;
+    }
+    get scaling() {
+        return this._scaling;
+    }
+    get moving() {
+        return this._moving;
     }
     Follow(target) {
         this._target = target;
@@ -792,17 +808,20 @@ class Camera {
             timing: timing
         };
     }
+    Shake(range, dur, count, angle) {
+        this._shaking = {
+            counter: 0,
+            count: count,
+            angle: angle,
+            dur: dur,
+            range: range
+        };
+    }
     Reset() {
         this._pos = new Vector(0, 0);
         this._scale = 1.0;
         this._scaling = null;
         this._moving = null;
-    }
-    get scaling() {
-        return this._scaling;
-    }
-    get moving() {
-        return this._moving;
     }
     Update(elapsedTimeS) {
 
@@ -857,6 +876,16 @@ class Camera {
                     break;
             }
             this._scale = math.lerp(value, anim.from, anim.to);
+            if (progress == 1) {
+                this._scaling = null;
+            }
+        }
+
+        if(this._shaking) {
+            const anim = this._shaking;
+            anim.counter += elapsedTimeS * 1000;
+            const progress = Math.min(anim.counter / anim.dur, 1);
+            this._offset.Copy(new Vector(Math.sin(progress * Math.PI * 2 * anim.count) * anim.range, 0).Rotate(anim.angle));
             if (progress == 1) {
                 this._scaling = null;
             }
@@ -1365,10 +1394,10 @@ class Sprite extends Drawable {
 class TrailEffect extends Drawable {
     constructor(params) {
         super(params);
-        this._count = (this._params.count || 45);
+        this._dur = (this._params.dur || 1000);
         this._lineWidth = (this._params.lineWidth || 5);
         this._rgb = (this._params.rgb || [255, 255, 255]);
-        this._previousPositions = [];
+        this._frames = [];
         this._width = (this._params.width || 100);
         this._height = (this._params.height || 100);
     }
@@ -1378,15 +1407,20 @@ class TrailEffect extends Drawable {
     get height() {
         return this._height;
     }
-    Draw(ctx) {
-        this._previousPositions.unshift(this._pos.Clone());
-        if(this._previousPositions.length > this._count) {
-            this._previousPositions.length = this._count;
+    Update(elapsedTimeS) {
+        this._frames.unshift({ pos: this._pos.Clone(), counter: 0 });
+        for(let i = 0; i < this._frames.length; ++i) {
+            this._frames[i].counter += elapsedTimeS * 1000;
+            if(this._frames[i].counter >= this._dur) {
+                this._frames.splice(i--, 1);
+            }
         }
+    }
+    Draw(ctx) {
         ctx.save();
-        for(let i = 0; i < this._previousPositions.length - 1; ++i) {
-            const pos1 = this._previousPositions[i];
-            const pos2 = this._previousPositions[i + 1];
+        for(let i = 0; i < this._frames.length - 1; ++i) {
+            const pos1 = this._frames[i].pos;
+            const pos2 = this._frames[i + 1].pos;
             
             const grd = ctx.createLinearGradient(pos1.x, pos1.y, pos2.x, pos2.y);
             grd.addColorStop(0, `rgba(${this._rgb.join(",")},${(this._count - i) / this._count})`);
