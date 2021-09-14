@@ -1461,12 +1461,8 @@ class Body extends Component {
         this._oldPos.Copy(this._pos);
         this._vel.Add(frameDecceleration.Mult(elapsedTimeS));
 
-        
-
-        if (Math.abs(this._vel.x) < 1) this._vel.x = 0;
-        if (Math.abs(this._vel.y) < 1) this._vel.y = 0;
         this._pos.Add(this._vel.Clone().Mult(elapsedTimeS));
-
+        this._pos.Add(this._passiveVel.Clone().Mult(elapsedTimeS));
         
 
         const gridController = this.GetComponent("SpatialGridController");
@@ -1476,28 +1472,15 @@ class Body extends Component {
             for(let e of entities) {
                 if(obj.type == "resolveCollision") {
                     if(physics.ResolveCollision(this, e.body)) {
-                        if(obj.action) obj.action(e);
+                        if(obj.action) obj.action();
                     }
-                } else if(obj.type == "detectCollision") {
+                } else if(obj.type == "isCollision") {
                     if(physics.DetectCollision(this, e.body)) {
-                        obj.action(e);
+                        obj.action();
                     }
                 }
             }
         }
-
-        if (this._options.followBottomObject && this._mass != 0) {
-            this._passiveVel = new Vector();
-            for (let b of Array.from(this._collisions.bottom)) {
-
-                if (b._vel.Mag() == 0) { continue; }
-
-                this._passiveVel.Add(b._vel);
-
-            }
-        }
-
-        this._pos.Add(this._passiveVel.Clone().Mult(elapsedTimeS));
 
     }
 
@@ -1556,6 +1539,7 @@ class Box extends Body {
 const ResolveCollisionBoxVsBox = (b1, b2) => {
 
     if(b1._mass == 0 && b2._mass == 0) { return; }
+    const SMALL_NUMBER = 0.0001;
     
     const vec1 = b1._pos.Clone().Sub(b1._oldPos);
     const vec2 = b2._pos.Clone().Sub(b2._oldPos);
@@ -1596,7 +1580,8 @@ const ResolveCollisionBoxVsBox = (b1, b2) => {
     if(relationY != 0 && collided == false) {
 
         const offsetY = relationY * (b1._height + b2._height) / 2;
-        const t = (b1._oldPos.y - b2._oldPos.y + offsetY) / (vec2.y - vec1.y);
+        const dy = vec2.y - vec1.y;
+        const t = (b1._oldPos.y - b2._oldPos.y + offsetY) / (dy);
 
         if(t >= 0 && t <= 1) {
 
@@ -1609,13 +1594,17 @@ const ResolveCollisionBoxVsBox = (b1, b2) => {
                 if(b._mass == 0) {
 
                     if((t._vel.y >= -t._passiveVel.y || t._vel.y >= 0)) {
-                        t._oldPos.y = t._pos.y = b.top - t._height / 2;
+                        t._oldPos.y = t._pos.y = b.top - t._height / 2 - SMALL_NUMBER;
                         if(t._vel.y > 0) t._vel.y *= -t._bounce;
+                        if(t._options.followBottomObject) {
+                            t._passiveVel.Copy(b._vel);
+                        }
                     }
+                    
                 } else if(t._mass == 0) {
 
                     if((b._vel.y <= -b._passiveVel.y || b._vel.y <= 0)) {
-                        b._oldPos.y = b._pos.y = t.bottom + b._height / 2;
+                        b._oldPos.y = b._pos.y = t.bottom + b._height / 2 + SMALL_NUMBER;
                         if(b._vel.y < 0) b._vel.y *= -b._bounce;
                     }
                 }
@@ -1630,7 +1619,8 @@ const ResolveCollisionBoxVsBox = (b1, b2) => {
     if(relationX != 0 && collided == false) {
 
         const offsetX = relationX * (b1._width + b2._width) / 2;
-        const t = (b1._oldPos.x - b2._oldPos.x + offsetX) / (vec2.x - vec1.x);
+        const dx = vec2.x - vec1.x;
+        let t = (b1._oldPos.x - b2._oldPos.x + offsetX) / (dx);
 
         if(t >= 0 && t <= 1) {
 
@@ -1645,13 +1635,13 @@ const ResolveCollisionBoxVsBox = (b1, b2) => {
                 if(r._mass == 0) {
 
                     if((l._vel.x >= -l._passiveVel.x || l._vel.x >= 0)) {
-                        l._oldPos.x = l._pos.x = r.left - l._width / 2;
+                        l._oldPos.x = l._pos.x = r.left - l._width / 2 - SMALL_NUMBER;
                         if(l._vel.x > 0) l._vel.x *= -l._bounce;
                     }
                 } else if(l._mass == 0) {
 
                     if((r._vel.x <= -r._passiveVel.x || r._vel.x <= 0)) {
-                        r._oldPos.x = r._pos.x = l.right + r._width / 2;
+                        r._oldPos.x = r._pos.x = l.right + r._width / 2 + SMALL_NUMBER;
                         if(r._vel.x < 0) r._vel.x *= -r._bounce;
                     }
                 }
