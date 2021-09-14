@@ -54,8 +54,11 @@ class Vector {
         this.y /= z;
         return this;
     }
+    MagSquared(){
+        return Math.pow(this.x, 2) + Math.pow(this.y, 2);
+    }
     Mag() {
-        return Math.sqrt(Math.pow(this.x, 2) + Math.pow(this.y, 2));
+        return Math.sqrt(this.MagSquared());
     }
     Lerp(v1, alpha) {
         this.Add(v1.Clone().Sub(this).Mult(alpha));
@@ -1301,6 +1304,32 @@ class Rect extends Drawable {
     }
 }
 
+class Circle extends Drawable {
+    constructor(params) {
+        super(params);
+        this._radius = this._params.radius;
+    }
+    get width() {
+        return this._radius * 2;
+    }
+    get height() {
+        return this._radius * 2;
+    }
+    Draw(ctx) {
+        ctx.beginPath();
+        ctx.save();
+        ctx.globalAlpha = this._opacity;
+        ctx.translate(this._pos.x, this._pos.y);
+        ctx.fillStyle = this._background;
+        ctx.strokeStyle = this._borderColor;
+        ctx.lineWidth = this._borderWidth;
+        ctx.arc(0, 0, this._radius, 0, 2 * Math.PI);
+        ctx.fill();
+        if(this._borderWidth > 0) ctx.stroke();
+        ctx.restore();
+    }
+}
+
 class Sprite extends Drawable {
     constructor(params) {
         super(params);
@@ -1703,6 +1732,7 @@ class Ball extends Body {
         super(params);
         this._radius = this._params.radius;
     }
+
     get width() {
         return this._radius * 2;
     }
@@ -1719,14 +1749,37 @@ class Ball extends Body {
     }
 }
 
-const ResolveCollisionBallVsBall = (b1, b2) => {
-
-    return false;
+const DetectCollisionBallVsBall = (b1, b2) => {
+    let radiusSum = b1._radius + b2._radius;
+    let vectorFrom1to2 = b2._pos.Clone().Sub(b1._pos);
+    if(vectorFrom1to2.MagSquared() < Math.pow(rSum, 2)){
+        return {
+            collided : true,
+            info : {
+                d : radiusSum - vectorFrom1to2.Mag(),
+                n : vectorFrom1to2.Unit(),
+            } 
+        }
+    }
+    return {
+        collided : false,
+        info : null
+    };
 }
 
-const DetectCollisionBallVsBall = (b1, b2) => {
-
-    return false;
+const ResolveCollisionBallVsBall = (b1, b2) => {
+    let detection = DetectCollisionBallVsBall(b1, b2);
+    if(detection.collided){
+        let relativeVel = b1._vel.Sub(b2._vel);
+        let avgBounce = (b1._bounce + b2._bounce) / 2;
+        let impulseMagnitude = ((-(1 + avgBounce) * (relativeVel.Dot(detection.info.n))) / (b1.inverseMass + b2.inverseMass));
+        let impulseDirection = detection.info.n;
+        let jn = impulseDirection.Mult(impulseMagnitude);
+        b1._vel = b1._vel.Add(jn.Mult(b1.inverseMass));
+        b2._vel = b2._vel.Sub(jn.Mult(b2.inverseMass));
+    }else{
+        return false;
+    }
 }
 
 const ResolveCollision = (b1, b2) => {
@@ -1866,6 +1919,7 @@ const drawable = {
     Text,
     Picture,
     Rect,
+    Circle,
     Sprite,
     TrailEffect
 };
