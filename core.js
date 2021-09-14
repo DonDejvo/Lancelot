@@ -1693,24 +1693,58 @@ const ResolveCollisionBoxVsBox = (b1, b2) => {
     
 }
 
-const ResolveCollision = (b1, b2) => {
-    if(b1.constructor.name == "Box" && b2.constructor.name == "Box") {
-        return ResolveCollisionBoxVsBox(b1, b2);
-    }
-    return false;
-}
-
 const DetectCollisionBoxVsBox = (b1, b2) => {
     return Math.abs(b1._pos.x - b2._pos.x) < (b1._width + b2._width) / 2 &&
         Math.abs(b1._pos.y - b2._pos.y) < (b1._height + b2._height) / 2;
 }
 
+class Ball extends Body {
+    constructor(params) {
+        super(params);
+        this._radius = this._params.radius;
+    }
+    get width() {
+        return this._radius * 2;
+    }
+    get height() {
+        return this._radius * 2;
+    }
+    set radius(val) {
+        this._radius = val;
+        this.GetComponent("SpatialGridController").width = this.width;
+        this.GetComponent("SpatialGridController").height = this.height;
+    }
+    Contains(p) {
+
+    }
+}
+
+const ResolveCollisionBallVsBall = (b1, b2) => {
+
+    return false;
+}
+
+const DetectCollisionBallVsBall = (b1, b2) => {
+
+    return false;
+}
+
+const ResolveCollision = (b1, b2) => {
+    if(b1.constructor.name == "Box" && b2.constructor.name == "Box") {
+        return ResolveCollisionBoxVsBox(b1, b2);
+    } else if(b1.constructor.name == "Ball" && b2.constructor.name == "Ball") {
+        return ResolveCollisionBallVsBall(b1, b2);
+    }
+    return false;
+}
+
 const DetectCollision = (b1, b2) => {
     if(b1.constructor.name == "Box" && b2.constructor.name == "Box") {
         return DetectCollisionBoxVsBox(b1, b2);
-    } else {
-        return false;
+    } else if(b1.constructor.name == "Ball" && b2.constructor.name == "Ball") {
+        return DetectCollisionBallVsBall(b1, b2);
     }
+    return false;
 }
 
 class Loader {
