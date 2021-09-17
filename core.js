@@ -64,6 +64,15 @@ class Vector {
         this.Add(v1.Clone().Sub(this).Mult(alpha));
         return this;
     }
+    Rotate(angle) {
+        const sin = Math.sin(angle);
+        const cos =  Math.cos(angle);
+        const x = this.x * cos - this.y * sin;
+        const y = this.x * sin + this.y * cos;
+        this.x = x;
+        this.y = y;
+        return this;
+    }
     Angle() {
         return Math.atan2(this.y, this.x);
     }
@@ -108,6 +117,29 @@ const math = (function () {
         },
         ease_in(x) {
             return Math.min(Math.max(Math.pow(x, 3), 0), 1);
+        }
+    };
+})();
+
+const side = (function() {
+    return {
+        fromAngle(angle) {
+            const sin = Math.sin(angle);
+            const cos = Math.cos(angle);
+            const y0 = Math.SQRT2 / 2;
+            if(cos >= y0) return "right";
+            if(cos <= -y0) return "left";
+            if(sin >= y0) return "bottom";
+            if(sin <= -y0) return "top";
+        },
+        opposite(s) {
+            const oppositeSide = {
+                "left": "right",
+                "right": "left",
+                "top": "bottom",
+                "bottom": "top"
+            };
+            return oppositeSide[s];
         }
     };
 })();
@@ -622,6 +654,7 @@ class Scene {
         const body = e.GetComponent("Body");
         if (body) {
             e.body = body;
+            
             const gridController = new SpatialGridController({
                 grid: this._spatialGrid,
                 width: body.width,
@@ -1136,14 +1169,20 @@ class Drawable extends Component {
         super();
         this._type = "drawable";
         this._params = params;
+        this._pos = new Vector();
+        this._width = (this._params.width || 0);
+        this._height = (this._params.height || 0);
+        this._height = 0;
         this._fixed = this._params.fixed === undefined ? true : this._params.fixed;
         this._zIndex = (this._params.zIndex || 0);
         this._flip = {
             x: (this._params.flipX || false),
             y: (this._params.flipY || false)
         };
-        this._rotationCount = (this._params.rotationCount || 0);
+        this._angle = (this._params.angle || 0);
         this._opacity = this._params.opacity !== undefined ? this._params.opacity : 1;
+
+        this._boundingBox = { width: 0, height: 0 };
     }
     set zIndex(val) {
         this._zIndex = val;
@@ -1153,18 +1192,50 @@ class Drawable extends Component {
         }
     }
     get width() {
-        return 0;
+        return this._boundingBox.width;
     }
     get height() {
-        return 0;
+        return this._boundingBox.height;
     }
-    get angle() {
-        return Math.PI / 2 * this._rotationCount;
+    set width(val) {
+        this._width = val;
+        this._UpdateBoundingBox();
+    }
+    set height(val) {
+        this._height = val;
+        this._UpdateBoundingBox();
+    }
+    set angle(val) {
+        this._angle = val;
+        this._UpdateBoundingBox();
     }
     InitComponent() {
         if(this._fixed) {
             this._pos = this._parent._pos;
         }
+        this._UpdateBoundingBox();
+    }
+    _UpdateBoundingBox() {
+        const vertices = new Array(4);
+        vertices[0] = new Vector(-this._width / 2, -this._height / 2).Rotate(this._angle);
+        vertices[1] = new Vector(this._width / 2, -this._height / 2).Rotate(this._angle);
+        vertices[2] = new Vector(this._width / 2, this._height / 2).Rotate(this._angle);
+        vertices[3] = new Vector(-this._width / 2, this._height / 2).Rotate(this._angle);
+        let width = 0, height = 0;
+        for(let i = 0; i < 2; ++i) {
+            const w = Math.abs(vertices[i].x) + Math.abs(vertices[i + 2].x);
+            const h = Math.abs(vertices[i].y) + Math.abs(vertices[i + 2].y);
+            if(w > width) {
+                width = w;
+            }
+            if(h > height) {
+                height = h;
+            }
+        }
+        this._boundingBox = {
+            width: width,
+            height: height
+        };
     }
     SetSize(w, h) {
         this._width = w;
@@ -1207,12 +1278,6 @@ class Text extends Drawable {
         this._padding = val;
         this._ComputeDimensions();
     }
-    get width() {
-        return this._rotationCount % 2 == 0 ? this._width : this._height;
-    }
-    get height() {
-        return this._rotationCount % 2 == 1 ? this._width : this._height;
-    }
     _ComputeDimensions() {
         this._height = this.lineHeight * this.linesCount;
         let maxWidth = 0;
@@ -1225,13 +1290,14 @@ class Text extends Drawable {
             }
         }
         this._width = maxWidth;
+        this._UpdateBoundingBox();
     }
     Draw(ctx) {
         ctx.beginPath();
         ctx.save();
         ctx.globalAlpha = this._opacity;
         ctx.translate(this._pos.x, this._pos.y);
-        ctx.rotate(this.angle);
+        ctx.rotate(this._angle);
         ctx.fillStyle = this._color;
         ctx.font = `${this._fontSize}px '${this._fontFamily}'`;
         ctx.textAlign = "center";
@@ -1256,18 +1322,12 @@ class Picture extends Drawable {
             y: (this._params.posY || 0)
         };
     }
-    get width() {
-        return this._rotationCount % 2 == 0 ? this._width : this._height;
-    }
-    get height() {
-        return this._rotationCount % 2 == 1 ? this._width : this._height;
-    }
     Draw(ctx) {
         ctx.save();
         ctx.globalAlpha = this._opacity;
         ctx.translate(this._pos.x, this._pos.y);
         ctx.scale(this._flip.x ? -1 : 1, this._flip.y ? -1 : 1);
-        ctx.rotate(this.angle);
+        ctx.rotate(this._angle);
         ctx.drawImage(this._image, this._framePos.x * this._frameWidth, this._framePos.y * this._frameHeight, this._frameWidth, this._frameHeight, -this._width / 2, -this._height / 2, this._width, this._height);
         ctx.restore();
     }
@@ -1282,18 +1342,13 @@ class Rect extends Drawable {
         this._borderColor = (this._params.borderColor || "black");
         this._borderWidth = (this._params.borderWidth || 0);
     }
-    get width() {
-        return this._rotationCount % 2 == 0 ? this._width : this._height;
-    }
-    get height() {
-        return this._rotationCount % 2 == 1 ? this._width : this._height;
-    }
+
     Draw(ctx) {
         ctx.beginPath();
         ctx.save();
         ctx.globalAlpha = this._opacity;
         ctx.translate(this._pos.x, this._pos.y);
-        ctx.rotate(this.angle);
+        ctx.rotate(this._angle);
         ctx.fillStyle = this._background;
         ctx.strokeStyle = this._borderColor;
         ctx.lineWidth = this._borderWidth;
@@ -1308,12 +1363,19 @@ class Circle extends Drawable {
     constructor(params) {
         super(params);
         this._radius = this._params.radius;
+        this._background = (this._params.background || "black");
+        this._borderColor = (this._params.borderColor || "black");
+        this._borderWidth = (this._params.borderWidth || 0);
     }
-    get width() {
-        return this._radius * 2;
+    set radius(val) {
+        this._radius = val;
+        this._UpdateBoundingBox();
     }
-    get height() {
-        return this._radius * 2;
+    _UpdateBoundingBox() {
+        this._boundingBox = {
+            width: this._radius * 2,
+            height: this._radius * 2
+        }
     }
     Draw(ctx) {
         ctx.beginPath();
@@ -1339,12 +1401,6 @@ class Sprite extends Drawable {
         this._currentAnim = null;
         this._paused = true;
         this._framePos = {x: 0, y: 0};
-    }
-    get width() {
-        return this._rotationCount % 2 == 0 ? this._width : this._height;
-    }
-    get height() {
-        return this._rotationCount % 2 == 1 ? this._width : this._height;
     }
     AddAnim(n, frames) {
         this._anims[n] = frames;
@@ -1410,7 +1466,7 @@ class Sprite extends Drawable {
         ctx.globalAlpha = this._opacity;
         ctx.translate(this._pos.x, this._pos.y);
         ctx.scale(this._flip.x ? -1 : 1, this._flip.y ? -1 : 1);
-        ctx.rotate(this.angle);
+        ctx.rotate(this._angle);
         ctx.drawImage(
             this._params.image,
             this._framePos.x * this._params.frameWidth, this._framePos.y * this._params.frameHeight, this._params.frameWidth, this._params.frameHeight,  
@@ -1432,12 +1488,6 @@ class TrailEffect extends Drawable {
     }
     get count() {
         return this._frames.length;
-    }
-    get width() {
-        return this._width;
-    }
-    get height() {
-        return this._height;
     }
     Update(elapsedTimeS) {
         this._frames.unshift({ pos: this._pos.Clone(), counter: 0 });
@@ -1559,6 +1609,22 @@ class Box extends Body {
         this._height = params.height;
         this._edges = (params.edges || [1, 1, 1, 1]);
     }
+
+    _Project(n, verts){
+        let min = Infinity;
+        let max = -Infinity;
+        for(let i = 0; i < verts.length; i++){
+            let proj = Vector.Dot(n, verts[i]);
+            if(proj > max){
+                max = proj;
+            }
+            if(proj < min){
+                min = proj;
+            }
+        }
+        return { min : min, max : max }
+    }
+
     get width() {
         return this._width;
     }
@@ -1602,135 +1668,37 @@ class Box extends Body {
     }
 }
 
-const ResolveCollisionBoxVsBox = (b1, b2) => {
-
-    if(b1._mass == 0 && b2._mass == 0) { return; }
-    const SMALL_NUMBER = 0.0001;
-    
-    const vec1 = b1._pos.Clone().Sub(b1._oldPos);
-    const vec2 = b2._pos.Clone().Sub(b2._oldPos);
-
-    let relationX, relationY;
-    if(b1.oldRight <= b2.oldLeft) relationX = 1;
-    else if(b1.oldLeft >= b2.oldRight) relationX = -1;
-    else relationX = 0;
-    if(b1.oldBottom <= b2.oldTop) relationY = 1;
-    else if(b1.oldTop >= b2.oldBottom) relationY = -1;
-    else relationY = 0;
-
-    let collided = false;
-
-    if(b1._mass != 0 && b2._mass != 0) {
-
-        if(Math.abs(b1._pos.x - b2._pos.x) < (b1._width + b2._width) / 2 && Math.abs(b1._pos.y - b2._pos.y) < (b1._height + b2._height) / 2) {
-            
-            collided = true;
-            
-            if(relationX == 0) {
-                const diff = ((b1._height + b2._height) / 2 - (b2._pos.y - b1._pos.y)) / (b1.inverseMass + b2.inverseMass);
-                b1._pos.y -= diff * b1.inverseMass;
-                b1._oldPos.y = b1._pos.y;
-                b2._pos.y += diff * b2.inverseMass;
-                b2._oldPos.y = b2._pos.y;
-            } else {
-                const diff = ((b1._width + b2._width) / 2 - (b2._pos.x - b1._pos.x)) / (b1.inverseMass + b2.inverseMass);
-                b1._pos.x -= diff * b1.inverseMass;
-                b1._oldPos.x = b1._pos.x;
-                b2._pos.x += diff * b2.inverseMass;
-                b2._oldPos.x = b2._pos.x;
-            }
-        }
-
-    }
-
-    if(relationY != 0 && collided == false) {
-
-        const offsetY = relationY * (b1._height + b2._height) / 2;
-        const dy = vec2.y - vec1.y;
-        const t = (b1._oldPos.y - b2._oldPos.y + offsetY) / (dy);
-
-        if(t >= 0 && t <= 1) {
-
-            if(Math.abs(b1._oldPos.x - b2._oldPos.x + (vec1.x - vec2.x) * t) < (b1._width + b2._width) / 2) {
-
-                collided = true;
-
-                const [t, b] = relationY == 1 ? [b1, b2] : [b2, b1];
-
-                if(b._mass == 0) {
-
-                    if((t._vel.y >= -t._passiveVel.y || t._vel.y >= 0)) {
-                        t._oldPos.y = t._pos.y = b.top - t._height / 2 - SMALL_NUMBER;
-                        if(t._vel.y > 0) t._vel.y *= -t._bounce;
-                        if(t._options.followBottomObject) {
-                            t._passiveVel.Copy(b._vel);
-                        }
-                    }
-                    
-                } else if(t._mass == 0) {
-
-                    if((b._vel.y <= -b._passiveVel.y || b._vel.y <= 0)) {
-                        b._oldPos.y = b._pos.y = t.bottom + b._height / 2 + SMALL_NUMBER;
-                        if(b._vel.y < 0) b._vel.y *= -b._bounce;
-                    }
-                }
-
-                t._collisions.bottom.add(b);
-                b._collisions.top.add(t);
-
-            }
-        }
-    }
-
-    if(relationX != 0 && collided == false) {
-
-        const offsetX = relationX * (b1._width + b2._width) / 2;
-        const dx = vec2.x - vec1.x;
-        let t = (b1._oldPos.x - b2._oldPos.x + offsetX) / (dx);
-
-        if(t >= 0 && t <= 1) {
-
-            if(Math.abs(b1._oldPos.y - b2._oldPos.y + (vec1.y - vec2.y) * t) < (b1._height + b2._height) / 2) {
-
-                collided = true;
-
-                const [l, r] = relationX == 1 ? [b1, b2] : [b2, b1];
-
-                
-
-                if(r._mass == 0) {
-
-                    if((l._vel.x >= -l._passiveVel.x || l._vel.x >= 0)) {
-                        l._oldPos.x = l._pos.x = r.left - l._width / 2 - SMALL_NUMBER;
-                        if(l._vel.x > 0) l._vel.x *= -l._bounce;
-                    }
-                } else if(l._mass == 0) {
-
-                    if((r._vel.x <= -r._passiveVel.x || r._vel.x <= 0)) {
-                        r._oldPos.x = r._pos.x = l.right + r._width / 2 + SMALL_NUMBER;
-                        if(r._vel.x < 0) r._vel.x *= -r._bounce;
-                    }
-                }
-
-                l._collisions.right.add(r);
-                r._collisions.left.add(l);
-            }
-        }
-    }
-
-    return collided;
-    
-}
-
-const DetectCollisionBoxVsBox = (b1, b2) => {
-    return Math.abs(b1._pos.x - b2._pos.x) < (b1._width + b2._width) / 2 &&
-        Math.abs(b1._pos.y - b2._pos.y) < (b1._height + b2._height) / 2;
-}
-
 class Ball extends Body {
     constructor(params) {
         super(params);
         this._radius = this._params.radius;
+    }
+
+    _Project(n){
+        let dist = n.Clone().Mult(this._radius);
+        let p1 = this._pos.Clone().Add(dist);
+        let p2 = this._pos.Clone().Sub(dist);
+        let max = Vector.Dot(n, p1);
+        let min = Vector.Dot(n, p2);
+        if(max < min){
+            let t = max;
+            max = min;
+            min = t;
+        } 
+        return { min : min, max : max };
+    }
+
+    _FindNearestVertex(verts){
+        let minDis = Infinity;
+        let index = null;
+        for(let i = 0; i < verts.length; i++){
+            let v = verts[i].Clone().Sub(this._pos).Mag();
+            if(v < minDis){
+                minDis = v;
+                index = i;
+            }
+        }
+        return { v : verts[index] }
     }
 
     get width() {
@@ -1745,19 +1713,186 @@ class Ball extends Body {
         this.GetComponent("SpatialGridController").height = this.height;
     }
     Contains(p) {
-
+        return Vector.Dist(this._pos, p) < this._radius;
     }
+}
+
+const DetectCollisionBoxVsBox = (b1, b2) => {
+    const collided = Math.abs(b1._pos.x - b2._pos.x) <= (b1._width + b2._width) / 2 &&
+        Math.abs(b1._pos.y - b2._pos.y) <= (b1._height + b2._height) / 2;
+    return {
+        collided : collided,
+        info : null
+    };
+}
+
+const ResolveCollisionBoxVsBox = (b1, b2) => {
+
+    if(b1._mass == 0 && b2._mass == 0) { return; }
+    const SMALL_NUMBER = 0.0001;
+    
+    const vec1 = b1._pos.Clone().Sub(b1._oldPos);
+    const vec2 = b2._pos.Clone().Sub(b2._oldPos);
+
+    if(Math.abs(b1._oldPos.x - b2._oldPos.x) < (b1._width + b2._width) / 2 && Math.abs(b1._oldPos.y - b2._oldPos.y) < (b1._height + b2._height) / 2) {
+        
+        if(Math.abs(b1._oldPos.x - b2._oldPos.x) / (b1._width + b2._width) < Math.abs(b1._oldPos.y - b2._oldPos.y) / (b1._height + b2._height)) {
+            const [t, b] = b1._oldPos.y <= b2._oldPos.y ? [b1, b2] : [b2, b1];
+            t._oldPos.y = t._pos.y = t._pos.y - (t.bottom - b.top) / (t.inverseMass + b.inverseMass) * t.inverseMass;
+            b._oldPos.y = b._pos.y = t.bottom + b._height / 2;
+        } else {
+            const [l, r] = b1._oldPos.x <= b2._oldPos.x ? [b1, b2] : [b2, b1]; 
+            l._oldPos.x = l._pos.x = l._pos.x - (l.right - r.left) / (l.inverseMass + r.inverseMass) * l.inverseMass;
+            r._oldPos.x = r._pos.x = l.right + r._width / 2;
+        }
+    }
+
+    let relationX, relationY;
+    if(b1.oldRight <= b2.oldLeft) relationX = 1;
+    else if(b1.oldLeft >= b2.oldRight) relationX = -1;
+    else relationX = 0;
+    if(b1.oldBottom <= b2.oldTop) relationY = 1;
+    else if(b1.oldTop >= b2.oldBottom) relationY = -1;
+    else relationY = 0;
+
+    let collided = false;
+    const bounce = Math.max(b1._bounce, b2._bounce);
+
+    if(relationY != 0 && collided == false) {
+
+        const offsetY = relationY * (b1._height + b2._height) / 2;
+        const dy = vec2.y - vec1.y;
+        const t = (b1._oldPos.y - b2._oldPos.y + offsetY) / (dy + SMALL_NUMBER);
+
+        if(t >= 0 && t <= 1) {
+
+            if(Math.abs(b1._oldPos.x - b2._oldPos.x + (vec1.x - vec2.x) * t) < (b1._width + b2._width) / 2) {
+
+                collided = true;
+
+                const [t, b] = relationY == 1 ? [b1, b2] : [b2, b1];
+
+                if(b._mass == 0) {
+
+                    if((t._vel.y >= -t._passiveVel.y || t._vel.y >= b._vel.y)) {
+                        t._oldPos.y = t._pos.y = b.top - t._height / 2 - SMALL_NUMBER;
+                        if(t._vel.y > 0) t._vel.y *= -bounce;
+                        
+                        if(t._options.followBottomObject) {
+                            t._passiveVel.Copy(b._vel);
+                        }
+                    }
+                    
+                } else if(t._mass == 0) {
+
+                    if((b._vel.y <= -b._passiveVel.y || b._vel.y <= t._vel.y)) {
+                        b._oldPos.y = b._pos.y = t.bottom + b._height / 2 + SMALL_NUMBER;
+                        if(b._vel.y < 0) b._vel.y *= -bounce;
+                    }
+                } else {
+
+                    if((t._vel.y >= b._vel.y)) {
+                        if(b._vel.y >= 0) {
+                            b._oldPos.y = b._pos.y = b._pos.y + (t.bottom - b.top) / (t.inverseMass + b.inverseMass) * b.inverseMass;
+                            t._oldPos.y = t._pos.y = b.top - t._height / 2 - SMALL_NUMBER;
+                        } else if(t._vel.y <= 0) {
+                            t._oldPos.y = t._pos.y = t._pos.y - (t.bottom - b.top) / (t.inverseMass + b.inverseMass) * t.inverseMass;
+                            b._oldPos.y = b._pos.y = t.bottom + b._height / 2 + SMALL_NUMBER;
+                        } else {
+                            t._oldPos.y = t._pos.y = t._pos.y - (t.bottom - b.top) / (t.inverseMass + b.inverseMass) * t.inverseMass;
+                            b._oldPos.y = b._pos.y = t.bottom + b._height / 2 + SMALL_NUMBER;
+                        }
+
+                        let jn = -(1 + bounce) * (t._vel.y - b._vel.y) / (t.inverseMass + b.inverseMass);
+                        t._vel.y += jn * t.inverseMass;
+                        b._vel.y -= jn * b.inverseMass;
+                        
+                        if(t._options.followBottomObject) {
+                            t._passiveVel.Copy(b._vel);
+                        }
+                    }
+
+                }
+
+                t._collisions.bottom.add(b);
+                b._collisions.top.add(t);
+
+            }
+        }
+    }
+
+    if(relationX != 0 && collided == false) {
+
+        const offsetX = relationX * (b1._width + b2._width) / 2;
+        const dx = vec2.x - vec1.x;
+        let t = (b1._oldPos.x - b2._oldPos.x + offsetX) / (dx + SMALL_NUMBER);
+
+        if(t >= 0 && t <= 1) {
+
+            if(Math.abs(b1._oldPos.y - b2._oldPos.y + (vec1.y - vec2.y) * t) < (b1._height + b2._height) / 2) {
+
+                collided = true;
+
+                const [l, r] = relationX == 1 ? [b1, b2] : [b2, b1];
+
+                
+
+                if(r._mass.x == 0) {
+
+                    if((l._vel.x >= -l._passiveVel.x || l._vel.x >= r._vel.x)) {
+                        l._oldPos.x = l._pos.x = r.left - l._width / 2 - SMALL_NUMBER;
+                        if(l._vel.x > 0) l._vel.x *= -bounce;
+                    }
+                } else if(l._mass.x == 0) {
+
+                    if((r._vel.x <= -r._passiveVel.x || r._vel.x <= l._vel.x)) {
+                        r._oldPos.x = r._pos.x = l.right + r._width / 2 + SMALL_NUMBER;
+                        if(r._vel.x < 0) r._vel.x *= -bounce;
+                    }
+                } else {
+
+                    if((l._vel.x >= r._vel.x)) {
+                        if(r._vel.x >= 0) {
+                            r._oldPos.x = r._pos.x = r._pos.x + (l.right - r.left) / (l.inverseMass + r.inverseMass) * r.inverseMass;
+                            l._oldPos.x = l._pos.x = r.left - l._width / 2 - SMALL_NUMBER;
+                            
+                        } else if(l._vel.x <= 0) {
+                            l._oldPos.x = l._pos.x = l._pos.x - (l.right - r.left) / (l.inverseMass + r.inverseMass) * l.inverseMass;
+                            r._oldPos.x = r._pos.x = l.right + r._width / 2 + SMALL_NUMBER;
+                            
+                        } else {
+                            l._oldPos.x = l._pos.x = l._pos.x - (l.right - r.left) / (l.inverseMass + r.inverseMass) * l.inverseMass - SMALL_NUMBER / 2;
+                            r._oldPos.x = r._pos.x = l.right + r._width / 2 + SMALL_NUMBER;
+                            
+                        }
+
+                        let jn = -(1 + bounce) * (l._vel.x - r._vel.x) / (l.inverseMass + r.inverseMass);
+                        l._vel.x += jn * l.inverseMass;
+                        r._vel.x -= jn * r.inverseMass;
+                        
+                    }
+
+                }
+
+                l._collisions.right.add(r);
+                r._collisions.left.add(l);
+            }
+        }
+    }
+
+    return collided;
+    
 }
 
 const DetectCollisionBallVsBall = (b1, b2) => {
     let radiusSum = b1._radius + b2._radius;
     let vectorFrom1to2 = b2._pos.Clone().Sub(b1._pos);
-    if(vectorFrom1to2.MagSquared() < Math.pow(rSum, 2)){
+    if(vectorFrom1to2.MagSquared() < Math.pow(radiusSum, 2)){
         return {
             collided : true,
             info : {
-                d : radiusSum - vectorFrom1to2.Mag(),
-                n : vectorFrom1to2.Unit(),
+                n : vectorFrom1to2.Clone().Unit(),
+                d : radiusSum - vectorFrom1to2.Mag()
             } 
         }
     }
@@ -1768,18 +1903,163 @@ const DetectCollisionBallVsBall = (b1, b2) => {
 }
 
 const ResolveCollisionBallVsBall = (b1, b2) => {
-    let detection = DetectCollisionBallVsBall(b1, b2);
-    if(detection.collided){
-        let relativeVel = b1._vel.Sub(b2._vel);
-        let avgBounce = (b1._bounce + b2._bounce) / 2;
-        let impulseMagnitude = ((-(1 + avgBounce) * (relativeVel.Dot(detection.info.n))) / (b1.inverseMass + b2.inverseMass));
-        let impulseDirection = detection.info.n;
-        let jn = impulseDirection.Mult(impulseMagnitude);
-        b1._vel = b1._vel.Add(jn.Mult(b1.inverseMass));
-        b2._vel = b2._vel.Sub(jn.Mult(b2.inverseMass));
-    }else{
+    if(b1._mass == 0 && b2._mass == 0){
         return false;
     }
+    let detection = DetectCollisionBallVsBall(b1, b2);
+    if(detection.collided){
+        const diff = detection.info.n.Clone().Mult((detection.info.d) / (b1.inverseMass + b2.inverseMass));
+        b1._pos.Sub(diff.Clone().Mult(b1.inverseMass));
+        b1._oldPos.Copy(b1._pos);
+        b2._pos.Add(diff.Clone().Mult(b2.inverseMass));
+        b2._oldPos.Copy(b2._pos);
+
+        if (!(Vector.Dot(b1._vel, detection.info.n) <= 0 && Vector.Dot(b2._vel, detection.info.n) >= 0)) {
+
+            let relativeVel = b1._vel.Clone().Sub(b2._vel);
+            let avgBounce = Math.max(b1._bounce, b2._bounce);
+            let impulseMagnitude = ((-(1 + avgBounce) * (Vector.Dot(relativeVel, detection.info.n))) / (b1.inverseMass + b2.inverseMass));
+            let jn = detection.info.n.Clone().Mult(impulseMagnitude);
+            b1._vel.Add(jn.Clone().Mult(b1.inverseMass));
+            b2._vel.Sub(jn.Clone().Mult(b2.inverseMass));
+
+        }
+
+        const s = side.fromAngle(detection.info.n.Angle());
+        b1._collisions[s].add(b2);
+        b2._collisions[side.opposite(s)].add(b1);
+        return true;
+    }
+    return false;
+}
+
+const DetectCollisionBoxVsBall = (box, ball) => {
+    
+    let boxVertices = [];
+    boxVertices[0] = new Vector(box._pos.x - box._width/2, box._pos.y - box._height/2);
+    boxVertices[1] = new Vector(box._pos.x + box._width/2, box._pos.y - box._height/2);
+    boxVertices[2] = new Vector(box._pos.x + box._width/2, box._pos.y + box._height/2);
+    boxVertices[3] = new Vector(box._pos.x - box._width/2, box._pos.y + box._height/2);
+
+    let boxFaceNormals = [];
+    boxFaceNormals[0] = boxVertices[1].Clone().Sub(boxVertices[0]).Unit();
+    boxFaceNormals[1] = boxVertices[2].Clone().Sub(boxVertices[1]).Unit();
+    boxFaceNormals[2] = boxVertices[3].Clone().Sub(boxVertices[2]).Unit();
+    boxFaceNormals[3] = boxVertices[0].Clone().Sub(boxVertices[3]).Unit();
+
+    let stack = [];
+
+    for(let i = 0; i < boxFaceNormals.length; i++){
+        let info1 = box._Project(boxFaceNormals[i], boxVertices);
+        let minA = info1.min; let maxA = info1.max;
+        let info2 = ball._Project(boxFaceNormals[i]);
+        let minB = info2.min; let maxB = info2.max;
+        if(minB < maxA && maxB > minA){
+            stack.push({
+                d : Math.abs(minB - maxA),
+                normal : boxFaceNormals[i]
+            });
+        }else{
+            return {
+                collided: false,
+                info: null
+            }
+        }
+        if(minA < maxB && maxA > minB){
+            stack.push({
+                d : Math.abs(minA - maxB),
+                normal : boxFaceNormals[i]
+            });
+        }else{
+            return {
+                collided: false,
+                info: null
+            }
+        }
+    }
+
+    let nearestPoint = ball._FindNearestVertex(boxVertices);
+    let vFromBallToNearestPoint = nearestPoint.v.Clone().Sub(ball._pos);
+    let ballNormal = vFromBallToNearestPoint.Clone().Unit();
+    let info1 = box._Project(ballNormal, boxVertices);
+    let minA = info1.min; let maxA = info1.max;
+    let info2 = ball._Project(ballNormal);
+    let minB = info2.min; let maxB = info2.max;
+    if(minB < maxA && maxB > minA){
+        stack.push({
+            d : Math.abs(minB - maxA),
+            normal : ballNormal
+        });
+    }else{
+        return {
+            collided: false,
+            info: null
+        }
+    }
+    if(minA < maxB && maxA > minB){
+        stack.push({
+            d : Math.abs(minA - maxB),
+            normal : ballNormal
+        });
+    }else{
+        return {
+            collided: false,
+            info: null
+        }
+    }
+
+    let finalDis = Infinity;
+    let collisionNormal = null;
+    for(let i = 0; i < stack.length; i++){
+        if(stack[i].d < finalDis){
+            finalDis = stack[i].d;
+            collisionNormal = stack[i].normal;
+        }
+    }
+    let vec = ball._pos.Clone().Sub(box._pos);
+    if(Vector.Dot(vec, collisionNormal) > 0){
+        collisionNormal.Mult(-1);
+    }
+
+    return {
+        collided: true,
+        info: {
+            d : finalDis, 
+            n : collisionNormal
+        }
+    }
+}
+
+const ResolveCollisionBoxVsBall = (box, ball) => {
+    if(box._mass == 0 && ball._mass == 0){
+        return false;
+    }
+    let detection = DetectCollisionBoxVsBall(box, ball);
+    if(detection.collided){
+        const diff = detection.info.n.Clone().Mult((detection.info.d) / (box.inverseMass + ball.inverseMass));
+        box._pos.Add(diff.Clone().Mult(box.inverseMass));
+        box._oldPos.Copy(box._pos);
+        ball._pos.Sub(diff.Clone().Mult(ball.inverseMass));
+        ball._oldPos.Copy(ball._pos);
+        
+        if (!(Vector.Dot(box._vel, detection.info.n) >= 0 && Vector.Dot(ball._vel, detection.info.n) <= 0)) {
+
+            let relativeVel = box._vel.Clone().Sub(ball._vel);
+            let avgBounce = Math.max(box._bounce, ball._bounce);
+            let impulseMagnitude = ((-(1 + avgBounce) * (Vector.Dot(relativeVel, detection.info.n))) / (box.inverseMass + ball.inverseMass));
+            let jn = detection.info.n.Clone().Mult(impulseMagnitude);
+            box._vel.Add(jn.Clone().Mult(box.inverseMass));
+            ball._vel.Sub(jn.Clone().Mult(ball.inverseMass));
+
+        }
+        
+        
+        const s = side.fromAngle(detection.info.n.Angle());
+        ball._collisions[s].add(box);
+        box._collisions[side.opposite(s)].add(ball);
+        return true;
+    }
+    return false;
 }
 
 const ResolveCollision = (b1, b2) => {
@@ -1787,15 +2067,23 @@ const ResolveCollision = (b1, b2) => {
         return ResolveCollisionBoxVsBox(b1, b2);
     } else if(b1.constructor.name == "Ball" && b2.constructor.name == "Ball") {
         return ResolveCollisionBallVsBall(b1, b2);
+    } else if(b1.constructor.name == "Box" && b2.constructor.name == "Ball") {
+        return ResolveCollisionBoxVsBall(b1, b2);
+    } else if(b1.constructor.name == "Ball" && b2.constructor.name == "Box") {
+        return ResolveCollisionBoxVsBall(b2, b1);
     }
     return false;
 }
 
 const DetectCollision = (b1, b2) => {
     if(b1.constructor.name == "Box" && b2.constructor.name == "Box") {
-        return DetectCollisionBoxVsBox(b1, b2);
+        return DetectCollisionBoxVsBox(b1, b2).collided;
     } else if(b1.constructor.name == "Ball" && b2.constructor.name == "Ball") {
-        return DetectCollisionBallVsBall(b1, b2);
+        return DetectCollisionBallVsBall(b1, b2).collided;
+    } else if(b1.constructor.name == "Box" && b2.constructor.name == "Ball") {
+        return DetectCollisionBoxVsBall(b1, b2).collided;
+    } else if(b1.constructor.name == "Ball" && b2.constructor.name == "Box") {
+        return DetectCollisionBoxVsBall(b2, b1).collided;
     }
     return false;
 }
@@ -1926,6 +2214,7 @@ const drawable = {
 
 const physics = {
     Box,
+    Ball,
     DetectCollision,
     ResolveCollision
 };
@@ -1942,6 +2231,7 @@ export {
     physics,
     Vector,
     math,
+    side,
     css, 
     id, 
     show, 
