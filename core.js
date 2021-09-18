@@ -153,9 +153,8 @@ class Engine {
         this._renderer = params.renderer;
         this._sceneManager = params.scenes;
         this._callback = params.start;
-
-        this._paused = true;
         this._timeouts = [];
+        this._paused = true;
 
         this._Init();
     }
@@ -569,8 +568,12 @@ class Scene {
         this._bounds = params.bounds;
         this._cellDimensions = (params.cellDimensions || [50, 50]);
         this._interactiveEntities = [];
+        this._timeouts = [];
 
         this._Init();
+    }
+    Timeout(f, dur) {
+        this._timeouts.push({ action: f, dur: dur, counter: 0 });
     }
     _Init() {
         this._paused = true;
@@ -698,6 +701,13 @@ class Scene {
     }
     Update(elapsedTimeS) {
         if (this._paused) { return; }
+        for(let i = 0; i < this._timeouts.length; ++i) {
+            const timeout = this._timeouts[i];
+            if((timeout.counter += elapsedTimeS * 1000) >= timeout.dur) {
+                timeout.action();
+                this._timeouts.splice(i--, 1);
+            }
+        }
         elapsedTimeS *= this._speed;
         this._entityManager.Update(elapsedTimeS);
         this._camera.Update(elapsedTimeS);
@@ -1588,11 +1598,11 @@ class Body extends Component {
             for(let e of entities) {
                 if(obj.type == "resolveCollision") {
                     if(physics.ResolveCollision(this, e.body)) {
-                        if(obj.action) obj.action();
+                        if(obj.action) obj.action(e);
                     }
                 } else if(obj.type == "isCollision") {
                     if(physics.DetectCollision(this, e.body)) {
-                        obj.action();
+                        obj.action(e);
                     }
                 }
             }
