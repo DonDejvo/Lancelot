@@ -24,4 +24,19 @@ This is only a guide on how to use npm for development, not on how to publish pa
 ### Package.json
 This is essencially the main file of your entire project: Everything regarding metadata belongs in here.
 As you can see when checking the file, you can set multiple things like name, version, author, license etc.
-Feel free to change them like you want, but please don't publish it yet as I dont really know how it works either, lol.
+Feel free to change them like you want, but please don't publish it yet as I dont really know how that works either, lol.
+
+### Npm commands
+In ```package.json```, you can see an object called "scripts". Inside of it, commands can be added to be executed by npm:
+```json
+scripts: {
+    "someTestCommand": "echo 'Joe mama' && exit 1"
+}
+```
+Running commands works like this:
+1. Open a cmd shell
+2. Run ```npm run someTestCommand```
+
+For Lancelot, there are currently two commands:
+```npm run dev``` - opens a snowpack server and a browser window for testing.
+```npm run build``` - creates new bundled version of all files linked to the entry file in "src" and puts it into "dist"
