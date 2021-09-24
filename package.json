@@ -1,0 +1,24 @@
+{
+    "name": "lancelot",
+    "version": "1.0.0",
+    "description": "A 2d Javascript game library",
+    "main": "core.js",
+    "scripts": {
+        "dev": "snowpack dev --config config/snowpack.config.mjs",
+        "build": "node config/esbuild.config.js"
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/DonDejvo/Lancelot.git"
+    },
+    "author": "DonDejvo",
+    "license": "MIT",
+    "bugs": {
+      "url": "https://github.com/DonDejvo/Lancelot/issues"
+    },
+    "homepage": "https://github.com/DonDejvo/Lancelot#readme",
+    "dependencies": {
+      "esbuild": "^0.13.2",
+      "snowpack": "^3.8.8"
+    }
+}
