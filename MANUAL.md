@@ -38,5 +38,6 @@ Running commands works like this:
 2. Run ```npm run someTestCommand```
 
 For Lancelot, there are currently two commands:
-```npm run dev``` - opens a snowpack server and a browser window for testing.
-```npm run build``` - creates new bundled version of all files linked to the entry file in "src" and puts it into "dist"
+ 
+* ```npm run dev``` - opens a snowpack server and a browser window for testing.
+* ```npm run build``` - creates new bundled version of all files linked to the entry file in "src" and puts it into "dist"
