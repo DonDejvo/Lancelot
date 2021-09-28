@@ -1,5 +1,4 @@
-const Add = (a, b) => a + b;
-const Sub = (a, b) => a - b;
+import { Add, Sub } from "./qwer.js";
 
 let __export = {
   Add,
