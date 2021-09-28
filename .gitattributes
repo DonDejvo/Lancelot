@@ -1,0 +1,12 @@
+# normalize line endings automatically for backwards compability
+* text=auto
+
+# set CRLF line endings for Windows PowerShell and CMD scripts
+*.{cmd,[cC][dD][mM]} text eol=crlf
+*.{bat,[aA][bB][tT]} text eol=crlf
+
+# set LF line endings for Linux/Unix bash scripts
+*.sh eol=lf
+
+# explicitly prevent modification, e.g. normalization of line endings, for binary files
+*.{jpg,png,gif,ico,exe} binary
