@@ -1,4 +1,4 @@
-# Lancelot
+# Lancelot - 2D game library
 
 ![Logo](https://raw.githubusercontent.com/DonDejvo/Lancelot/main/misc/resources/png/logo_banner.png)
 
