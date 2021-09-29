@@ -14,13 +14,54 @@
             width: 640,
             height: 360
         });
-        game.background = "pink";
+        game.background = "grey";
         
         let scene = game.CreateScene("test");
         scene.AddEventHandler("mouseup", (e) => console.log(e));
 
-        let myEntity = new Lancelot.Entity();
-        scene.AddEntity(myEntity);
+        const CreateTitle = (x, y, text) => {
+            let myEntity = new Lancelot.Entity();
+            myEntity.position = new Lancelot.Vector(x, y);
+            
+            let textSprite = new Lancelot.drawable.Text({
+                text: text,
+                fontSize: 24,
+                color: "gold"
+            });
+            myEntity.AddComponent(textSprite);
+
+            scene.AddEntity(myEntity);
+
+            return myEntity;
+        }
+
+        let title = CreateTitle(0, 0, "I am Lancelot and\nI wanna play with you :D");
+
+        scene.camera.ScaleTo(1.5, 1500, "ease-in");
+        scene.timeout.Set(() => {
+            scene.RemoveEntity(title);
+            let message_part_1 = CreateTitle(0, -50, "I read something on the internet...");
+            scene.camera.Clip(message_part_1);
+            let message_part_2 = CreateTitle(500, 0, "It was written there...");
+            let message_part_3 = CreateTitle(1000, 50, "Snakes have legs!");
+            scene.timeout.Set(() => {
+                scene.camera.MoveTo(new Lancelot.Vector(500, 0), 800, "ease-out");
+                scene.timeout.Set(() => {
+                    scene.camera.Clip(message_part_2);
+                    scene.camera.MoveTo(new Lancelot.Vector(1000, 0), 800, "ease-in");
+                    scene.timeout.Set(() => {
+                        scene.RemoveEntity(message_part_1);
+                        scene.RemoveEntity(message_part_2);
+                        scene.RemoveEntity(message_part_3);
+                        let wtf = CreateTitle(1000, 0, "WTF");
+                        scene.camera.Shake(15, 5000, 30, 0.5);
+                        scene.timeout.Set(() => {
+                            scene.RemoveEntity(wtf);
+                        }, 5000);
+                    }, 3000);
+                }, 2000);
+            }, 2000);
+        }, 3000);
 
         game.PlayScene("test");
     </script>

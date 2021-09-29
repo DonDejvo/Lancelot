@@ -38,8 +38,8 @@ export class Entity {
             c.Update(elapsedTimeS);
         });
     }
-    Attach(e) {
-        this._position.Attach(e._position);
+    Clip(e) {
+        this._position.Clip(e._position);
     }
     MoveTo(p, dur, timing = "linear") {
         this._position.MoveTo(p, dur, timing);
@@ -53,7 +53,7 @@ export class Entity {
         }
         this._components.set(n, c);
         c._parent = this;
-        c._pos.Copy(this._pos.Clone().Add(c._offset));
+        c._pos.Copy(this._pos.Clone().Add(c.offset));
         c.InitComponent();
     }
     GetComponent(n) {

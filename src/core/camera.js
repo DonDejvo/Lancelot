@@ -1,5 +1,6 @@
 import { Position } from "./utils/position.js";
 import { Vector } from "./utils/vector.js";
+import { math } from "./utils/math.js";
 
 export class Camera {
     constructor() {
@@ -33,8 +34,8 @@ export class Camera {
     set velocity(vec) {
         this._vel.Copy(vec);
     }
-    Attach(e) {
-        this._position.Attach(e._position);
+    Clip(e) {
+        this._position.Clip(e._position);
     }
     MoveTo(p, dur, timing = "linear") {
         this._position.MoveTo(p, dur, timing);

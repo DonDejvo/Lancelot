@@ -120,7 +120,7 @@ export class Scene {
     }
     _RemoveDrawable(c) {
         const i = this._drawable.indexOf(c);
-        if (i > 0) {
+        if (i != -1) {
             this._drawable.splice(i, 1);
         }
     }
@@ -142,7 +142,7 @@ export class Scene {
         }
 
         const i = this._bodies.indexOf(b);
-        if (i > 0) {
+        if (i != -1) {
             this._bodies.splice(i, 1);
         }
     }

@@ -1,4 +1,5 @@
 import { Vector } from "./vector.js";
+import { math } from "./math.js";
 
 export class Position {
     constructor(parent) {
@@ -7,7 +8,7 @@ export class Position {
         this._attached = [];
         this._moving = null;
     }
-    Attach(e) {
+    Clip(e) {
         this._attached.push(e);
     }
     SetPosition(p) {

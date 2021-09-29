@@ -1,3 +1,5 @@
+import { Vector } from "./utils/vector.js";
+
 export class Component {
     constructor() {
         this._type = "";
