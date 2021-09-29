@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <script type="module">
+        import defaultExport from "../src/Lancelot.js";
+
+        let game = new Lancelot.Game({
+            width: 640,
+            height: 360
+        });
+        game.background = "pink";
+        
+        let scene = game.CreateScene("test");
+        scene.AddEventHandler("mouseup", (e) => console.log(e));
+
+        let myEntity = new Lancelot.Entity();
+        scene.AddEntity(myEntity);
+
+        game.PlayScene("test");
+    </script>
+</body>
+</html>
