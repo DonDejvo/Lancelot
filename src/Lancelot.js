@@ -2,15 +2,10 @@ import { Game } from "./core/game.js";
 import { Loader } from "./core/loader.js";
 import { Entity } from "./core/entity.js";
 import { Component } from "./core/component.js";
-import { Drawable, Text } from "./core/drawable/drawable.js";
+import * as drawable from "./core/drawable/drawable.js";
 import { Vector } from "./core/utils/vector.js";
 
 const __name = 'Lancelot';
-
-let drawable = {
-    Drawable,
-    Text
-}
 
 let __export = {
     Vector,

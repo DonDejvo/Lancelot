@@ -1,11 +1,23 @@
 export class Vector {
     constructor(x = 0, y = 0) {
-        this.x = x;
-        this.y = y;
+        this._x = x;
+        this._y = y;
+    }
+    get x() {
+        return this._x;
+    }
+    get y() {
+        return this._y;
+    }
+    set x(num) {
+        this._x = num;
+    }
+    set y(num) {
+        this._y = num;
     }
     Copy(v1) {
-        this.x = v1.x;
-        this.y = v1.y;
+        this._x = v1.x;
+        this._y = v1.y;
     }
     Clone() {
         return new Vector(this.x, this.y);
@@ -68,5 +80,28 @@ export class Vector {
             return 0;
         }
         return Math.acos(Vector.Dot(v1, v2) / (z1 * z2));
+    }
+}
+
+export class PositionVector extends Vector {
+    constructor(parent, x = 0, y = 0) {
+        super(x, y);
+        this._parent = parent;
+    }
+    get x() {
+        return this._x;
+    }
+    set x(num) {
+        const vec = new Vector(num, this._y);
+        this._parent.position = vec;
+        this._x = num;
+    }
+    get y() {
+        return this._y;
+    }
+    set y(num) {
+        const vec = new Vector(this._x, num);
+        this._parent.position = vec;
+        this._y = num;
     }
 }

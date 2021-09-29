@@ -1,17 +1,26 @@
-import { Vector } from "./vector.js";
+import { Vector, PositionVector } from "./vector.js";
 import { math } from "./math.js";
 
 export class Position {
     constructor(parent) {
         this._parent = parent;
-        this._pos = new Vector();
+        this._pos = new PositionVector(parent);
         this._attached = [];
         this._moving = null;
     }
     Clip(e) {
         this._attached.push(e);
     }
-    SetPosition(p) {
+    Unclip(e) {
+        const i = this._attached.indexOf(e);
+        if(i != -1) {
+            this._attached.splice(i, 1);
+        }
+    }
+    get position() {
+        return this._pos;
+    }
+    set position(p) {
         for(let e of this._attached) {
             const offset = e._pos.Clone().Sub(this._pos);
             e._parent.position = p.Clone().Add(offset);

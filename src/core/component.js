@@ -1,10 +1,10 @@
-import { Vector } from "./utils/vector.js";
+import { PositionVector, Vector } from "./utils/vector.js";
 
 export class Component {
     constructor() {
         this._type = "";
         this._parent = null;
-        this._pos = new Vector();
+        this._pos = new PositionVector(this);
         this.offset = new Vector();
     }
     get type() {

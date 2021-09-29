@@ -24,7 +24,7 @@ export class Entity {
         return this._pos;
     }
     set position(p) {
-        this._position.SetPosition(p);
+        this._position.position = p;
         this._components.forEach((c) => {
             c._pos.Copy(this._pos.Clone().Add(c.offset));
         });
@@ -40,6 +40,9 @@ export class Entity {
     }
     Clip(e) {
         this._position.Clip(e._position);
+    }
+    Unclip(e) {
+        this._position.Unclip(e._position);
     }
     MoveTo(p, dur, timing = "linear") {
         this._position.MoveTo(p, dur, timing);

@@ -1,3 +1,11 @@
+var __defProp = Object.defineProperty;
+var __markAsModule = (target) => __defProp(target, "__esModule", { value: true });
+var __export = (target, all) => {
+  __markAsModule(target);
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+
 // src/core/utils/timeout-handler.js
 var TimeoutHandler = class {
   constructor() {
@@ -305,12 +313,24 @@ var EntityManager = class {
 // src/core/utils/vector.js
 var Vector2 = class {
   constructor(x = 0, y = 0) {
-    this.x = x;
-    this.y = y;
+    this._x = x;
+    this._y = y;
+  }
+  get x() {
+    return this._x;
+  }
+  get y() {
+    return this._y;
+  }
+  set x(num) {
+    this._x = num;
+  }
+  set y(num) {
+    this._y = num;
   }
   Copy(v1) {
-    this.x = v1.x;
-    this.y = v1.y;
+    this._x = v1.x;
+    this._y = v1.y;
   }
   Clone() {
     return new Vector2(this.x, this.y);
@@ -375,19 +395,50 @@ var Vector2 = class {
     return Math.acos(Vector2.Dot(v1, v2) / (z1 * z2));
   }
 };
+var PositionVector = class extends Vector2 {
+  constructor(parent, x = 0, y = 0) {
+    super(x, y);
+    this._parent = parent;
+  }
+  get x() {
+    return this._x;
+  }
+  set x(num) {
+    const vec = new Vector2(num, this._y);
+    this._parent.position = vec;
+    this._x = num;
+  }
+  get y() {
+    return this._y;
+  }
+  set y(num) {
+    const vec = new Vector2(this._x, num);
+    this._parent.position = vec;
+    this._y = num;
+  }
+};
 
 // src/core/utils/position.js
 var Position = class {
   constructor(parent) {
     this._parent = parent;
-    this._pos = new Vector2();
+    this._pos = new PositionVector(parent);
     this._attached = [];
     this._moving = null;
   }
   Clip(e) {
     this._attached.push(e);
   }
-  SetPosition(p) {
+  Unclip(e) {
+    const i = this._attached.indexOf(e);
+    if (i != -1) {
+      this._attached.splice(i, 1);
+    }
+  }
+  get position() {
+    return this._pos;
+  }
+  set position(p) {
     for (let e of this._attached) {
       const offset = e._pos.Clone().Sub(this._pos);
       e._parent.position = p.Clone().Add(offset);
@@ -444,10 +495,10 @@ var Camera = class {
     this._offset = new Vector2();
   }
   get position() {
-    return this._position._pos.Clone();
+    return this._pos;
   }
   set position(vec) {
-    this._position.SetPosition(vec);
+    this._position.position = vec;
   }
   get shaking() {
     return this._shaking;
@@ -466,6 +517,9 @@ var Camera = class {
   }
   Clip(e) {
     this._position.Clip(e._position);
+  }
+  Unclip(e) {
+    this._position.Unclip(e._position);
   }
   MoveTo(p, dur, timing = "linear") {
     this._position.MoveTo(p, dur, timing);
@@ -559,7 +613,7 @@ var Component = class {
   constructor() {
     this._type = "";
     this._parent = null;
-    this._pos = new Vector2();
+    this._pos = new PositionVector(this);
     this.offset = new Vector2();
   }
   get type() {
@@ -1019,7 +1073,7 @@ var Entity = class {
     return this._pos;
   }
   set position(p) {
-    this._position.SetPosition(p);
+    this._position.position = p;
     this._components.forEach((c) => {
       c._pos.Copy(this._pos.Clone().Add(c.offset));
     });
@@ -1035,6 +1089,9 @@ var Entity = class {
   }
   Clip(e) {
     this._position.Clip(e._position);
+  }
+  Unclip(e) {
+    this._position.Unclip(e._position);
   }
   MoveTo(p, dur, timing = "linear") {
     this._position.MoveTo(p, dur, timing);
@@ -1060,6 +1117,15 @@ var Entity = class {
 };
 
 // src/core/drawable/drawable.js
+var drawable_exports = {};
+__export(drawable_exports, {
+  Circle: () => Circle,
+  Drawable: () => Drawable,
+  Picture: () => Picture,
+  Rect: () => Rect,
+  Sprite: () => Sprite,
+  Text: () => Text
+});
 var Drawable = class extends Component {
   constructor(params) {
     super();
@@ -1067,14 +1133,13 @@ var Drawable = class extends Component {
     this._params = params;
     this._width = this._params.width || 0;
     this._height = this._params.height || 0;
-    this._fixed = this._params.fixed === void 0 ? true : this._params.fixed;
     this._zIndex = this._params.zIndex || 0;
     this.flip = {
       x: this._params.flipX || false,
       y: this._params.flipY || false
     };
     this._rotationCount = this._params.rotationCount || 0;
-    this._opacity = this._params.opacity !== void 0 ? this._params.opacity : 1;
+    this.opacity = this._params.opacity !== void 0 ? this._params.opacity : 1;
     this._angle = this._params.angle || this._rotationCount * Math.PI / 2 || 0;
     this.boundingBox = { width: 0, height: 0, x: 0, y: 0 };
   }
@@ -1207,7 +1272,7 @@ var Text = class extends Drawable {
   Draw(ctx) {
     ctx.beginPath();
     ctx.save();
-    ctx.globalAlpha = this._opacity;
+    ctx.globalAlpha = this.opacity;
     ctx.translate(this._pos.x, this._pos.y);
     ctx.rotate(this.angle);
     ctx.fillStyle = this._color;
@@ -1220,30 +1285,184 @@ var Text = class extends Drawable {
     ctx.restore();
   }
 };
+var Picture = class extends Drawable {
+  constructor(params) {
+    super(params);
+    this._image = this._params.image;
+    this._frameWidth = this._params.frameWidth || this._image.width;
+    this._frameHeight = this._params.frameHeight || this._image.height;
+    this._framePos = {
+      x: this._params.posX || 0,
+      y: this._params.posY || 0
+    };
+  }
+  Draw(ctx) {
+    ctx.save();
+    ctx.globalAlpha = this.opacity;
+    ctx.translate(this._pos.x, this._pos.y);
+    ctx.scale(this.flip.x ? -1 : 1, this.flip.y ? -1 : 1);
+    ctx.rotate(this.angle);
+    ctx.drawImage(this._image, this._framePos.x * this._frameWidth, this._framePos.y * this._frameHeight, this._frameWidth, this._frameHeight, -this._width / 2, -this._height / 2, this._width, this._height);
+    ctx.restore();
+  }
+};
+var Rect = class extends Drawable {
+  constructor(params) {
+    super(params);
+    this.background = this._params.background || "black";
+    this.borderColor = this._params.borderColor || "black";
+    this.borderWidth = this._params.borderWidth || 0;
+  }
+  Draw(ctx) {
+    ctx.beginPath();
+    ctx.save();
+    ctx.globalAlpha = this.opacity;
+    ctx.translate(this._pos.x, this._pos.y);
+    ctx.rotate(this.angle);
+    ctx.fillStyle = this.background;
+    ctx.strokeStyle = this.borderColor;
+    ctx.lineWidth = this.borderWidth;
+    ctx.rect(-this._width / 2, -this._height / 2, this._width, this._height);
+    ctx.fill();
+    if (this.borderWidth > 0)
+      ctx.stroke();
+    ctx.restore();
+  }
+};
+var Circle = class extends Drawable {
+  constructor(params) {
+    super(params);
+    this._radius = this._params.radius;
+    this._width = this._radius * 2;
+    this._height = this._radius * 2;
+    this.background = this._params.background || "black";
+    this.borderColor = this._params.borderColor || "black";
+    this.borderWidth = this._params.borderWidth || 0;
+  }
+  get radius() {
+    return this._radius;
+  }
+  set radius(val) {
+    this._radius = val;
+    this._width = this._radius * 2;
+    this._height = this._radius * 2;
+    this._UpdateBoundingBox();
+  }
+  Draw(ctx) {
+    ctx.beginPath();
+    ctx.save();
+    ctx.globalAlpha = this.opacity;
+    ctx.translate(this._pos.x, this._pos.y);
+    ctx.fillStyle = this.background;
+    ctx.strokeStyle = this.borderColor;
+    ctx.lineWidth = this.borderWidth;
+    ctx.arc(0, 0, this._radius, 0, 2 * Math.PI);
+    ctx.fill();
+    if (this.borderWidth > 0)
+      ctx.stroke();
+    ctx.restore();
+  }
+};
+var Sprite = class extends Drawable {
+  constructor(params) {
+    super(params);
+    this._anims = new Map();
+    this._currentAnim = null;
+    this._paused = true;
+    this._framePos = { x: 0, y: 0 };
+  }
+  AddAnim(n, frames) {
+    this._anims.set(n, frames);
+  }
+  PlayAnim(n, rate, repeat, OnEnd) {
+    if (this.currentAnim == n) {
+      return;
+    }
+    this._paused = false;
+    const currentAnim = {
+      name: n,
+      rate,
+      repeat,
+      OnEnd,
+      frame: 0,
+      counter: 0
+    };
+    this._currentAnim = currentAnim;
+    this._framePos = this._anims[currentAnim.name][currentAnim.frame];
+  }
+  Reset() {
+    if (this._currentAnim) {
+      this._currentAnim.frame = 0;
+      this._currentAnim.counter = 0;
+    }
+  }
+  Pause() {
+    this._paused = true;
+  }
+  Resume() {
+    if (this._currentAnim) {
+      this._paused = false;
+    }
+  }
+  Update(timeElapsed) {
+    if (this._paused) {
+      return;
+    }
+    const currentAnim = this._currentAnim;
+    const frames = this._anims.get(currentAnim.name);
+    currentAnim.counter += timeElapsed * 1e3;
+    if (currentAnim.counter >= currentAnim.rate) {
+      currentAnim.counter = 0;
+      ++currentAnim.frame;
+      if (currentAnim.frame >= frames.length) {
+        currentAnim.frame = 0;
+        if (currentAnim.OnEnd) {
+          currentAnim.OnEnd();
+        }
+        if (!currentAnim.repeat) {
+          this._currentAnim = null;
+          this._paused = true;
+        }
+      }
+      this._framePos = frames[currentAnim.frame];
+    }
+  }
+  get currentAnim() {
+    if (this._currentAnim) {
+      return this._currentAnim.name;
+    }
+    return null;
+  }
+  Draw(ctx) {
+    ctx.save();
+    ctx.globalAlpha = this.opacity;
+    ctx.translate(this._pos.x, this._pos.y);
+    ctx.scale(this.flip.x ? -1 : 1, this.flip.y ? -1 : 1);
+    ctx.rotate(this.angle);
+    ctx.drawImage(this._params.image, this._framePos.x * this._params.frameWidth, this._framePos.y * this._params.frameHeight, this._params.frameWidth, this._params.frameHeight, -this._width / 2, -this._height / 2, this._width, this._height);
+    ctx.restore();
+  }
+};
 
 // src/Lancelot.js
 var __name = "Lancelot";
-var drawable = {
-  Drawable,
-  Text
-};
-var __export = {
+var __export2 = {
   Vector: Vector2,
   Game,
   Loader,
   Entity,
   Component,
-  drawable
+  drawable: drawable_exports
 };
 if (typeof module === "object" && typeof module.exports === "object") {
-  module.exports = __export;
+  module.exports = __export2;
 } else if (typeof define === "function" && define.amd) {
-  define(__name, [], __export);
+  define(__name, [], __export2);
 } else {
   let global = typeof globalThis !== "undefined" ? globalThis : self;
-  global[__name] = __export;
+  global[__name] = __export2;
 }
-var Lancelot_default = __export;
+var Lancelot_default = __export2;
 export {
   Lancelot_default as default
 };

@@ -14,10 +14,10 @@ export class Camera {
         this._offset = new Vector();
     }
     get position() {
-        return this._position._pos.Clone();
+        return this._pos;
     }
     set position(vec) {
-        this._position.SetPosition(vec);
+        this._position.position = vec;
     }
     get shaking() {
         return this._shaking;
@@ -36,6 +36,9 @@ export class Camera {
     }
     Clip(e) {
         this._position.Clip(e._position);
+    }
+    Unclip(e) {
+        this._position.Unclip(e._position);
     }
     MoveTo(p, dur, timing = "linear") {
         this._position.MoveTo(p, dur, timing);
