@@ -6,6 +6,90 @@ var __export = (target, all) => {
     __defProp(target, name, { get: all[name], enumerable: true });
 };
 
+// src/core/utils/math.js
+var math = function() {
+  return {
+    rand(min, max) {
+      return Math.random() * (max - min) + min;
+    },
+    randint(min, max) {
+      return Math.floor(Math.random() * (max - min + 1) + min);
+    },
+    lerp(x, a, b2) {
+      return a + (b2 - a) * x;
+    },
+    clamp(x, a, b2) {
+      return Math.min(Math.max(x, a), b2);
+    },
+    in_range(x, a, b2) {
+      return x >= a && x <= b2;
+    },
+    sat(x) {
+      return Math.min(Math.max(x, 0), 1);
+    },
+    ease_out(x) {
+      return Math.min(Math.max(Math.pow(x, 1 / 2), 0), 1);
+    },
+    ease_in(x) {
+      return Math.min(Math.max(Math.pow(x, 3), 0), 1);
+    }
+  };
+}();
+
+// src/core/audio-manager.js
+var AudioSection = class {
+  constructor() {
+    this._volume = 1;
+    this._playing = false;
+    this._audioMap = new Map();
+    this._current = null;
+  }
+  get volume() {
+    return this._volume;
+  }
+  set volume(num) {
+    num = math.sat(num);
+    this._volume = num;
+    this._audioMap.forEach((audio) => {
+      audio.volume = this._volume;
+    });
+  }
+  get playing() {
+    return this._current ? !this._current.paused : false;
+  }
+  AddAudio(n, audio, loop = false) {
+    audio.loop = loop;
+    audio.volume = this._volume;
+    this._audioMap.set(n, audio);
+  }
+  Play(n, fromStart = false) {
+    if (this._current) {
+      this._current.pause();
+    }
+    const audio = this._audioMap.get(n);
+    if (audio) {
+      this._current = audio;
+      if (fromStart) {
+        this._current.currentTime = 0;
+      }
+      this._current.play();
+    }
+  }
+  PlayClone(n) {
+    const audio = this._audioMap.get(n);
+    if (audio) {
+      const audioClone = audio.cloneNode(true);
+      audioClone.volume = this._volume;
+      audioClone.play();
+    }
+  }
+  Pause() {
+    if (this._current) {
+      this._current.pause();
+    }
+  }
+};
+
 // src/core/utils/timeout-handler.js
 var TimeoutHandler = class {
   constructor() {
@@ -55,14 +139,113 @@ var Engine = class {
   }
 };
 
+// src/core/utils/vector.js
+var Vector2 = class {
+  constructor(x = 0, y = 0) {
+    this._x = x;
+    this._y = y;
+  }
+  get x() {
+    return this._x;
+  }
+  get y() {
+    return this._y;
+  }
+  set x(num) {
+    this.Set(num, this.y);
+  }
+  set y(num) {
+    this.Set(this.x, num);
+  }
+  Set(x, y) {
+    this._x = x;
+    this._y = y;
+  }
+  Copy(v1) {
+    this.Set(v1.x, v1.y);
+    return this;
+  }
+  Clone() {
+    return new Vector2(this.x, this.y);
+  }
+  Add(v1) {
+    this.Set(this.x + v1.x, this.y + v1.y);
+    return this;
+  }
+  Sub(v1) {
+    this.Set(this.x - v1.x, this.y - v1.y);
+    return this;
+  }
+  Mult(s) {
+    this.Set(this.x * s, this.y * s);
+    return this;
+  }
+  Norm() {
+    this.Set(this.y, -this.x);
+    return this;
+  }
+  Unit() {
+    const z = this.Mag();
+    if (z === 0) {
+      return this;
+    }
+    this.Set(this.x / z, this.y / z);
+    return this;
+  }
+  Mag() {
+    return Math.sqrt(Math.pow(this.x, 2) + Math.pow(this.y, 2));
+  }
+  Lerp(v1, alpha) {
+    return this.Add(v1.Clone().Sub(this).Mult(alpha));
+  }
+  Angle() {
+    return Math.atan2(this.y, this_x);
+  }
+  Rotate(angle) {
+    const sin = Math.sin(angle);
+    const cos = Math.cos(angle);
+    const x = this.x * cos - this.y * sin;
+    const y = this.x * sin + this.y * cos;
+    this.Set(x, y);
+    return this;
+  }
+  static Dot(v1, v2) {
+    return v1.x * v2.x + v1.y * v2.y;
+  }
+  static Dist(v1, v2) {
+    return v1.Clone().Sub(v2).Mag();
+  }
+  static AngleBetween(v1, v2) {
+    const z1 = v1.Mag();
+    const z2 = v2.Mag();
+    if (z1 === 0 || z2 === 0) {
+      return 0;
+    }
+    return Math.acos(Vector2.Dot(v1, v2) / (z1 * z2));
+  }
+};
+var PositionVector = class extends Vector2 {
+  constructor(positionFunction, x = 0, y = 0) {
+    super(x, y);
+    this._positionFunction = positionFunction;
+  }
+  Set(x, y) {
+    if (x !== this.x || y !== this.y) {
+      this._x = x;
+      this._y = y;
+      this._positionFunction();
+    }
+  }
+};
+
 // src/core/renderer.js
 var Renderer = class {
-  constructor(params) {
-    this._width = params.width;
-    this._height = params.height;
+  constructor(params2) {
+    this._width = params2.width;
+    this._height = params2.height;
     this._aspect = this._width / this._height;
     this._scale = 1;
-    this.background = "black";
+    this.background = params2.background || "black";
     this._InitContainer();
     this._InitCanvas();
     this._OnResize();
@@ -123,10 +306,11 @@ var Renderer = class {
     ctx.translate(-cam.position.x * cam.scale + this._width / 2, -cam.position.y * cam.scale + this._height / 2);
     ctx.scale(cam.scale, cam.scale);
     for (let elem of scene._drawable) {
-      const pos = elem.position.Clone();
+      const boundingBox = elem.boundingBox;
+      const pos = new Vector2(boundingBox.x, boundingBox.y);
       pos.Sub(cam.position);
       pos.Mult(cam.scale);
-      const [width, height] = [elem.boundingBox.width, elem.boundingBox.height].map((_) => _ * cam.scale);
+      const [width, height] = [boundingBox.width, boundingBox.height].map((_) => _ * cam.scale);
       if (pos.x + width / 2 < -this._width / 2 || pos.x - width / 2 > this._width / 2 || pos.y + height / 2 < -this._height / 2 || pos.y - height / 2 > this._height / 2) {
         continue;
       }
@@ -169,36 +353,6 @@ var SceneManager = class {
     return this._currentScene;
   }
 };
-
-// src/core/utils/math.js
-var math = function() {
-  return {
-    rand(min, max) {
-      return Math.random() * (max - min) + min;
-    },
-    randint(min, max) {
-      return Math.floor(Math.random() * (max - min + 1) + min);
-    },
-    lerp(x, a, b2) {
-      return a + (b2 - a) * x;
-    },
-    clamp(x, a, b2) {
-      return Math.min(Math.max(x, a), b2);
-    },
-    in_range(x, a, b2) {
-      return x >= a && x <= b2;
-    },
-    sat(x) {
-      return Math.min(Math.max(x, 0), 1);
-    },
-    ease_out(x) {
-      return Math.min(Math.max(Math.pow(x, 1 / 2), 0), 1);
-    },
-    ease_in(x) {
-      return Math.min(Math.max(Math.pow(x, 3), 0), 1);
-    }
-  };
-}();
 
 // src/core/spatial-hash-grid.js
 var SpatialHashGrid = class {
@@ -310,152 +464,64 @@ var EntityManager = class {
   }
 };
 
-// src/core/utils/vector.js
-var Vector2 = class {
-  constructor(x = 0, y = 0) {
-    this._x = x;
-    this._y = y;
-  }
-  get x() {
-    return this._x;
-  }
-  get y() {
-    return this._y;
-  }
-  set x(num) {
-    this._x = num;
-  }
-  set y(num) {
-    this._y = num;
-  }
-  Copy(v1) {
-    this._x = v1._x;
-    this._y = v1._y;
-  }
-  Clone() {
-    return new Vector2(this._x, this._y);
-  }
-  Add(v1) {
-    this._x += v1._x;
-    this._y += v1._y;
-    return this;
-  }
-  Sub(v1) {
-    this._x -= v1._x;
-    this._y -= v1._y;
-    return this;
-  }
-  Mult(s) {
-    this._x *= s;
-    this._y *= s;
-    return this;
-  }
-  Norm() {
-    [this._x, this._y] = [this._y, -this._x];
-    return this;
-  }
-  Unit() {
-    const z = this.Mag();
-    if (z === 0) {
-      return this;
-    }
-    this._x /= z;
-    this._y /= z;
-    return this;
-  }
-  Mag() {
-    return Math.sqrt(Math.pow(this._x, 2) + Math.pow(this._y, 2));
-  }
-  Lerp(v1, alpha) {
-    this.Add(v1.Clone().Sub(this).Mult(alpha));
-    return this;
-  }
-  Angle() {
-    return Math.atan2(this._y, this._x);
-  }
-  Rotate(angle) {
-    const x = this._x * Math.cos(angle) - this._y * Math.sin(angle);
-    const y = this._x * Math.sin(angle) + this._y * Math.cos(angle);
-    this._x = x;
-    this._y = y;
-    return this;
-  }
-  static Dot(v1, v2) {
-    return v1._x * v2._x + v1._y * v2._y;
-  }
-  static Dist(v1, v2) {
-    return Math.sqrt(Math.pow(v1._x - v2._x, 2) + Math.pow(v1._y - v2._y, 2));
-  }
-  static AngleBetween(v1, v2) {
-    const z1 = v1.Mag();
-    const z2 = v2.Mag();
-    if (z1 === 0 || z2 === 0) {
-      return 0;
-    }
-    return Math.acos(Vector2.Dot(v1, v2) / (z1 * z2));
-  }
-};
-var PositionVector = class extends Vector2 {
-  constructor(parent, x = 0, y = 0) {
-    super(x, y);
-    this._parent = parent;
-  }
-  get x() {
-    return this._x;
-  }
-  set x(num) {
-    const vec = new Vector2(num, this._y);
-    this._parent.position = vec;
-    this._x = num;
-  }
-  get y() {
-    return this._y;
-  }
-  set y(num) {
-    const vec = new Vector2(this._x, num);
-    this._parent.position = vec;
-    this._y = num;
-  }
-};
-
 // src/core/utils/position.js
 var Position = class {
-  constructor(parent) {
-    this._parent = parent;
-    this._pos = new PositionVector(parent);
+  constructor() {
+    this._pos = new PositionVector(this.DoWeirdStuff.bind(this));
+    this._parent = null;
+    this._fixed = false;
+    this._offset = new PositionVector(this.DoWeirdStuffWithOffset.bind(this));
+    ;
     this._attached = [];
     this._moving = null;
   }
-  Clip(e) {
-    this._attached.push(e);
+  Clip(p, fixed = false) {
+    this._attached.push(p);
+    p._parent = this;
+    p._fixed = fixed;
+    p._offset.Copy(p.position.Clone().Sub(this.position));
   }
   Unclip(e) {
     const i = this._attached.indexOf(e);
     if (i != -1) {
       this._attached.splice(i, 1);
+      e._parent = null;
     }
   }
   get position() {
     return this._pos;
   }
   set position(p) {
-    for (let e of this._attached) {
-      const offset = e._pos.Clone().Sub(this._pos);
-      e._parent.position = p.Clone().Add(offset);
-    }
-    this._pos.Copy(p);
+    this.position.Copy(p);
   }
   MoveTo(p, dur, timing = "linear") {
     this._moving = {
       counter: 0,
       dur,
-      from: this._pos.Clone(),
+      from: this.position.Clone(),
       to: p,
       timing
     };
   }
   StopMoving() {
     this._moving = null;
+  }
+  DoWeirdStuff() {
+    if (this._parent) {
+      if (this._fixed) {
+        this._parent.position.Copy(this.position.Clone().Sub(this._offset));
+      } else {
+        this._offset.Copy(this.position.Clone().Sub(this._parent.position));
+      }
+    }
+    for (let p of this._attached) {
+      p.position.Copy(this.position.Clone().Add(p._offset));
+    }
+  }
+  DoWeirdStuffWithOffset() {
+    if (this._parent && this._fixed) {
+      this.position.Copy(this._parent.position.Clone().Add(this._offset));
+    }
   }
   Update(elapsedTimeS) {
     if (this._moving) {
@@ -474,7 +540,7 @@ var Position = class {
           value = math.ease_out(progress);
           break;
       }
-      this._parent.position = anim.from.Clone().Lerp(anim.to, value);
+      this.position.Copy(anim.from.Clone().Lerp(anim.to, value));
       if (progress == 1) {
         this._moving = null;
       }
@@ -485,8 +551,7 @@ var Position = class {
 // src/core/camera.js
 var Camera = class {
   constructor() {
-    this._position = new Position(this);
-    this._pos = this._position._pos;
+    this._position = new Position();
     this.scale = 1;
     this._target = null;
     this._vel = new Vector2();
@@ -495,10 +560,10 @@ var Camera = class {
     this._offset = new Vector2();
   }
   get position() {
-    return this._pos;
+    return this._position.position;
   }
   set position(vec) {
-    this._position.position = vec;
+    this._position.position.Copy(vec);
   }
   get shaking() {
     return this._shaking;
@@ -562,16 +627,12 @@ var Camera = class {
     if (this.moving) {
       this._position.Update(elapsedTimeS);
     } else if (this._target) {
-      if (Vector2.Dist(this._pos, this._target._pos) < 1) {
-        this.position = this._target._pos.Clone();
-      } else {
-        const t = 4 * elapsedTimeS;
-        this.position = this._pos.Clone().Lerp(this._target._pos, t);
-      }
+      const t = 4 * elapsedTimeS;
+      this.position.Lerp(this._target.position, t);
     } else {
       const vel = this._vel.Clone();
       vel.Mult(elapsedTimeS);
-      this.position = this._pos.Clone().Add(vel);
+      this.position.Add(vel);
     }
     if (this._scaling) {
       const anim = this._scaling;
@@ -598,9 +659,9 @@ var Camera = class {
       const anim = this._shaking;
       anim.counter += elapsedTimeS * 1e3;
       const progress = Math.min(anim.counter / anim.dur, 1);
-      this.position = this._pos.Clone().Sub(this._offset);
+      this.position.Sub(this._offset);
       this._offset.Copy(new Vector2(Math.sin(progress * Math.PI * 2 * anim.count) * anim.range, 0).Rotate(anim.angle));
-      this.position = this._pos.Clone().Add(this._offset);
+      this.position.Add(this._offset);
       if (progress == 1) {
         this.StopShaking();
       }
@@ -613,8 +674,7 @@ var Component = class {
   constructor() {
     this._type = "";
     this._parent = null;
-    this._pos = new PositionVector(this);
-    this.offset = new Vector2();
+    this._position = new Position();
   }
   get type() {
     return this._type;
@@ -626,11 +686,16 @@ var Component = class {
     return this._parent;
   }
   get position() {
-    return this._pos;
+    return this._position.position;
   }
-  set position(vec) {
-    this._pos.Copy(vec);
-    this._parent.SetPosition(vec.Clone().Sub(this.offset));
+  set position(p) {
+    this._position.position = p;
+  }
+  get offset() {
+    return this._position._offset;
+  }
+  set offset(vec) {
+    this._position._offset.Copy(vec);
   }
   InitComponent() {
   }
@@ -646,9 +711,9 @@ var Component = class {
 
 // src/core/interactive.js
 var Interactive = class extends Component {
-  constructor(params) {
+  constructor(params2) {
     super();
-    this._capture = params.capture;
+    this._capture = params2.capture === void 0 ? false : params2.capture;
     this._eventHandlers = new Map();
   }
   AddEventHandler(type, handler) {
@@ -679,14 +744,86 @@ var Interactive = class extends Component {
   }
 };
 
+// src/core/entity.js
+var Entity = class {
+  constructor() {
+    this._position = new Position(this.DoWeirdStuff.bind(this));
+    this._components = new Map();
+    this._parent = null;
+    this._name = null;
+    this._scene = null;
+    this.groupList = new Set();
+  }
+  get name() {
+    return this._name;
+  }
+  get scene() {
+    return this._scene;
+  }
+  get position() {
+    return this._position.position;
+  }
+  set position(p) {
+    this._position.position = p;
+  }
+  get moving() {
+    return this._position._moving;
+  }
+  DoWeirdStuff() {
+    this._components.forEach((c) => {
+      c.position.Copy(this.position.Clone().Add(c.offset));
+    });
+  }
+  Update(elapsedTimeS) {
+    this._position.Update(elapsedTimeS);
+    this._components.forEach((c) => {
+      c.Update(elapsedTimeS);
+    });
+  }
+  Clip(e, fixed = false) {
+    this._position.Clip(e._position, fixed);
+  }
+  Unclip(e) {
+    this._position.Unclip(e._position);
+  }
+  MoveTo(p, dur, timing = "linear") {
+    this._position.MoveTo(p, dur, timing);
+  }
+  StopMoving() {
+    this._position.StopMoving();
+  }
+  AddComponent(c, n) {
+    if (n === void 0) {
+      n = c.constructor.name;
+    }
+    this._components.set(n, c);
+    c._parent = this;
+    c.position.Copy(this.position.Clone().Add(c.offset));
+    this.Clip(c, true);
+    c.InitComponent();
+    switch (c.type) {
+      case "drawable":
+        this.scene._AddDrawable(c);
+        break;
+      case "body":
+        this.scene._AddBody(this, c);
+        break;
+    }
+  }
+  GetComponent(n) {
+    return this._components.get(n);
+  }
+  FindEntity(n) {
+    return this._parent.Get(n);
+  }
+};
+
 // src/core/scene.js
 var Scene = class {
-  constructor(params) {
-    this._resources = params.resources;
-    this._input = params.input;
-    this._bounds = params.bounds;
-    this._cellDimensions = params.cellDimensions || [100, 100];
-    this._relaxationCount = params.relaxationCount || 5;
+  constructor(params2) {
+    this._bounds = params2.bounds;
+    this._cellDimensions = params2.cellDimensions || [100, 100];
+    this._relaxationCount = params2.relaxationCount || 5;
     this.paused = true;
     this.speed = 1;
     this.timeout = new TimeoutHandler();
@@ -700,6 +837,11 @@ var Scene = class {
   }
   get camera() {
     return this._camera;
+  }
+  CreateEntity(n) {
+    const e = new Entity();
+    this.AddEntity(e, n);
+    return e;
   }
   AddEventHandler(type, handler) {
     if (!this._eventHandlers.has(type)) {
@@ -718,9 +860,9 @@ var Scene = class {
       handlers.splice(idx, 1);
     }
   }
-  SetInteractive(entity, params) {
+  SetInteractive(entity, params2 = {}) {
     this._interactiveEntities.push(entity);
-    const interactive = new Interactive(params);
+    const interactive = new Interactive(params2);
     entity.AddComponent(interactive);
     entity.interactive = interactive;
   }
@@ -765,13 +907,6 @@ var Scene = class {
   AddEntity(e, n) {
     e._scene = this;
     this._entityManager.Add(e, n);
-    e._components.forEach((c) => {
-      if (c._type == "drawable") {
-        this._AddDrawable(c);
-      } else if (c._type == "body") {
-        this._AddBody(e, c);
-      }
-    });
   }
   RemoveEntity(e) {
     this._entityManager.Remove(e);
@@ -852,91 +987,6 @@ var Scene = class {
   }
 };
 
-// src/core/game.js
-var Game = class {
-  constructor(params) {
-    this._width = params.width;
-    this._height = params.height;
-    this._renderer = new Renderer({
-      width: this._width,
-      height: this._height
-    });
-    this._engine = new Engine();
-    this._sceneManager = new SceneManager();
-    this.timeout = this._engine.timeout;
-    const step = (elapsedTime) => {
-      const scene = this._sceneManager.currentScene;
-      if (scene) {
-        scene.Update(elapsedTime * 1e-3);
-      }
-      this._renderer.Render(scene);
-    };
-    this._engine._step = step;
-    this._InitSceneEvents();
-    this._engine.Start();
-  }
-  get background() {
-    return this._renderer.background;
-  }
-  set background(col) {
-    this._renderer.background = col;
-  }
-  _InitSceneEvents() {
-    const isTouchDevice = "ontouchstart" in document;
-    const cnv = this._renderer._canvas;
-    if (isTouchDevice) {
-      cnv.addEventListener("touchstart", (e) => this._HandleTouchEvent(e));
-      cnv.addEventListener("touchmove", (e) => this._HandleTouchEvent(e));
-      cnv.addEventListener("touchend", (e) => this._HandleTouchEvent(e));
-    } else {
-      cnv.addEventListener("mousedown", (e) => this._HandleMouseEvent(e));
-      cnv.addEventListener("mousemove", (e) => this._HandleMouseEvent(e));
-      cnv.addEventListener("mouseup", (e) => this._HandleMouseEvent(e));
-    }
-  }
-  _HandleTouchEvent(e) {
-    const touchToMouseType = {
-      "touchstart": "mousedown",
-      "touchmove": "mousemove",
-      "touchend": "mouseup"
-    };
-    this._HandleSceneEvent(touchToMouseType[e.type], e.changedTouches[0].pageX, e.changedTouches[0].pageY);
-  }
-  _HandleMouseEvent(e) {
-    this._HandleSceneEvent(e.type, e.pageX, e.pageY);
-  }
-  _HandleSceneEvent(type, x, y) {
-    const scene = this._sceneManager.currentScene;
-    if (scene) {
-      const coords = this._renderer.DisplayToSceneCoords(scene, x, y);
-      scene._On(type, { x: coords.x, y: coords.y, id: 0, type });
-    }
-  }
-  CreateSection(id) {
-  }
-  ShowSection(id) {
-  }
-  HideSection(id) {
-  }
-  CreateScene(n, params = {}) {
-    const scene = new Scene({
-      bounds: params.bounds || [[-1e3, -1e3], [1e3, 1e3]],
-      cellDimensions: params.cellDimensions
-    });
-    this._sceneManager.Add(scene, n);
-    return scene;
-  }
-  PlayScene(n) {
-    return this._sceneManager.Play(n);
-  }
-  PauseScene() {
-    const scene = this._sceneManager.currentScene;
-    if (scene) {
-      scene.paused ? scene.Play() : scene.Pause();
-    }
-  }
-};
-
 // src/core/loader.js
 var Loader = class {
   constructor() {
@@ -948,7 +998,7 @@ var Loader = class {
   _Add(n, p, type) {
     this._toLoad.push({
       name: n,
-      path: this._path + "/" + p,
+      path: this._path + p,
       type
     });
     ++this._size;
@@ -1049,70 +1099,152 @@ var Loader = class {
   }
 };
 
-// src/core/entity.js
-var Entity = class {
-  constructor() {
-    this._position = new Position(this);
-    this._pos = this._position._pos;
-    this._components = new Map();
-    this._parent = null;
-    this._name = null;
-    this._scene = null;
-    this.groupList = new Set();
-  }
-  get name() {
-    return this._name;
-  }
-  get scene() {
-    return this._scene;
-  }
-  get parent() {
-    return this._parent;
-  }
-  get position() {
-    return this._pos;
-  }
-  set position(p) {
-    this._position.position = p;
-    this._components.forEach((c) => {
-      c._pos.Copy(this._pos.Clone().Add(c.offset));
+// src/core/game.js
+var Game = class {
+  constructor(params2) {
+    this._width = params2.width;
+    this._height = params2.height;
+    this._preload = params2.preload.bind(this);
+    this._init = params2.init.bind(this);
+    this._resources = null;
+    this._loader = new Loader();
+    this._renderer = new Renderer({
+      width: this._width,
+      height: this._height,
+      background: params2.background
     });
-  }
-  get moving() {
-    return this._position._moving;
-  }
-  Update(elapsedTimeS) {
-    this._position.Update(elapsedTimeS);
-    this._components.forEach((c) => {
-      c.Update(elapsedTimeS);
-    });
-  }
-  Clip(e) {
-    this._position.Clip(e._position);
-  }
-  Unclip(e) {
-    this._position.Unclip(e._position);
-  }
-  MoveTo(p, dur, timing = "linear") {
-    this._position.MoveTo(p, dur, timing);
-  }
-  StopMoving() {
-    this._position.StopMoving();
-  }
-  AddComponent(c, n) {
-    if (n === void 0) {
-      n = c.constructor.name;
+    this._engine = new Engine();
+    this._sceneManager = new SceneManager();
+    this.timeout = this._engine.timeout;
+    this.audio = (() => {
+      const sections = new Map();
+      const AddSection = (n) => {
+        sections.set(n, new AudioSection());
+      };
+      AddSection("music");
+      AddSection("effects");
+      const AddAudio = (sectionName, audioName, loop = false) => {
+        const section = sections.get(sectionName);
+        section.AddAudio(audioName, this._resources.get(audioName), loop);
+      };
+      const AddMusic = (audioName, loop = false) => {
+        AddAudio("music", audioName, loop);
+      };
+      const AddEffect = (audioName, loop = false) => {
+        AddAudio("effects", audioName, loop);
+      };
+      return {
+        get music() {
+          return sections.get("music");
+        },
+        get effects() {
+          return sections.get("effects");
+        },
+        AddMusic,
+        AddEffect
+      };
+    })();
+    const step = (elapsedTime) => {
+      const scene = this._sceneManager.currentScene;
+      if (scene) {
+        scene.Update(elapsedTime * 1e-3);
+      }
+      this._renderer.Render(scene);
+    };
+    this._engine._step = step;
+    this._InitSceneEvents();
+    this._engine.Start();
+    if (this._preload) {
+      this._preload();
+      this._loader.Load((data) => {
+        this._resources = data;
+        this._init();
+      });
+    } else {
+      this._resources = new Map();
+      this._init();
     }
-    this._components.set(n, c);
-    c._parent = this;
-    c._pos.Copy(this._pos.Clone().Add(c.offset));
-    c.InitComponent();
   }
-  GetComponent(n) {
-    return this._components.get(n);
+  get background() {
+    return this._renderer.background;
   }
-  FindEntity(n) {
-    return this._parent.Get(n);
+  set background(col) {
+    this._renderer.background = col;
+  }
+  get loader() {
+    return this._loader;
+  }
+  get resources() {
+    return this._resources;
+  }
+  _InitSceneEvents() {
+    const isTouchDevice = "ontouchstart" in document;
+    const cnv = this._renderer._canvas;
+    if (isTouchDevice) {
+      cnv.addEventListener("touchstart", (e) => this._HandleTouchEvent(e));
+      cnv.addEventListener("touchmove", (e) => this._HandleTouchEvent(e));
+      cnv.addEventListener("touchend", (e) => this._HandleTouchEvent(e));
+    } else {
+      cnv.addEventListener("mousedown", (e) => this._HandleMouseEvent(e));
+      cnv.addEventListener("mousemove", (e) => this._HandleMouseEvent(e));
+      cnv.addEventListener("mouseup", (e) => this._HandleMouseEvent(e));
+    }
+  }
+  _HandleTouchEvent(e) {
+    const touchToMouseType = {
+      "touchstart": "mousedown",
+      "touchmove": "mousemove",
+      "touchend": "mouseup"
+    };
+    this._HandleSceneEvent(touchToMouseType[e.type], e.changedTouches[0].pageX, e.changedTouches[0].pageY);
+  }
+  _HandleMouseEvent(e) {
+    this._HandleSceneEvent(e.type, e.pageX, e.pageY);
+  }
+  _HandleSceneEvent(type, x, y) {
+    const scene = this._sceneManager.currentScene;
+    if (scene) {
+      const coords = this._renderer.DisplayToSceneCoords(scene, x, y);
+      scene._On(type, { x: coords.x, y: coords.y, id: 0, type });
+    }
+  }
+  CreateSection(id) {
+    const section = document.createElement("div");
+    section.id = id;
+    section.style.position = "absolute";
+    section.style.left = "0";
+    section.style.top = "0";
+    section.style.width = "100%";
+    section.style.height = "100%";
+    section.style.display = "none";
+    this._renderer._container.appendChild(section);
+    return section;
+  }
+  GetSection(id) {
+    return document.getElementById(id);
+  }
+  ShowSection(id) {
+    this.GetSection(id).style.display = "block";
+  }
+  HideSection(id) {
+    this.GetSection(id).style.display = "none";
+  }
+  CreateScene(n, params2 = {}) {
+    const scene = new Scene({
+      bounds: params2.bounds || [[-1e3, -1e3], [1e3, 1e3]],
+      cellDimensions: params2.cellDimensions
+    });
+    this._sceneManager.Add(scene, n);
+    return scene;
+  }
+  PlayScene(n) {
+    return this._sceneManager.Play(n);
+  }
+  PauseScene() {
+    const scene = this._sceneManager.currentScene;
+    if (scene) {
+      scene.paused ? scene.Play() : scene.Pause();
+    }
   }
 };
 
@@ -1122,26 +1254,28 @@ __export(drawable_exports, {
   Circle: () => Circle,
   Drawable: () => Drawable,
   Picture: () => Picture,
+  Polygon: () => Polygon,
   Rect: () => Rect,
   Sprite: () => Sprite,
   Text: () => Text
 });
 var Drawable = class extends Component {
-  constructor(params) {
+  constructor(params2) {
     super();
     this._type = "drawable";
-    this._params = params;
+    this._params = params2;
     this._width = this._params.width || 0;
     this._height = this._params.height || 0;
+    this._vertices = [];
     this._zIndex = this._params.zIndex || 0;
     this.flip = {
       x: this._params.flipX || false,
       y: this._params.flipY || false
     };
+    this._scale = params2.scale || 1;
     this._rotationCount = this._params.rotationCount || 0;
     this.opacity = this._params.opacity !== void 0 ? this._params.opacity : 1;
     this._angle = this._params.angle || this._rotationCount * Math.PI / 2 || 0;
-    this.boundingBox = { width: 0, height: 0, x: 0, y: 0 };
   }
   get zIndex() {
     return this._zIndex;
@@ -1161,15 +1295,14 @@ var Drawable = class extends Component {
   }
   set width(num) {
     this._width = num;
-    this._UpdateBoundingBox();
+    this._ComputeVertices();
   }
   set height(num) {
     this._height = num;
-    this._UpdateBoundingBox();
+    this._ComputeVertices();
   }
   set angle(num) {
     this._angle = num;
-    this._UpdateBoundingBox();
   }
   get angle() {
     return this._angle;
@@ -1181,28 +1314,52 @@ var Drawable = class extends Component {
     this._rotationCount = num;
     this.angle = this._rotationCount * Math.PI / 2;
   }
-  InitComponent() {
-    this._UpdateBoundingBox();
+  get scale() {
+    return this._scale;
   }
-  _UpdateBoundingBox() {
-    const vertices = new Array(4);
-    vertices[0] = new Vector2(-this._width / 2, -this._height / 2).Rotate(this._angle);
-    vertices[1] = new Vector2(this._width / 2, -this._height / 2).Rotate(this._angle);
-    vertices[2] = new Vector2(this._width / 2, this._height / 2).Rotate(this._angle);
-    vertices[3] = new Vector2(-this._width / 2, this._height / 2).Rotate(this._angle);
-    let width = 0, height = 0;
-    for (let i = 0; i < 2; ++i) {
-      const w = Math.abs(vertices[i].x) + Math.abs(vertices[i + 2].x);
-      const h = Math.abs(vertices[i].y) + Math.abs(vertices[i + 2].y);
-      if (w > width) {
-        width = w;
+  set scale(num) {
+    this._scale = num;
+  }
+  get boundingBox() {
+    const vertices = this._vertices;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (let v of vertices) {
+      if (v.x < minX) {
+        minX = v.x;
+      } else if (v.x > maxX) {
+        maxX = v.x;
       }
-      if (h > height) {
-        height = h;
+      if (v.y < minY) {
+        minY = v.y;
+      } else if (v.y > maxY) {
+        maxY = v.y;
       }
     }
-    this.boundingBox.width = width;
-    this.boundingBox.height = height;
+    const width = maxX - minX;
+    const height = maxY - minY;
+    const centerX = this.position.x + minX + width / 2;
+    const centerY = this.position.y + minY + height / 2;
+    return { x: centerX, y: centerY, width, height };
+  }
+  InitComponent() {
+    this._ComputeVertices();
+  }
+  GetVertices() {
+    return [
+      new Vector2(-this._width / 2, -this._height / 2),
+      new Vector2(this._width / 2, -this._height / 2),
+      new Vector2(-this._width / 2, this._height / 2),
+      new Vector2(this._width / 2, this._height / 2)
+    ];
+  }
+  _ComputeVertices() {
+    this._vertices = this.GetVertices();
+    for (let i = 0; i < this._vertices.length; ++i) {
+      const v = this._vertices[i];
+      v.x *= this.flip.x ? -this.scale : this.scale;
+      v.y *= this.flip.y ? -this.scale : this.scale;
+      v.Rotate(this.angle);
+    }
   }
   SetSize(w, h) {
     this._width = w;
@@ -1212,11 +1369,12 @@ var Drawable = class extends Component {
   }
 };
 var Text = class extends Drawable {
-  constructor(params) {
-    super(params);
+  constructor(params2) {
+    super(params2);
     this._text = this._params.text;
     this._lines = this._text.split(/\n/);
     this._padding = this._params.padding || 0;
+    this._align = params2.align || "center";
     this._fontSize = this._params.fontSize || 16;
     this._fontFamily = this._params.fontFamily || "Arial";
     this._color = this._params.color || "black";
@@ -1256,6 +1414,13 @@ var Text = class extends Drawable {
     this._padding = val;
     this._ComputeDimensions();
   }
+  get align() {
+    return this._align;
+  }
+  set align(s) {
+    this._align = s;
+    this._ComputeDimensions();
+  }
   _ComputeDimensions() {
     this._height = this.lineHeight * this.linesCount;
     let maxWidth = 0;
@@ -1267,27 +1432,29 @@ var Text = class extends Drawable {
         maxWidth = lineWidth;
       }
     }
-    this._width = maxWidth;
+    this._width = maxWidth + this._padding * 2;
   }
   Draw(ctx) {
+    let offsetX = this._align == "left" ? -this._width / 2 : this._align == "right" ? this._width / 2 : 0;
     ctx.beginPath();
     ctx.save();
     ctx.globalAlpha = this.opacity;
-    ctx.translate(this._pos.x, this._pos.y);
+    ctx.translate(this.position.x, this.position.y);
+    ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
     ctx.rotate(this.angle);
     ctx.fillStyle = this._color;
     ctx.font = `${this._fontSize}px '${this._fontFamily}'`;
-    ctx.textAlign = "center";
+    ctx.textAlign = this._align;
     ctx.textBaseline = "middle";
     for (let i = 0; i < this.linesCount; ++i) {
-      ctx.fillText(this._lines[i], 0, this.lineHeight * i - (this.linesCount - 1) / 2 * this.lineHeight);
+      ctx.fillText(this._lines[i], offsetX + this._padding, this.lineHeight * i - (this.linesCount - 1) / 2 * this.lineHeight);
     }
     ctx.restore();
   }
 };
 var Picture = class extends Drawable {
-  constructor(params) {
-    super(params);
+  constructor(params2) {
+    super(params2);
     this._image = this._params.image;
     this._frameWidth = this._params.frameWidth || this._image.width;
     this._frameHeight = this._params.frameHeight || this._image.height;
@@ -1299,29 +1466,30 @@ var Picture = class extends Drawable {
   Draw(ctx) {
     ctx.save();
     ctx.globalAlpha = this.opacity;
-    ctx.translate(this._pos.x, this._pos.y);
-    ctx.scale(this.flip.x ? -1 : 1, this.flip.y ? -1 : 1);
+    ctx.translate(this.position.x, this.position.y);
+    ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
     ctx.rotate(this.angle);
     ctx.drawImage(this._image, this._framePos.x * this._frameWidth, this._framePos.y * this._frameHeight, this._frameWidth, this._frameHeight, -this._width / 2, -this._height / 2, this._width, this._height);
     ctx.restore();
   }
 };
 var Rect = class extends Drawable {
-  constructor(params) {
-    super(params);
+  constructor(params2) {
+    super(params2);
     this.background = this._params.background || "black";
     this.borderColor = this._params.borderColor || "black";
     this.borderWidth = this._params.borderWidth || 0;
   }
   Draw(ctx) {
-    ctx.beginPath();
     ctx.save();
     ctx.globalAlpha = this.opacity;
-    ctx.translate(this._pos.x, this._pos.y);
+    ctx.translate(this.position.x, this.position.y);
+    ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
     ctx.rotate(this.angle);
     ctx.fillStyle = this.background;
     ctx.strokeStyle = this.borderColor;
     ctx.lineWidth = this.borderWidth;
+    ctx.beginPath();
     ctx.rect(-this._width / 2, -this._height / 2, this._width, this._height);
     ctx.fill();
     if (this.borderWidth > 0)
@@ -1330,14 +1498,11 @@ var Rect = class extends Drawable {
   }
 };
 var Circle = class extends Drawable {
-  constructor(params) {
-    super(params);
+  constructor(params2) {
+    super(params2);
     this._radius = this._params.radius;
     this._width = this._radius * 2;
     this._height = this._radius * 2;
-    this.background = this._params.background || "black";
-    this.borderColor = this._params.borderColor || "black";
-    this.borderWidth = this._params.borderWidth || 0;
   }
   get radius() {
     return this._radius;
@@ -1346,17 +1511,55 @@ var Circle = class extends Drawable {
     this._radius = val;
     this._width = this._radius * 2;
     this._height = this._radius * 2;
-    this._UpdateBoundingBox();
+    this._ComputeVertices();
   }
   Draw(ctx) {
-    ctx.beginPath();
     ctx.save();
     ctx.globalAlpha = this.opacity;
-    ctx.translate(this._pos.x, this._pos.y);
+    ctx.translate(this.position.x, this.position.y);
+    ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
     ctx.fillStyle = this.background;
     ctx.strokeStyle = this.borderColor;
     ctx.lineWidth = this.borderWidth;
+    ctx.beginPath();
     ctx.arc(0, 0, this._radius, 0, 2 * Math.PI);
+    ctx.fill();
+    if (this.borderWidth > 0)
+      ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(this._radius, 0);
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+var Polygon = class extends Drawable {
+  constructor(params2) {
+    super(params2);
+    this.background = this._params.background || "black";
+    this.borderColor = this._params.borderColor || "black";
+    this.borderWidth = this._params.borderWidth || 0;
+  }
+  GetVertices() {
+    return this._params.vertices.map((v) => new Vector2(v[0], v[1]));
+  }
+  Draw(ctx) {
+    ctx.save();
+    ctx.globalAlpha = this.opacity;
+    ctx.translate(this.position.x, this.position.y);
+    ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
+    ctx.fillStyle = this.background;
+    ctx.strokeStyle = this.borderColor;
+    ctx.lineWidth = this.borderWidth;
+    ctx.beginPath();
+    for (let i = 0; i < this._vertices.length; ++i) {
+      const v = this._vertices[i];
+      if (i == 0)
+        ctx.moveTo(v.x, v.y);
+      else
+        ctx.lineTo(v.x, v.y);
+    }
+    ctx.closePath();
     ctx.fill();
     if (this.borderWidth > 0)
       ctx.stroke();
@@ -1364,8 +1567,8 @@ var Circle = class extends Drawable {
   }
 };
 var Sprite = class extends Drawable {
-  constructor(params) {
-    super(params);
+  constructor(params2) {
+    super(params2);
     this._anims = new Map();
     this._currentAnim = null;
     this._paused = true;
@@ -1436,23 +1639,26 @@ var Sprite = class extends Drawable {
   Draw(ctx) {
     ctx.save();
     ctx.globalAlpha = this.opacity;
-    ctx.translate(this._pos.x, this._pos.y);
-    ctx.scale(this.flip.x ? -1 : 1, this.flip.y ? -1 : 1);
+    ctx.translate(this.position.x, this.position.y);
+    ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
     ctx.rotate(this.angle);
     ctx.drawImage(this._params.image, this._framePos.x * this._params.frameWidth, this._framePos.y * this._params.frameHeight, this._params.frameWidth, this._params.frameHeight, -this._width / 2, -this._height / 2, this._width, this._height);
     ctx.restore();
   }
 };
 
+// src/core/physics/physics.js
+var physics_exports = {};
+__markAsModule(physics_exports);
+
 // src/Lancelot.js
 var __name = "Lancelot";
 var __export2 = {
   Vector: Vector2,
   Game,
-  Loader,
-  Entity,
   Component,
-  drawable: drawable_exports
+  drawable: drawable_exports,
+  physics: physics_exports
 };
 if (typeof module === "object" && typeof module.exports === "object") {
   module.exports = __export2;
