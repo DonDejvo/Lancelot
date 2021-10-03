@@ -4,8 +4,7 @@ import { math } from "./utils/math.js";
 
 export class Camera {
     constructor() {
-        this._position = new Position(this);
-        this._pos = this._position._pos;
+        this._position = new Position();
         this.scale = 1.0;
         this._target = null;
         this._vel = new Vector();
@@ -14,10 +13,10 @@ export class Camera {
         this._offset = new Vector();
     }
     get position() {
-        return this._pos;
+        return this._position.position;
     }
     set position(vec) {
-        this._position.position = vec;
+        this._position.position.Copy(vec);
     }
     get shaking() {
         return this._shaking;
@@ -82,17 +81,12 @@ export class Camera {
         if (this.moving) {
             this._position.Update(elapsedTimeS);
         } else if (this._target) {
-            if (Vector.Dist(this._pos, this._target._pos) < 1.0) {
-                this.position = this._target._pos.Clone();
-            }
-            else {
-                const t = 4 * elapsedTimeS;
-                this.position = this._pos.Clone().Lerp(this._target._pos, t);
-            }
+            const t = 4 * elapsedTimeS;
+            this.position.Lerp(this._target.position, t);
         } else {
             const vel = this._vel.Clone();
             vel.Mult(elapsedTimeS);
-            this.position = this._pos.Clone().Add(vel);
+            this.position.Add(vel);
         }
 
         if (this._scaling) {
@@ -121,9 +115,9 @@ export class Camera {
             const anim = this._shaking;
             anim.counter += elapsedTimeS * 1000;
             const progress = Math.min(anim.counter / anim.dur, 1);
-            this.position = this._pos.Clone().Sub(this._offset);
+            this.position.Sub(this._offset);
             this._offset.Copy(new Vector(Math.sin(progress * Math.PI * 2 * anim.count) * anim.range, 0).Rotate(anim.angle));
-            this.position = this._pos.Clone().Add(this._offset);
+            this.position.Add(this._offset);
             if (progress == 1) {
                 this.StopShaking();
             }

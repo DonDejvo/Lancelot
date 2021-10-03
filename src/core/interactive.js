@@ -3,7 +3,7 @@ import { Component } from "./component.js";
 export class Interactive extends Component {
     constructor(params) {
         super();
-        this._capture = params.capture;
+        this._capture = params.capture === undefined ? false : params.capture;
         this._eventHandlers = new Map();
     }
     AddEventHandler(type, handler) {

@@ -1,19 +1,17 @@
 import { Game } from "./core/game.js";
-import { Loader } from "./core/loader.js";
-import { Entity } from "./core/entity.js";
 import { Component } from "./core/component.js";
 import * as drawable from "./core/drawable/drawable.js";
 import { Vector } from "./core/utils/vector.js";
+import * as physics from "./core/physics/physics.js";
 
 const __name = 'Lancelot';
 
 let __export = {
     Vector,
     Game,
-    Loader,
-    Entity,
     Component,
-    drawable
+    drawable,
+    physics
 };
 
 if (typeof module === 'object' && typeof module.exports === 'object') {

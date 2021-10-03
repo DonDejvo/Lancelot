@@ -8,16 +8,16 @@ export class Drawable extends Component {
         this._params = params;
         this._width = (this._params.width || 0);
         this._height = (this._params.height || 0);
+        this._vertices = [];
         this._zIndex = (this._params.zIndex || 0);
         this.flip = {
             x: (this._params.flipX || false),
             y: (this._params.flipY || false)
         };
+        this._scale = (params.scale || 1.0);
         this._rotationCount = (this._params.rotationCount || 0);
         this.opacity = this._params.opacity !== undefined ? this._params.opacity : 1;
         this._angle = (this._params.angle || this._rotationCount * Math.PI / 2 || 0);
-
-        this.boundingBox = { width: 0, height: 0, x: 0, y: 0 };
     }
     get zIndex() {
         return this._zIndex;
@@ -37,15 +37,14 @@ export class Drawable extends Component {
     }
     set width(num) {
         this._width = num;
-        this._UpdateBoundingBox();
+        this._ComputeVertices();
     }
     set height(num) {
         this._height = num;
-        this._UpdateBoundingBox();
+        this._ComputeVertices();
     }
     set angle(num) {
         this._angle = num;
-        this._UpdateBoundingBox();
     }
     get angle() {
         return this._angle;
@@ -56,29 +55,54 @@ export class Drawable extends Component {
     set rotationCount(num) {
         this._rotationCount = num;
         this.angle = this._rotationCount * Math.PI / 2;
-    } 
-    InitComponent() {
-        this._UpdateBoundingBox();
     }
-    _UpdateBoundingBox() {
-        const vertices = new Array(4);
-        vertices[0] = new Vector(-this._width / 2, -this._height / 2).Rotate(this._angle);
-        vertices[1] = new Vector(this._width / 2, -this._height / 2).Rotate(this._angle);
-        vertices[2] = new Vector(this._width / 2, this._height / 2).Rotate(this._angle);
-        vertices[3] = new Vector(-this._width / 2, this._height / 2).Rotate(this._angle);
-        let width = 0, height = 0;
-        for(let i = 0; i < 2; ++i) {
-            const w = Math.abs(vertices[i].x) + Math.abs(vertices[i + 2].x);
-            const h = Math.abs(vertices[i].y) + Math.abs(vertices[i + 2].y);
-            if(w > width) {
-                width = w;
+    get scale() {
+        return this._scale;
+    }
+    set scale(num) {
+        this._scale = num;
+    }
+    get boundingBox() {
+        const vertices = this._vertices;
+        
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        for(let v of vertices) {
+            if(v.x < minX) {
+                minX = v.x;
+            } else if(v.x > maxX) {
+                maxX = v.x;
             }
-            if(h > height) {
-                height = h;
+            if(v.y < minY) {
+                minY = v.y;
+            } else if(v.y > maxY) {
+                maxY = v.y;
             }
         }
-        this.boundingBox.width = width;
-        this.boundingBox.height = height;
+        const width = maxX - minX;
+        const height = maxY - minY;
+        const centerX = this.position.x + minX + width / 2;
+        const centerY = this.position.y + minY + height / 2;
+        return { x: centerX, y: centerY, width: width, height: height };
+    }
+    InitComponent() {
+        this._ComputeVertices();
+    }
+    GetVertices() {
+        return [
+            new Vector(-this._width / 2, -this._height / 2),
+            new Vector(this._width / 2, -this._height / 2),
+            new Vector(-this._width / 2, this._height / 2),
+            new Vector(this._width / 2, this._height / 2)
+        ];
+    }
+    _ComputeVertices() {
+        this._vertices = this.GetVertices();
+        for(let i = 0; i < this._vertices.length; ++i) {
+            const v = this._vertices[i];
+            v.x *= this.flip.x ? -this.scale : this.scale;
+            v.y *= this.flip.y ? -this.scale : this.scale;
+            v.Rotate(this.angle);
+        }
     }
     SetSize(w, h) {
         this._width = w;
@@ -93,6 +117,7 @@ export class Text extends Drawable {
         this._text = this._params.text;
         this._lines = this._text.split(/\n/);
         this._padding = (this._params.padding || 0);
+        this._align = (params.align || "center");
         this._fontSize = (this._params.fontSize || 16);
         this._fontFamily = (this._params.fontFamily || "Arial");
         this._color = (this._params.color || "black");
@@ -133,6 +158,13 @@ export class Text extends Drawable {
         this._padding = val;
         this._ComputeDimensions();
     }
+    get align() {
+        return this._align;
+    }
+    set align(s) {
+        this._align = s;
+        this._ComputeDimensions();
+    }
     _ComputeDimensions() {
         this._height = this.lineHeight * this.linesCount;
         let maxWidth = 0;
@@ -144,20 +176,22 @@ export class Text extends Drawable {
                 maxWidth = lineWidth;
             }
         }
-        this._width = maxWidth;
+        this._width = maxWidth + this._padding * 2;
     }
     Draw(ctx) {
+        let offsetX = this._align == "left" ? -this._width / 2 : this._align == "right" ? this._width / 2 : 0;
         ctx.beginPath();
         ctx.save();
         ctx.globalAlpha = this.opacity;
-        ctx.translate(this._pos.x, this._pos.y);
+        ctx.translate(this.position.x, this.position.y);
+        ctx.scale(this.flip.x ? -this.scale: this.scale, this.flip.y ? -this.scale : this.scale);
         ctx.rotate(this.angle);
         ctx.fillStyle = this._color;
         ctx.font = `${this._fontSize}px '${this._fontFamily}'`;
-        ctx.textAlign = "center";
+        ctx.textAlign = this._align;
         ctx.textBaseline = "middle";
         for(let i = 0; i < this.linesCount; ++i) {
-            ctx.fillText(this._lines[i], 0, this.lineHeight * i - (this.linesCount - 1) / 2 * this.lineHeight);
+            ctx.fillText(this._lines[i], offsetX + this._padding, this.lineHeight * i - (this.linesCount - 1) / 2 * this.lineHeight);
         }
         ctx.restore();
     }
@@ -177,8 +211,8 @@ export class Picture extends Drawable {
     Draw(ctx) {
         ctx.save();
         ctx.globalAlpha = this.opacity;
-        ctx.translate(this._pos.x, this._pos.y);
-        ctx.scale(this.flip.x ? -1 : 1, this.flip.y ? -1 : 1);
+        ctx.translate(this.position.x, this.position.y);
+        ctx.scale(this.flip.x ? -this.scale: this.scale, this.flip.y ? -this.scale : this.scale);
         ctx.rotate(this.angle);
         ctx.drawImage(this._image, this._framePos.x * this._frameWidth, this._framePos.y * this._frameHeight, this._frameWidth, this._frameHeight, -this._width / 2, -this._height / 2, this._width, this._height);
         ctx.restore();
@@ -193,14 +227,15 @@ export class Rect extends Drawable {
         this.borderWidth = (this._params.borderWidth || 0);
     }
     Draw(ctx) {
-        ctx.beginPath();
         ctx.save();
         ctx.globalAlpha = this.opacity;
-        ctx.translate(this._pos.x, this._pos.y);
+        ctx.translate(this.position.x, this.position.y);
+        ctx.scale(this.flip.x ? -this.scale: this.scale, this.flip.y ? -this.scale : this.scale);
         ctx.rotate(this.angle);
         ctx.fillStyle = this.background;
         ctx.strokeStyle = this.borderColor;
         ctx.lineWidth = this.borderWidth;
+        ctx.beginPath();
         ctx.rect(-this._width / 2, -this._height / 2, this._width, this._height);
         ctx.fill();
         if(this.borderWidth > 0) ctx.stroke();
@@ -214,9 +249,6 @@ export class Circle extends Drawable {
         this._radius = this._params.radius;
         this._width = this._radius * 2;
         this._height = this._radius * 2;
-        this.background = (this._params.background || "black");
-        this.borderColor = (this._params.borderColor || "black");
-        this.borderWidth = (this._params.borderWidth || 0);
     }
     get radius() {
         return this._radius;
@@ -225,17 +257,53 @@ export class Circle extends Drawable {
         this._radius = val;
         this._width = this._radius * 2;
         this._height = this._radius * 2;
-        this._UpdateBoundingBox();
+        this._ComputeVertices();
     }
     Draw(ctx) {
-        ctx.beginPath();
         ctx.save();
         ctx.globalAlpha = this.opacity;
-        ctx.translate(this._pos.x, this._pos.y);
+        ctx.translate(this.position.x, this.position.y);
+        ctx.scale(this.flip.x ? -this.scale: this.scale, this.flip.y ? -this.scale : this.scale);
         ctx.fillStyle = this.background;
         ctx.strokeStyle = this.borderColor;
         ctx.lineWidth = this.borderWidth;
+        ctx.beginPath();
         ctx.arc(0, 0, this._radius, 0, 2 * Math.PI);
+        ctx.fill();
+        if(this.borderWidth > 0) ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(this._radius, 0);
+        ctx.stroke();
+        ctx.restore();
+    }
+}
+
+export class Polygon extends Drawable {
+    constructor(params) {
+        super(params);
+        this.background = (this._params.background || "black");
+        this.borderColor = (this._params.borderColor || "black");
+        this.borderWidth = (this._params.borderWidth || 0);
+    }
+    GetVertices() {
+        return this._params.vertices.map((v) => new Vector(v[0], v[1]));
+    }
+    Draw(ctx) {
+        ctx.save();
+        ctx.globalAlpha = this.opacity;
+        ctx.translate(this.position.x, this.position.y);
+        ctx.scale(this.flip.x ? -this.scale: this.scale, this.flip.y ? -this.scale : this.scale);
+        ctx.fillStyle = this.background;
+        ctx.strokeStyle = this.borderColor;
+        ctx.lineWidth = this.borderWidth;
+        ctx.beginPath();
+        for(let i = 0; i < this._vertices.length; ++i) {
+            const v = this._vertices[i];
+            if(i == 0) ctx.moveTo(v.x, v.y);
+            else ctx.lineTo(v.x, v.y);
+        }
+        ctx.closePath();
         ctx.fill();
         if(this.borderWidth > 0) ctx.stroke();
         ctx.restore();
@@ -313,8 +381,8 @@ export class Sprite extends Drawable {
     Draw(ctx) {
         ctx.save();
         ctx.globalAlpha = this.opacity;
-        ctx.translate(this._pos.x, this._pos.y);
-        ctx.scale(this.flip.x ? -1 : 1, this.flip.y ? -1 : 1);
+        ctx.translate(this.position.x, this.position.y);
+        ctx.scale(this.flip.x ? -this.scale: this.scale, this.flip.y ? -this.scale : this.scale);
         ctx.rotate(this.angle);
         ctx.drawImage(
             this._params.image,

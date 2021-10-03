@@ -1,3 +1,10 @@
+/*
+
+x: number
+y: number
+
+*/
+
 export class Vector {
     constructor(x = 0, y = 0) {
         this._x = x;
@@ -10,35 +17,36 @@ export class Vector {
         return this._y;
     }
     set x(num) {
-        this._x = num;
+        this.Set(num, this.y);
     }
     set y(num) {
-        this._y = num;
+        this.Set(this.x, num);
+    }
+    Set(x, y) {
+        this._x = x;
+        this._y = y;
     }
     Copy(v1) {
-        this._x = v1._x;
-        this._y = v1._y;
+        this.Set(v1.x, v1.y);
+        return this;
     }
     Clone() {
-        return new Vector(this._x, this._y);
+        return new Vector(this.x, this.y);
     }
     Add(v1) {
-        this._x += v1._x;
-        this._y += v1._y;
+        this.Set(this.x + v1.x, this.y + v1.y);
         return this;
     }
     Sub(v1) {
-        this._x -= v1._x;
-        this._y -= v1._y;
+        this.Set(this.x - v1.x, this.y - v1.y);
         return this;
     }
     Mult(s) {
-        this._x *= s;
-        this._y *= s;
+        this.Set(this.x * s, this.y * s);
         return this;
     }
     Norm() {
-        [this._x, this._y] = [this._y, -this._x];
+        this.Set(this.y, -this.x);
         return this;
     }
     Unit() {
@@ -46,32 +54,31 @@ export class Vector {
         if (z === 0) {
             return this;
         }
-        this._x /= z;
-        this._y /= z;
+        this.Set(this.x / z, this.y / z);
         return this;
     }
     Mag() {
-        return Math.sqrt(Math.pow(this._x, 2) + Math.pow(this._y, 2));
+        return Math.sqrt(Math.pow(this.x, 2) + Math.pow(this.y, 2));
     }
     Lerp(v1, alpha) {
-        this.Add(v1.Clone().Sub(this).Mult(alpha));
-        return this;
+        return this.Add(v1.Clone().Sub(this).Mult(alpha));
     }
     Angle() {
-        return Math.atan2(this._y, this._x);
+        return Math.atan2(this.y, this_x);
     }
     Rotate(angle) {
-        const x = this._x * Math.cos(angle) - this._y * Math.sin(angle);
-        const y = this._x * Math.sin(angle) + this._y * Math.cos(angle);
-        this._x = x;
-        this._y = y;
+        const sin =  Math.sin(angle);
+        const cos = Math.cos(angle);
+        const x = this.x * cos - this.y * sin;
+        const y = this.x * sin + this.y * cos;
+        this.Set(x, y);
         return this;
     }
     static Dot(v1, v2) {
-        return v1._x * v2._x + v1._y * v2._y;
+        return v1.x * v2.x + v1.y * v2.y;
     }
     static Dist(v1, v2) {
-        return Math.sqrt(Math.pow((v1._x - v2._x), 2) + Math.pow((v1._y - v2._y), 2));
+        return v1.Clone().Sub(v2).Mag();
     }
     static AngleBetween(v1, v2) {
         const z1 = v1.Mag();
@@ -84,24 +91,15 @@ export class Vector {
 }
 
 export class PositionVector extends Vector {
-    constructor(parent, x = 0, y = 0) {
+    constructor(positionFunction, x = 0, y = 0) {
         super(x, y);
-        this._parent = parent;
+        this._positionFunction = positionFunction;
     }
-    get x() {
-        return this._x;
-    }
-    set x(num) {
-        const vec = new Vector(num, this._y);
-        this._parent.position = vec;
-        this._x = num;
-    }
-    get y() {
-        return this._y;
-    }
-    set y(num) {
-        const vec = new Vector(this._x, num);
-        this._parent.position = vec;
-        this._y = num;
+    Set(x, y) {
+        if(x !== this.x || y !== this.y) {
+            this._x = x;
+            this._y = y;
+            this._positionFunction();
+        }
     }
 }

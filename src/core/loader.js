@@ -8,7 +8,7 @@ export class Loader {
     _Add(n, p, type) {
         this._toLoad.push({
             name: n,
-            path: this._path + "/" + p,
+            path: this._path + p,
             type: type
         });
         ++this._size;

@@ -1,10 +1,12 @@
+import { Vector } from "./utils/vector.js";
+
 export class Renderer {
     constructor(params) {
         this._width = params.width;
         this._height = params.height;
         this._aspect = this._width / this._height;
         this._scale = 1.0;
-        this.background = "black";
+        this.background = (params.background || "black");
 
         this._InitContainer();
         this._InitCanvas();
@@ -82,10 +84,11 @@ export class Renderer {
         ctx.scale(cam.scale, cam.scale);
 
         for(let elem of scene._drawable) {
-            const pos = elem.position.Clone();
+            const boundingBox = elem.boundingBox;
+            const pos = new Vector(boundingBox.x, boundingBox.y);
             pos.Sub(cam.position);
             pos.Mult(cam.scale);
-            const [width, height] = [elem.boundingBox.width, elem.boundingBox.height].map((_) => _ * cam.scale);
+            const [width, height] = [boundingBox.width, boundingBox.height].map((_) => _ * cam.scale);
             if(
                 pos.x + width / 2 < -this._width / 2 ||
                 pos.x - width / 2 > this._width / 2 ||

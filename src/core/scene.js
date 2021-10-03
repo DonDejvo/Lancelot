@@ -3,12 +3,11 @@ import { TimeoutHandler } from "./utils/timeout-handler.js";
 import { EntityManager } from "./entity-manager.js";
 import { Camera } from "./camera.js";
 import { Interactive } from "./interactive.js";
+import { Entity } from "./entity.js";
 
 export class Scene {
     constructor(params) {
 
-        this._resources = params.resources;
-        this._input = params.input;
         this._bounds = params.bounds;
         this._cellDimensions = (params.cellDimensions || [100, 100]);
         this._relaxationCount = (params.relaxationCount || 5);
@@ -31,6 +30,11 @@ export class Scene {
     get camera() {
         return this._camera;
     }
+    CreateEntity(n) {
+        const e = new Entity();
+        this.AddEntity(e, n);
+        return e;
+    }
     AddEventHandler(type, handler) {
         if(!this._eventHandlers.has(type)) {
             this._eventHandlers.set(type, []);
@@ -47,7 +51,7 @@ export class Scene {
         }
 
     }
-    SetInteractive(entity, params) {
+    SetInteractive(entity, params = {}) {
         this._interactiveEntities.push(entity);
         const interactive = new Interactive(params);
         entity.AddComponent(interactive);
@@ -91,13 +95,6 @@ export class Scene {
     AddEntity(e, n) {
         e._scene = this;
         this._entityManager.Add(e, n);
-        e._components.forEach((c) => {
-            if (c._type == "drawable") {
-                this._AddDrawable(c);
-            } else if(c._type == "body") {
-                this._AddBody(e, c);
-            }
-        });
     }
     RemoveEntity(e) {
         this._entityManager.Remove(e);

@@ -1,11 +1,21 @@
-import { PositionVector, Vector } from "./utils/vector.js";
+import { Vector } from "./utils/vector.js";
+import { Position } from "./utils/position.js";
+
+/*
+
+position: Vector
+parent: Entity
+type: string
+scene: Scene
+GetComponent(name: string)
+
+*/
 
 export class Component {
     constructor() {
         this._type = "";
         this._parent = null;
-        this._pos = new PositionVector(this);
-        this.offset = new Vector();
+        this._position = new Position();
     }
     get type() {
         return this._type;
@@ -17,11 +27,16 @@ export class Component {
         return this._parent;
     }
     get position() {
-        return this._pos;
+        return this._position.position;
     }
-    set position(vec) {
-        this._pos.Copy(vec);
-        this._parent.SetPosition(vec.Clone().Sub(this.offset));
+    set position(p) {
+        this._position.position = p;
+    }
+    get offset() {
+        return this._position._offset;
+    }
+    set offset(vec) {
+        this._position._offset.Copy(vec);
     }
     InitComponent() { }
     GetComponent(n) {

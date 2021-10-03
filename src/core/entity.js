@@ -1,10 +1,24 @@
 import { Position } from "./utils/position.js";
 
+/*
+
+position: Vector
+name: string
+scene: Scene
+moving: boolean
+Clip(e: Entity)
+Unclip(e: Entity)
+MoveTo(position: Vector, duration: number, timing: string)
+StopMoving()
+AddComponent(c: Component, name?: string)
+GetComponent(name: string)
+
+*/
+
 
 export class Entity {
     constructor() {
-        this._position = new Position(this);
-        this._pos = this._position._pos;
+        this._position = new Position(this.DoWeirdStuff.bind(this));
         this._components = new Map();
         this._parent = null;
         this._name = null;
@@ -17,20 +31,19 @@ export class Entity {
     get scene() {
         return this._scene;
     }
-    get parent() {
-        return this._parent;
-    }
     get position() {
-        return this._pos;
+        return this._position.position;
     }
     set position(p) {
         this._position.position = p;
-        this._components.forEach((c) => {
-            c._pos.Copy(this._pos.Clone().Add(c.offset));
-        });
     }
     get moving() {
         return this._position._moving;
+    }
+    DoWeirdStuff() {
+        this._components.forEach((c) => {
+            c.position.Copy(this.position.Clone().Add(c.offset));
+        });
     }
     Update(elapsedTimeS) {
         this._position.Update(elapsedTimeS);
@@ -38,8 +51,8 @@ export class Entity {
             c.Update(elapsedTimeS);
         });
     }
-    Clip(e) {
-        this._position.Clip(e._position);
+    Clip(e, fixed = false) {
+        this._position.Clip(e._position, fixed);
     }
     Unclip(e) {
         this._position.Unclip(e._position);
@@ -56,8 +69,17 @@ export class Entity {
         }
         this._components.set(n, c);
         c._parent = this;
-        c._pos.Copy(this._pos.Clone().Add(c.offset));
+        c.position.Copy(this.position.Clone().Add(c.offset));
+        this.Clip(c, true);
         c.InitComponent();
+        switch(c.type) {
+            case "drawable":
+                this.scene._AddDrawable(c);
+                break;
+            case "body":
+                this.scene._AddBody(this, c);
+                break;
+        }
     }
     GetComponent(n) {
         return this._components.get(n);
