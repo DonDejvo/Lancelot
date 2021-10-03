@@ -17,6 +17,7 @@ export class Drawable extends Component {
         this._scale = (params.scale || 1.0);
         this._rotationCount = (this._params.rotationCount || 0);
         this.opacity = this._params.opacity !== undefined ? this._params.opacity : 1;
+        this.filter = (this._params.filter || "");
         this._angle = (this._params.angle || this._rotationCount * Math.PI / 2 || 0);
     }
     get zIndex() {
@@ -229,6 +230,7 @@ export class Rect extends Drawable {
     Draw(ctx) {
         ctx.save();
         ctx.globalAlpha = this.opacity;
+        ctx.filter = this.filter;
         ctx.translate(this.position.x, this.position.y);
         ctx.scale(this.flip.x ? -this.scale: this.scale, this.flip.y ? -this.scale : this.scale);
         ctx.rotate(this.angle);
@@ -249,6 +251,9 @@ export class Circle extends Drawable {
         this._radius = this._params.radius;
         this._width = this._radius * 2;
         this._height = this._radius * 2;
+        this.background = (this._params.background || "black");
+        this.borderColor = (this._params.borderColor || "black");
+        this.borderWidth = (this._params.borderWidth || 0);
     }
     get radius() {
         return this._radius;
@@ -262,6 +267,7 @@ export class Circle extends Drawable {
     Draw(ctx) {
         ctx.save();
         ctx.globalAlpha = this.opacity;
+        ctx.filter = this.filter;
         ctx.translate(this.position.x, this.position.y);
         ctx.scale(this.flip.x ? -this.scale: this.scale, this.flip.y ? -this.scale : this.scale);
         ctx.fillStyle = this.background;
@@ -271,10 +277,6 @@ export class Circle extends Drawable {
         ctx.arc(0, 0, this._radius, 0, 2 * Math.PI);
         ctx.fill();
         if(this.borderWidth > 0) ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(this._radius, 0);
-        ctx.stroke();
         ctx.restore();
     }
 }
@@ -292,6 +294,7 @@ export class Polygon extends Drawable {
     Draw(ctx) {
         ctx.save();
         ctx.globalAlpha = this.opacity;
+        ctx.filter = this.filter;
         ctx.translate(this.position.x, this.position.y);
         ctx.scale(this.flip.x ? -this.scale: this.scale, this.flip.y ? -this.scale : this.scale);
         ctx.fillStyle = this.background;

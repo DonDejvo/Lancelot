@@ -7,6 +7,38 @@
     <title>Document</title>
 </head>
 <body>
-    <a href="audio/">audio</a>
+    <script type="module">
+        import defaultExport from "../src/Lancelot.js";
+
+        const game = new Lancelot.Game({
+            width: 360,
+            height: 480,
+            background: "#242424",
+            init: init
+        });
+
+        function init() {
+            
+            const scene = this.CreateScene("test");
+            this.PlayScene("test");
+
+            const entity = scene.CreateEntity();
+            const emitter = new Lancelot.particle.Emitter({
+                angle: {min: Math.PI * 1.4, max: 1.6 * Math.PI},
+                speed: 90,
+                lifetime: 1200,
+                angleVariance: 0.05,
+                scale: {to: 0.1}
+            });
+            entity.AddComponent(emitter);
+            emitter.AddParticle(Lancelot.drawable.Circle, {
+                radius: 15,
+                background: "orange",
+                filter: "blur(5px) contrast(5)"
+            });
+            emitter.Emit(1, true, 30);
+
+        }
+    </script>
 </body>
 </html>

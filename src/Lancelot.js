@@ -3,6 +3,7 @@ import { Component } from "./core/component.js";
 import * as drawable from "./core/drawable/drawable.js";
 import { Vector } from "./core/utils/vector.js";
 import * as physics from "./core/physics/physics.js";
+import { particle } from "./core/particle.js";
 
 const __name = 'Lancelot';
 
@@ -10,6 +11,7 @@ let __export = {
     Vector,
     Game,
     Component,
+    particle,
     drawable,
     physics
 };

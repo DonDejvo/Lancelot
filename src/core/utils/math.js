@@ -23,6 +23,10 @@ export const math = (function () {
         },
         ease_in(x) {
             return Math.min(Math.max(Math.pow(x, 3), 0), 1);
+        },
+        choice(arr) {
+            const len = arr.length;
+            return arr[Math.floor(Math.random() * len)];
         }
     };
 })();

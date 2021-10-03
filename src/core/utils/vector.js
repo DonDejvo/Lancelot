@@ -96,7 +96,7 @@ export class PositionVector extends Vector {
         this._positionFunction = positionFunction;
     }
     Set(x, y) {
-        if(x !== this.x || y !== this.y) {
+        if(x != this.x || y != this.y) {
             this._x = x;
             this._y = y;
             this._positionFunction();

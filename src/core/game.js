@@ -9,7 +9,7 @@ export class Game {
     constructor(params) {
         this._width = params.width;
         this._height = params.height;
-        this._preload = params.preload.bind(this);
+        this._preload = params.preload == undefined ? null : params.preload.bind(this);
         this._init = params.init.bind(this);
 
         this._resources = null;
@@ -154,10 +154,7 @@ export class Game {
         this.GetSection(id).style.display = "none";
     }
     CreateScene(n, params = {}) {
-        const scene = new Scene({
-            bounds: (params.bounds || [[-1000, -1000], [1000, 1000]]),
-            cellDimensions: params.cellDimensions
-        });
+        const scene = new Scene(params);
         this._sceneManager.Add(scene, n);
         return scene;
     }

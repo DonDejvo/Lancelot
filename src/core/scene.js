@@ -8,7 +8,7 @@ import { Entity } from "./entity.js";
 export class Scene {
     constructor(params) {
 
-        this._bounds = params.bounds;
+        this._bounds = (params.bounds || [[-1000, -1000], [1000, 1000]]);
         this._cellDimensions = (params.cellDimensions || [100, 100]);
         this._relaxationCount = (params.relaxationCount || 5);
 
