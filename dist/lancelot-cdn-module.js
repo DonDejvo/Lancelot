@@ -249,7 +249,7 @@ var Renderer = class {
     this._height = params2.height;
     this._aspect = this._width / this._height;
     this._scale = 1;
-    this.background = params2.background || "black";
+    this._background = params2.background || "black";
     this._InitContainer();
     this._InitCanvas();
     this._OnResize();
@@ -257,6 +257,13 @@ var Renderer = class {
   }
   get dimension() {
     return this._canvas.getBoundingClientRect();
+  }
+  get background() {
+    return this._background;
+  }
+  set background(col) {
+    this._background = col;
+    this._canvas.style.background = col;
   }
   _InitContainer() {
     const body = document.body;
@@ -286,6 +293,7 @@ var Renderer = class {
     cnv.style.left = "0";
     cnv.style.top = "0";
     cnv.style.display = "block";
+    cnv.style.background = this._background;
     this._container.appendChild(cnv);
   }
   _OnResize() {

@@ -6,7 +6,7 @@ export class Renderer {
         this._height = params.height;
         this._aspect = this._width / this._height;
         this._scale = 1.0;
-        this.background = (params.background || "black");
+        this._background = (params.background || "black");
 
         this._InitContainer();
         this._InitCanvas();
@@ -16,6 +16,13 @@ export class Renderer {
     }
     get dimension() {
         return this._canvas.getBoundingClientRect();
+    }
+    get background() {
+        return this._background;
+    }
+    set background(col) {
+        this._background = col;
+        this._canvas.style.background = col;
     }
     _InitContainer() {
 
@@ -54,6 +61,7 @@ export class Renderer {
         cnv.style.left = "0";
         cnv.style.top = "0";
         cnv.style.display = "block";
+        cnv.style.background = this._background;
 
         this._container.appendChild(cnv);
     } 
