@@ -1286,6 +1286,10 @@ var Drawable = class extends Component {
     this.opacity = this._params.opacity !== void 0 ? this._params.opacity : 1;
     this.filter = this._params.filter || "";
     this._angle = this._params.angle || this._rotationCount * Math.PI / 2 || 0;
+    this.fillStyle = this._params.fillStyle || "black";
+    this.strokeStyle = this._params.fillStyle || "black";
+    this.strokeWidth = this._params.strokeWidth || 0;
+    this.mode = this._params.mode || "source-over";
   }
   get zIndex() {
     return this._zIndex;
@@ -1351,6 +1355,30 @@ var Drawable = class extends Component {
     const centerY = this.position.y + minY + height / 2;
     return { x: centerX, y: centerY, width, height };
   }
+  ParseStyle(ctx, s) {
+    const params2 = s.split(";");
+    const len = params2.length;
+    if (len === 1) {
+      return s;
+    }
+    let grd;
+    const values = params2[1].split(",").map((s2) => parseFloat(s2));
+    switch (params2[0]) {
+      case "linear":
+        grd = ctx.createLinearGradient(...values);
+        break;
+      case "radial":
+        grd = ctx.createRadialGradient(...values);
+        break;
+      default:
+        return "black";
+    }
+    for (let i = 2; i < len; ++i) {
+      const colorValuePair = params2[i].split("=");
+      grd.addColorStop(parseFloat(colorValuePair[1]), colorValuePair[0]);
+    }
+    return grd;
+  }
   InitComponent() {
     this._ComputeVertices();
   }
@@ -1387,7 +1415,6 @@ var Text = class extends Drawable {
     this._align = params2.align || "center";
     this._fontSize = this._params.fontSize || 16;
     this._fontFamily = this._params.fontFamily || "Arial";
-    this._color = this._params.color || "black";
     this._ComputeDimensions();
   }
   get linesCount() {
@@ -1446,16 +1473,17 @@ var Text = class extends Drawable {
   }
   Draw(ctx) {
     let offsetX = this._align == "left" ? -this._width / 2 : this._align == "right" ? this._width / 2 : 0;
-    ctx.beginPath();
     ctx.save();
+    ctx.globalCompositeOperation = this.mode;
     ctx.globalAlpha = this.opacity;
     ctx.translate(this.position.x, this.position.y);
     ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
     ctx.rotate(this.angle);
-    ctx.fillStyle = this._color;
+    ctx.fillStyle = this.ParseStyle(ctx, this.fillStyle);
     ctx.font = `${this._fontSize}px '${this._fontFamily}'`;
     ctx.textAlign = this._align;
     ctx.textBaseline = "middle";
+    ctx.beginPath();
     for (let i = 0; i < this.linesCount; ++i) {
       ctx.fillText(this._lines[i], offsetX + this._padding, this.lineHeight * i - (this.linesCount - 1) / 2 * this.lineHeight);
     }
@@ -1475,6 +1503,7 @@ var Picture = class extends Drawable {
   }
   Draw(ctx) {
     ctx.save();
+    ctx.globalCompositeOperation = this.mode;
     ctx.globalAlpha = this.opacity;
     ctx.translate(this.position.x, this.position.y);
     ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
@@ -1486,24 +1515,22 @@ var Picture = class extends Drawable {
 var Rect = class extends Drawable {
   constructor(params2) {
     super(params2);
-    this.background = this._params.background || "black";
-    this.borderColor = this._params.borderColor || "black";
-    this.borderWidth = this._params.borderWidth || 0;
   }
   Draw(ctx) {
     ctx.save();
+    ctx.globalCompositeOperation = this.mode;
     ctx.globalAlpha = this.opacity;
     ctx.filter = this.filter;
     ctx.translate(this.position.x, this.position.y);
     ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
     ctx.rotate(this.angle);
-    ctx.fillStyle = this.background;
-    ctx.strokeStyle = this.borderColor;
-    ctx.lineWidth = this.borderWidth;
+    ctx.fillStyle = this.ParseStyle(ctx, this.fillStyle);
+    ctx.strokeStyle = this.ParseStyle(ctx, this.strokeStyle);
+    ctx.lineWidth = this.strokeWidth;
     ctx.beginPath();
     ctx.rect(-this._width / 2, -this._height / 2, this._width, this._height);
     ctx.fill();
-    if (this.borderWidth > 0)
+    if (this.strokeWidth > 0)
       ctx.stroke();
     ctx.restore();
   }
@@ -1514,9 +1541,6 @@ var Circle = class extends Drawable {
     this._radius = this._params.radius;
     this._width = this._radius * 2;
     this._height = this._radius * 2;
-    this.background = this._params.background || "black";
-    this.borderColor = this._params.borderColor || "black";
-    this.borderWidth = this._params.borderWidth || 0;
   }
   get radius() {
     return this._radius;
@@ -1529,17 +1553,18 @@ var Circle = class extends Drawable {
   }
   Draw(ctx) {
     ctx.save();
+    ctx.globalCompositeOperation = this.mode;
     ctx.globalAlpha = this.opacity;
     ctx.filter = this.filter;
     ctx.translate(this.position.x, this.position.y);
     ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
-    ctx.fillStyle = this.background;
-    ctx.strokeStyle = this.borderColor;
-    ctx.lineWidth = this.borderWidth;
+    ctx.fillStyle = this.ParseStyle(ctx, this.fillStyle);
+    ctx.strokeStyle = this.ParseStyle(ctx, this.strokeStyle);
+    ctx.lineWidth = this.strokeWidth;
     ctx.beginPath();
     ctx.arc(0, 0, this._radius, 0, 2 * Math.PI);
     ctx.fill();
-    if (this.borderWidth > 0)
+    if (this.strokeWidth > 0)
       ctx.stroke();
     ctx.restore();
   }
@@ -1547,22 +1572,21 @@ var Circle = class extends Drawable {
 var Polygon = class extends Drawable {
   constructor(params2) {
     super(params2);
-    this.background = this._params.background || "black";
-    this.borderColor = this._params.borderColor || "black";
-    this.borderWidth = this._params.borderWidth || 0;
+    this._points = this._params.points;
   }
   GetVertices() {
-    return this._params.vertices.map((v) => new Vector2(v[0], v[1]));
+    return this._points.map((v) => new Vector2(v[0], v[1]));
   }
   Draw(ctx) {
     ctx.save();
+    ctx.globalCompositeOperation = this.mode;
     ctx.globalAlpha = this.opacity;
     ctx.filter = this.filter;
     ctx.translate(this.position.x, this.position.y);
     ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
-    ctx.fillStyle = this.background;
-    ctx.strokeStyle = this.borderColor;
-    ctx.lineWidth = this.borderWidth;
+    ctx.fillStyle = this.ParseStyle(ctx, this.fillStyle);
+    ctx.strokeStyle = this.ParseStyle(ctx, this.strokeStyle);
+    ctx.lineWidth = this.strokeWidth;
     ctx.beginPath();
     for (let i = 0; i < this._vertices.length; ++i) {
       const v = this._vertices[i];
@@ -1573,7 +1597,7 @@ var Polygon = class extends Drawable {
     }
     ctx.closePath();
     ctx.fill();
-    if (this.borderWidth > 0)
+    if (this.strokeWidth > 0)
       ctx.stroke();
     ctx.restore();
   }
@@ -1650,6 +1674,7 @@ var Sprite = class extends Drawable {
   }
   Draw(ctx) {
     ctx.save();
+    ctx.globalCompositeOperation = this.mode;
     ctx.globalAlpha = this.opacity;
     ctx.translate(this.position.x, this.position.y);
     ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
