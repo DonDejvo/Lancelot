@@ -1,4 +1,4 @@
-import defaultExport from "https://cdn.jsdelivr.net/gh/DonDejvo/Lancelot/dist/lancelot-cdn-module.min.js";
+import defaultExport from "https://cdn.jsdelivr.net/gh/DonDejvo/Lancelot/dist/lancelot-cdn-module.js";
 
         const game = new Lancelot.Game({
             width: 640,
