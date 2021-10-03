@@ -32,6 +32,10 @@ var math = function() {
     },
     ease_in(x) {
       return Math.min(Math.max(Math.pow(x, 3), 0), 1);
+    },
+    choice(arr) {
+      const len = arr.length;
+      return arr[Math.floor(Math.random() * len)];
     }
   };
 }();
@@ -230,7 +234,7 @@ var PositionVector = class extends Vector2 {
     this._positionFunction = positionFunction;
   }
   Set(x, y) {
-    if (x !== this.x || y !== this.y) {
+    if (x != this.x || y != this.y) {
       this._x = x;
       this._y = y;
       this._positionFunction();
@@ -821,7 +825,7 @@ var Entity = class {
 // src/core/scene.js
 var Scene = class {
   constructor(params2) {
-    this._bounds = params2.bounds;
+    this._bounds = params2.bounds || [[-1e3, -1e3], [1e3, 1e3]];
     this._cellDimensions = params2.cellDimensions || [100, 100];
     this._relaxationCount = params2.relaxationCount || 5;
     this.paused = true;
@@ -1104,7 +1108,7 @@ var Game = class {
   constructor(params2) {
     this._width = params2.width;
     this._height = params2.height;
-    this._preload = params2.preload.bind(this);
+    this._preload = params2.preload == void 0 ? null : params2.preload.bind(this);
     this._init = params2.init.bind(this);
     this._resources = null;
     this._loader = new Loader();
@@ -1230,10 +1234,7 @@ var Game = class {
     this.GetSection(id).style.display = "none";
   }
   CreateScene(n, params2 = {}) {
-    const scene = new Scene({
-      bounds: params2.bounds || [[-1e3, -1e3], [1e3, 1e3]],
-      cellDimensions: params2.cellDimensions
-    });
+    const scene = new Scene(params2);
     this._sceneManager.Add(scene, n);
     return scene;
   }
@@ -1275,6 +1276,7 @@ var Drawable = class extends Component {
     this._scale = params2.scale || 1;
     this._rotationCount = this._params.rotationCount || 0;
     this.opacity = this._params.opacity !== void 0 ? this._params.opacity : 1;
+    this.filter = this._params.filter || "";
     this._angle = this._params.angle || this._rotationCount * Math.PI / 2 || 0;
   }
   get zIndex() {
@@ -1483,6 +1485,7 @@ var Rect = class extends Drawable {
   Draw(ctx) {
     ctx.save();
     ctx.globalAlpha = this.opacity;
+    ctx.filter = this.filter;
     ctx.translate(this.position.x, this.position.y);
     ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
     ctx.rotate(this.angle);
@@ -1503,6 +1506,9 @@ var Circle = class extends Drawable {
     this._radius = this._params.radius;
     this._width = this._radius * 2;
     this._height = this._radius * 2;
+    this.background = this._params.background || "black";
+    this.borderColor = this._params.borderColor || "black";
+    this.borderWidth = this._params.borderWidth || 0;
   }
   get radius() {
     return this._radius;
@@ -1516,6 +1522,7 @@ var Circle = class extends Drawable {
   Draw(ctx) {
     ctx.save();
     ctx.globalAlpha = this.opacity;
+    ctx.filter = this.filter;
     ctx.translate(this.position.x, this.position.y);
     ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
     ctx.fillStyle = this.background;
@@ -1526,10 +1533,6 @@ var Circle = class extends Drawable {
     ctx.fill();
     if (this.borderWidth > 0)
       ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(this._radius, 0);
-    ctx.stroke();
     ctx.restore();
   }
 };
@@ -1546,6 +1549,7 @@ var Polygon = class extends Drawable {
   Draw(ctx) {
     ctx.save();
     ctx.globalAlpha = this.opacity;
+    ctx.filter = this.filter;
     ctx.translate(this.position.x, this.position.y);
     ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
     ctx.fillStyle = this.background;
@@ -1651,12 +1655,129 @@ var Sprite = class extends Drawable {
 var physics_exports = {};
 __markAsModule(physics_exports);
 
+// src/core/particle.js
+var Emitter = class extends Component {
+  constructor(params2) {
+    super();
+    this._particles = [];
+    this._options = {
+      lifetime: params2.lifetime,
+      friction: params2.friction || 0,
+      angleVariance: params2.angleVariance || 0,
+      angle: this._InitMinMax(params2.angle),
+      speed: this._InitMinMax(params2.speed),
+      acceleration: params2.acceleration || new Vector2(),
+      scale: this._InitRange(params2.scale),
+      opacity: this._InitRange(params2.opacity)
+    };
+    this._emitting = null;
+  }
+  _InitMinMax(param) {
+    if (param == void 0) {
+      return 0;
+    } else if (typeof param == "number") {
+      return { min: param, max: param };
+    } else {
+      return { min: param.min, max: param.max };
+    }
+  }
+  _InitRange(param) {
+    if (param == void 0) {
+      return null;
+    } else {
+      return { from: param.from == void 0 ? 1 : param.from, to: param.to };
+    }
+  }
+  _CreateParticle() {
+    const particle2 = this.scene.CreateEntity();
+    particle2.groupList.add("particle");
+    particle2.position.Copy(this.position);
+    const particleType = math.choice(this._particles);
+    particle2.AddComponent(new particleType[0](particleType[1]), "Sprite");
+    particle2.AddComponent(new ParticleController(this._options));
+  }
+  AddParticle(type, params2) {
+    this._particles.push([type, params2]);
+  }
+  Emit(count, repeat = false, delay = 0) {
+    if (repeat) {
+      this._emitting = {
+        count,
+        counter: delay,
+        delay
+      };
+    } else {
+      for (let i = 0; i < count; ++i) {
+        this._CreateParticle();
+      }
+    }
+  }
+  Update(elapsedTimeS) {
+    if (this._emitting) {
+      const emitting = this._emitting;
+      emitting.counter += elapsedTimeS * 1e3;
+      if (emitting.counter >= emitting.delay) {
+        emitting.counter = 0;
+        this.Emit(emitting.count);
+      }
+    }
+  }
+};
+var ParticleController = class extends Component {
+  constructor(params2) {
+    super();
+    this._friction = params2.friction || 0;
+    this._lifetime = params2.lifetime;
+    this._angleVariance = params2.angleVariance || 0;
+    this._acc = params2.acceleration || new Vector2();
+    this._counter = 0;
+    this._scale = this._InitRange(params2.scale);
+    this._opacity = this._InitRange(params2.opacity);
+    this._vel = new Vector2(this._InitMinMax(params2.speed), 0).Rotate(this._InitMinMax(params2.angle));
+  }
+  _InitMinMax(param) {
+    return math.rand(param.min, param.max);
+  }
+  _InitRange(param) {
+    if (!param) {
+      return null;
+    } else {
+      return { from: param.from == void 0 ? 1 : param.from, to: param.to };
+    }
+  }
+  Update(elapsedTimeS) {
+    this._counter += elapsedTimeS * 1e3;
+    if (this._counter >= this._lifetime) {
+      this.scene.RemoveEntity(this.parent);
+      return;
+    }
+    this._vel.Add(this._acc.Mult(elapsedTimeS));
+    const decceleration = 60;
+    const frameDecceleration = new Vector2(this._vel.x * decceleration * this._friction, this._vel.y * decceleration * this._friction);
+    this._vel.Sub(frameDecceleration.Mult(elapsedTimeS));
+    this._vel.Rotate(math.rand(-this._angleVariance, this._angleVariance));
+    this.position.Add(this._vel.Clone().Mult(elapsedTimeS));
+    const sprite = this.GetComponent("Sprite");
+    const progress = Math.min(this._counter / this._lifetime, 1);
+    if (this._scale) {
+      sprite.scale = math.lerp(progress, this._scale.from, this._scale.to);
+    }
+    if (this._opacity) {
+      sprite.opacity = math.lerp(progress, this._opacity.from, this._opacity.to);
+    }
+  }
+};
+var particle = {
+  Emitter
+};
+
 // src/Lancelot.js
 var __name = "Lancelot";
 var __export2 = {
   Vector: Vector2,
   Game,
   Component,
+  particle,
   drawable: drawable_exports,
   physics: physics_exports
 };
