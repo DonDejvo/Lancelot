@@ -7,14 +7,15 @@ class Emitter extends Component {
         super();
         this._particles = [];
         this._options = {
-            lifetime: params.lifetime,
+            lifetime: this._InitMinMax(params.lifetime),
             friction: (params.friction || 0),
             angleVariance: (params.angleVariance || 0),
             angle: this._InitMinMax(params.angle),
             speed: this._InitMinMax(params.speed),
             acceleration: (params.acceleration || new Vector()),
             scale: this._InitRange(params.scale),
-            opacity: this._InitRange(params.opacity)
+            opacity: this._InitRange(params.opacity),
+            rotationSpeed: (params.rotationSpeed || 0)
         };
         this._emitting = null;
     }
@@ -77,13 +78,14 @@ class ParticleController extends Component {
     constructor(params) {
         super();
         this._friction = (params.friction || 0);
-        this._lifetime = params.lifetime;
+        this._lifetime = this._InitMinMax(params.lifetime);
         this._angleVariance = (params.angleVariance || 0);
         this._acc = (params.acceleration || new Vector());
         this._counter = 0;
         this._scale = this._InitRange(params.scale);
         this._opacity = this._InitRange(params.opacity);
         this._vel = new Vector(this._InitMinMax(params.speed), 0).Rotate(this._InitMinMax(params.angle));
+        this._rotationSpeed = (params.rotationSpeed || 0);
     }
     _InitMinMax(param) {
         return math.rand(param.min, param.max);
@@ -107,7 +109,7 @@ class ParticleController extends Component {
         const decceleration = 60;
         const frameDecceleration = new Vector(this._vel.x * decceleration * this._friction, this._vel.y * decceleration * this._friction);
         this._vel.Sub(frameDecceleration.Mult(elapsedTimeS));
-        this._vel.Rotate(math.rand(-this._angleVariance, this._angleVariance));
+        this._vel.Rotate(math.rand(-this._angleVariance, this._angleVariance)  * elapsedTimeS);
         this.position.Add(this._vel.Clone().Mult(elapsedTimeS));
 
         const sprite = this.GetComponent("Sprite");
@@ -118,6 +120,7 @@ class ParticleController extends Component {
         if(this._opacity) {
             sprite.opacity = math.lerp(progress, this._opacity.from, this._opacity.to);
         }
+        sprite.angle += this._rotationSpeed * elapsedTimeS;
     }
 }
 

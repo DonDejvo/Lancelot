@@ -20,9 +20,11 @@ export class Drawable extends Component {
         this.filter = (this._params.filter || "");
         this._angle = (this._params.angle || this._rotationCount * Math.PI / 2 || 0);
         this.fillStyle = (this._params.fillStyle || "black");
-        this.strokeStyle = (this._params.fillStyle || "black");
+        this.strokeStyle = (this._params.strokeStyle || "black");
         this.strokeWidth = (this._params.strokeWidth || 0);
         this.mode = (this._params.mode || "source-over");
+        this._offset = new Vector();
+        this._shaking = null;
     }
     get zIndex() {
         return this._zIndex;
@@ -89,6 +91,22 @@ export class Drawable extends Component {
         const centerY = this.position.y + minY + height / 2;
         return { x: centerX, y: centerY, width: width, height: height };
     }
+    get positionWithShakeOffset() {
+        return this.position.Clone().Add(this._offset);
+    }
+    Shake(range, dur, count, angle) {
+        this._shaking = {
+            counter: 0,
+            count: count,
+            angle: angle,
+            dur: dur,
+            range: range
+        };
+    }
+    StopShaking() {
+        this._shaking = null;
+        this._offset = new Vector();
+    }
     ParseStyle(ctx, s) {
         const params = s.split(";");
         const len = params.length;
@@ -138,6 +156,17 @@ export class Drawable extends Component {
         this._height = h;
     }
     Draw(_) { }
+    Update(elapsedTimeS) {
+        if(this._shaking) {
+            const anim = this._shaking;
+            anim.counter += elapsedTimeS * 1000;
+            const progress = Math.min(anim.counter / anim.dur, 1);
+            this._offset.Copy(new Vector(Math.sin(progress * Math.PI * 2 * anim.count) * anim.range, 0).Rotate(anim.angle));
+            if (progress == 1) {
+                this.StopShaking();
+            }
+        }
+    }
 }
 
 export class Text extends Drawable {
@@ -211,7 +240,7 @@ export class Text extends Drawable {
         ctx.save();
         ctx.globalCompositeOperation = this.mode;
         ctx.globalAlpha = this.opacity;
-        ctx.translate(this.position.x, this.position.y);
+        ctx.translate(this.positionWithShakeOffset.x, this.positionWithShakeOffset.y);
         ctx.scale(this.flip.x ? -this.scale: this.scale, this.flip.y ? -this.scale : this.scale);
         ctx.rotate(this.angle);
         ctx.fillStyle = this.ParseStyle(ctx, this.fillStyle);
@@ -241,7 +270,7 @@ export class Picture extends Drawable {
         ctx.save();
         ctx.globalCompositeOperation = this.mode;
         ctx.globalAlpha = this.opacity;
-        ctx.translate(this.position.x, this.position.y);
+        ctx.translate(this.positionWithShakeOffset.x, this.positionWithShakeOffset.y);
         ctx.scale(this.flip.x ? -this.scale: this.scale, this.flip.y ? -this.scale : this.scale);
         ctx.rotate(this.angle);
         ctx.drawImage(this._image, this._framePos.x * this._frameWidth, this._framePos.y * this._frameHeight, this._frameWidth, this._frameHeight, -this._width / 2, -this._height / 2, this._width, this._height);
@@ -258,7 +287,7 @@ export class Rect extends Drawable {
         ctx.globalCompositeOperation = this.mode;
         ctx.globalAlpha = this.opacity;
         ctx.filter = this.filter;
-        ctx.translate(this.position.x, this.position.y);
+        ctx.translate(this.positionWithShakeOffset.x, this.positionWithShakeOffset.y);
         ctx.scale(this.flip.x ? -this.scale: this.scale, this.flip.y ? -this.scale : this.scale);
         ctx.rotate(this.angle);
         ctx.fillStyle = this.ParseStyle(ctx, this.fillStyle);
@@ -293,7 +322,7 @@ export class Circle extends Drawable {
         ctx.globalCompositeOperation = this.mode;
         ctx.globalAlpha = this.opacity;
         ctx.filter = this.filter;
-        ctx.translate(this.position.x, this.position.y);
+        ctx.translate(this.positionWithShakeOffset.x, this.positionWithShakeOffset.y);
         ctx.scale(this.flip.x ? -this.scale: this.scale, this.flip.y ? -this.scale : this.scale);
         ctx.fillStyle = this.ParseStyle(ctx, this.fillStyle);
         ctx.strokeStyle = this.ParseStyle(ctx, this.strokeStyle);
@@ -319,7 +348,7 @@ export class Polygon extends Drawable {
         ctx.globalCompositeOperation = this.mode;
         ctx.globalAlpha = this.opacity;
         ctx.filter = this.filter;
-        ctx.translate(this.position.x, this.position.y);
+        ctx.translate(this.positionWithShakeOffset.x, this.positionWithShakeOffset.y);
         ctx.scale(this.flip.x ? -this.scale: this.scale, this.flip.y ? -this.scale : this.scale);
         ctx.fillStyle = this.ParseStyle(ctx, this.fillStyle);
         ctx.strokeStyle = this.ParseStyle(ctx, this.strokeStyle);
@@ -376,13 +405,14 @@ export class Sprite extends Drawable {
             this._paused = false;
         }
     }
-    Update(timeElapsed) {
+    Update(timeElapsedS) {
+        super.Update(timeElapsedS);
         if(this._paused) {
             return;
         }
         const currentAnim = this._currentAnim;
         const frames = this._anims.get(currentAnim.name);
-        currentAnim.counter += timeElapsed * 1000;
+        currentAnim.counter += timeElapsedS * 1000;
         if(currentAnim.counter >= currentAnim.rate) {
             currentAnim.counter = 0;
             ++currentAnim.frame;
@@ -409,7 +439,7 @@ export class Sprite extends Drawable {
         ctx.save();
         ctx.globalCompositeOperation = this.mode;
         ctx.globalAlpha = this.opacity;
-        ctx.translate(this.position.x, this.position.y);
+        ctx.translate(this.positionWithShakeOffset.x, this.positionWithShakeOffset.y);
         ctx.scale(this.flip.x ? -this.scale: this.scale, this.flip.y ? -this.scale : this.scale);
         ctx.rotate(this.angle);
         ctx.drawImage(

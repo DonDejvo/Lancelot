@@ -22,34 +22,71 @@
             const scene = this.CreateScene("test");
             this.PlayScene("test");
 
-            const count = 3;
-            for (let i = 0; i < count; ++i) {
-                const entity = scene.CreateEntity();
-                entity.position.x = (i - (count - 1) / 2) * 125;
-                const emitter = new Lancelot.particle.Emitter({
-                    angle: { min: Math.PI * 1.4, max: 1.6 * Math.PI },
-                    speed: 90,
-                    lifetime: 1200,
-                    angleVariance: 0.05,
-                    scale: { to: 0.1 },
-                });
-                const pointCount = 7;
-                const points = [];
-                for(let i = 0; i < pointCount; ++i) {
-                    const angle = Math.PI * 2 / pointCount * i;
-                    const x = Math.cos(angle) * 25;
-                    const y = Math.sin(angle) * 20;
-                    points.push([x, y]);
-                }
-                entity.AddComponent(emitter);
-                emitter.AddParticle(Lancelot.drawable.Polygon, {
-                    points: points,
-                    fillStyle: "radial;10,10,0,-10,-10,30;orange=0.5;#4A4A4A=1",
-                    mode: ["overlay", "hard-light", "soft-light"][i],
-                });
-                emitter.Emit(1, true, 50);
-            }
+            /*
+            const entity = scene.CreateEntity();
+            const emitter = new Lancelot.particle.Emitter({
+                angle: { min: 0, max: 2 * Math.PI },
+                speed: { min: 20, max: 80 },
+                lifetime: { min: 1000, max: 2000 },
+                angleVariance: 10,
+                scale: { to: 0 },
+                opacity: { to: 0 },
+                rotationSpeed: 6,
+            });
+            entity.AddComponent(emitter);
+            emitter.AddParticle(Lancelot.drawable.Rect, {
+                width: 10,
+                height: 10,
+                fillStyle: "violet"
+            });
+            emitter.AddParticle(Lancelot.drawable.Rect, {
+                width: 10,
+                height: 10,
+                fillStyle: "turquoise"
+            });
+            emitter.AddParticle(Lancelot.drawable.Rect, {
+                width: 10,
+                height: 10,
+                fillStyle: "tomato"
+            });
+            emitter.AddParticle(Lancelot.drawable.Circle, {
+                radius: 5,
+                fillStyle: "salmon"
+            });
+            emitter.AddParticle(Lancelot.drawable.Circle, {
+                radius: 5,
+                fillStyle: "aquaMarine"
+            });
+            emitter.AddParticle(Lancelot.drawable.Circle, {
+                radius: 5,
+                fillStyle: "orangeRed"
+            });
+            emitter.AddParticle(Lancelot.drawable.Circle, {
+                radius: 5,
+                fillStyle: "hotpink"
+            });
+            emitter.Emit(10, true, 100);
+            */
 
+            const entity = scene.CreateEntity();
+            const sprite1 = new Lancelot.drawable.Rect({
+                width: 50,
+                height: 50,
+                strokeStyle: "white",
+                fillStyle: "transparent",
+                strokeWidth: 2
+            });
+            entity.AddComponent(sprite1, "Sprite1");
+            const sprite2 = new Lancelot.drawable.Rect({
+                width: 20,
+                height: 20,
+                strokeStyle: "white",
+                fillStyle: "transparent",
+                strokeWidth: 2
+            });
+            entity.AddComponent(sprite2, "Sprite2");
+
+            sprite2.Shake(5, 1200, 10, 0);
         }
     </script>
 </body>
