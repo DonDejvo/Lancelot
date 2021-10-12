@@ -91,7 +91,7 @@ export class Drawable extends Component {
         const centerY = this.position.y + minY + height / 2;
         return { x: centerX, y: centerY, width: width, height: height };
     }
-    get positionWithShakeOffset() {
+    get position0() {
         return this.position.Clone().Add(this._offset);
     }
     Shake(range, dur, count, angle) {
@@ -240,7 +240,7 @@ export class Text extends Drawable {
         ctx.save();
         ctx.globalCompositeOperation = this.mode;
         ctx.globalAlpha = this.opacity;
-        ctx.translate(this.positionWithShakeOffset.x, this.positionWithShakeOffset.y);
+        ctx.translate(this.position0.x, this.position0.y);
         ctx.scale(this.flip.x ? -this.scale: this.scale, this.flip.y ? -this.scale : this.scale);
         ctx.rotate(this.angle);
         ctx.fillStyle = this.ParseStyle(ctx, this.fillStyle);
@@ -270,7 +270,7 @@ export class Picture extends Drawable {
         ctx.save();
         ctx.globalCompositeOperation = this.mode;
         ctx.globalAlpha = this.opacity;
-        ctx.translate(this.positionWithShakeOffset.x, this.positionWithShakeOffset.y);
+        ctx.translate(this.position0.x, this.position0.y);
         ctx.scale(this.flip.x ? -this.scale: this.scale, this.flip.y ? -this.scale : this.scale);
         ctx.rotate(this.angle);
         ctx.drawImage(this._image, this._framePos.x * this._frameWidth, this._framePos.y * this._frameHeight, this._frameWidth, this._frameHeight, -this._width / 2, -this._height / 2, this._width, this._height);
@@ -287,7 +287,7 @@ export class Rect extends Drawable {
         ctx.globalCompositeOperation = this.mode;
         ctx.globalAlpha = this.opacity;
         ctx.filter = this.filter;
-        ctx.translate(this.positionWithShakeOffset.x, this.positionWithShakeOffset.y);
+        ctx.translate(this.position0.x, this.position0.y);
         ctx.scale(this.flip.x ? -this.scale: this.scale, this.flip.y ? -this.scale : this.scale);
         ctx.rotate(this.angle);
         ctx.fillStyle = this.ParseStyle(ctx, this.fillStyle);
@@ -322,7 +322,7 @@ export class Circle extends Drawable {
         ctx.globalCompositeOperation = this.mode;
         ctx.globalAlpha = this.opacity;
         ctx.filter = this.filter;
-        ctx.translate(this.positionWithShakeOffset.x, this.positionWithShakeOffset.y);
+        ctx.translate(this.position0.x, this.position0.y);
         ctx.scale(this.flip.x ? -this.scale: this.scale, this.flip.y ? -this.scale : this.scale);
         ctx.fillStyle = this.ParseStyle(ctx, this.fillStyle);
         ctx.strokeStyle = this.ParseStyle(ctx, this.strokeStyle);
@@ -348,7 +348,7 @@ export class Polygon extends Drawable {
         ctx.globalCompositeOperation = this.mode;
         ctx.globalAlpha = this.opacity;
         ctx.filter = this.filter;
-        ctx.translate(this.positionWithShakeOffset.x, this.positionWithShakeOffset.y);
+        ctx.translate(this.position0.x, this.position0.y);
         ctx.scale(this.flip.x ? -this.scale: this.scale, this.flip.y ? -this.scale : this.scale);
         ctx.fillStyle = this.ParseStyle(ctx, this.fillStyle);
         ctx.strokeStyle = this.ParseStyle(ctx, this.strokeStyle);
@@ -439,7 +439,7 @@ export class Sprite extends Drawable {
         ctx.save();
         ctx.globalCompositeOperation = this.mode;
         ctx.globalAlpha = this.opacity;
-        ctx.translate(this.positionWithShakeOffset.x, this.positionWithShakeOffset.y);
+        ctx.translate(this.position0.x, this.position0.y);
         ctx.scale(this.flip.x ? -this.scale: this.scale, this.flip.y ? -this.scale : this.scale);
         ctx.rotate(this.angle);
         ctx.drawImage(

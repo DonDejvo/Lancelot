@@ -4,6 +4,7 @@ import { EntityManager } from "./entity-manager.js";
 import { Camera } from "./camera.js";
 import { Interactive } from "./interactive.js";
 import { Entity } from "./entity.js";
+import { SpatialGridController } from "./spatial-grid-controller.js";
 
 export class Scene {
     constructor(params) {
@@ -102,7 +103,7 @@ export class Scene {
             if (c._type == "drawable") {
                 this._RemoveDrawable(c);
             } else if(c._type == "body") {
-                this._RemoveBody(e, b);
+                this._RemoveBody(e, c);
             }
         });
     }
@@ -123,10 +124,11 @@ export class Scene {
     }
     _AddBody(e, b) {
         e.body = b;
+        const boundingRect = b.boundingRect;
         const gridController = new SpatialGridController({
             grid: this._spatialGrid,
-            width: b.width,
-            height: b.height
+            width: boundingRect.width,
+            height: boundingRect.height
         });
         e.AddComponent(gridController);
         

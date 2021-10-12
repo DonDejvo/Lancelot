@@ -10,6 +10,20 @@
     <script type="module">
         import defaultExport from "../src/Lancelot.js";
 
+        class Controller extends Lancelot.Component {
+            constructor() {
+                super();
+
+            }
+            Update() {
+                const sprite = this.GetComponent("Sprite");
+                const body = this.parent.body;
+
+                body.velocity.y += 10;
+                sprite.angle = body.angle;
+            }
+        }
+
         const game = new Lancelot.Game({
             width: 420,
             height: 480,
@@ -22,72 +36,61 @@
             const scene = this.CreateScene("test");
             this.PlayScene("test");
 
-            /*
-            const entity = scene.CreateEntity();
-            const emitter = new Lancelot.particle.Emitter({
-                angle: { min: 0, max: 2 * Math.PI },
-                speed: { min: 20, max: 80 },
-                lifetime: { min: 1000, max: 2000 },
-                angleVariance: 10,
-                scale: { to: 0 },
-                opacity: { to: 0 },
-                rotationSpeed: 6,
-            });
-            entity.AddComponent(emitter);
-            emitter.AddParticle(Lancelot.drawable.Rect, {
-                width: 10,
-                height: 10,
-                fillStyle: "violet"
-            });
-            emitter.AddParticle(Lancelot.drawable.Rect, {
-                width: 10,
-                height: 10,
-                fillStyle: "turquoise"
-            });
-            emitter.AddParticle(Lancelot.drawable.Rect, {
-                width: 10,
-                height: 10,
-                fillStyle: "tomato"
-            });
-            emitter.AddParticle(Lancelot.drawable.Circle, {
-                radius: 5,
-                fillStyle: "salmon"
-            });
-            emitter.AddParticle(Lancelot.drawable.Circle, {
-                radius: 5,
-                fillStyle: "aquaMarine"
-            });
-            emitter.AddParticle(Lancelot.drawable.Circle, {
-                radius: 5,
-                fillStyle: "orangeRed"
-            });
-            emitter.AddParticle(Lancelot.drawable.Circle, {
-                radius: 5,
-                fillStyle: "hotpink"
-            });
-            emitter.Emit(10, true, 100);
-            */
+            for (let i = 0; i < 1; ++i) {
 
-            const entity = scene.CreateEntity();
-            const sprite1 = new Lancelot.drawable.Rect({
-                width: 50,
-                height: 50,
-                strokeStyle: "white",
-                fillStyle: "transparent",
-                strokeWidth: 2
-            });
-            entity.AddComponent(sprite1, "Sprite1");
-            const sprite2 = new Lancelot.drawable.Rect({
-                width: 20,
-                height: 20,
-                strokeStyle: "white",
-                fillStyle: "transparent",
-                strokeWidth: 2
-            });
-            entity.AddComponent(sprite2, "Sprite2");
+                const myEntity = scene.CreateEntity();
+                myEntity.groupList.add("m1");
+                myEntity.position.y = -200 + i * 80;
 
-            sprite2.Shake(5, 1200, 10, 0);
+                const body = new Lancelot.physics.Box({
+                    width: 80,
+                    height: 50,
+                    friction: { y: 0.01, x: 0.01, angular: 0.01 },
+                    mass: 5
+                });
+                body.AddBehavior("m0", "resolve", (other) => {
+                    
+                });
+
+                myEntity.AddComponent(body);
+
+                const sprite = new Lancelot.drawable.Rect({
+                    fillStyle: "white",
+                    width: body._width,
+                    height: body._height,
+                    angle: body.angle
+                });
+                myEntity.AddComponent(sprite, "Sprite");
+                myEntity.AddComponent(new Controller());
+
+            }
+
+            for (let i = 0; i < 1; ++i) {
+
+                    const myEntity = scene.CreateEntity();
+                    myEntity.groupList.add("m0");
+                    myEntity.position.y = 200;
+
+                    const body = new Lancelot.physics.Box({
+                        width: 300,
+                        height: 50
+                    });
+                    body.angle = 0.5;
+
+                    myEntity.AddComponent(body);
+
+                    const sprite = new Lancelot.drawable.Rect({
+                        fillStyle: "white",
+                        width: body._width,
+                        height: body._height,
+                        angle: body.angle
+                    });
+                    myEntity.AddComponent(sprite, "Sprite");
+                }
+            
         }
+
+        
     </script>
 </body>
 </html>

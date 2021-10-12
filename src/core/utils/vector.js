@@ -80,6 +80,9 @@ export class Vector {
     static Dist(v1, v2) {
         return v1.Clone().Sub(v2).Mag();
     }
+    static Cross(v1, v2) {
+        return v1.x * v2.y - v1.y * v2.x;
+    }
     static AngleBetween(v1, v2) {
         const z1 = v1.Mag();
         const z2 = v2.Mag();

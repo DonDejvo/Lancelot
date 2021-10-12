@@ -11,16 +11,16 @@ export class SpatialGridController extends Component {
     }
     InitComponent() {
         const pos = [
-            this._parent.body._pos.x,
-            this._parent.body._pos.y
+            this._parent.body.position.x,
+            this._parent.body.position.y
         ];
         this._client = this._grid.NewClient(pos, [this._width, this._height]);
         this._client.entity = this._parent;
     }
     Update(_) {
         const pos = [
-            this._parent.body._pos.x,
-            this._parent.body._pos.y
+            this._parent.body.position.x,
+            this._parent.body.position.y
         ];
         if (pos[0] == this._client.position[0] && pos[1] == this._client.position[1]) {
             return;
@@ -30,7 +30,7 @@ export class SpatialGridController extends Component {
     }
     FindNearby(rangeX, rangeY) {
         const results = this._grid.FindNear(
-            [this._parent._pos.x, this._parent._pos.y], [rangeX, rangeY]
+            [this._parent.position.x, this._parent.position.y], [rangeX, rangeY]
         );
         return results.filter(c => c.entity != this._parent).map(c => c.entity);
     }

@@ -1,5 +1,6 @@
 import { Component } from "./component.js";
 import { math } from "./utils/math.js";
+import { ParamParser } from "./utils/param-parser.js";
 import { Vector } from "./utils/vector.js";
 
 class Emitter extends Component {
@@ -7,33 +8,17 @@ class Emitter extends Component {
         super();
         this._particles = [];
         this._options = {
-            lifetime: this._InitMinMax(params.lifetime),
-            friction: (params.friction || 0),
-            angleVariance: (params.angleVariance || 0),
-            angle: this._InitMinMax(params.angle),
-            speed: this._InitMinMax(params.speed),
+            lifetime: ParamParser.ParseObject(params.lifetime, { min: 1000, max: 1000 }),
+            friction: ParamParser.ParseValue(params.friction, 0),
+            angleVariance: ParamParser.ParseValue(params.angleVariance, 0),
+            angle: ParamParser.ParseObject(params.angle, { min: 0, max: 0 }),
+            speed: ParamParser.ParseObject(params.speed, { min: 0, max: 0 }),
             acceleration: (params.acceleration || new Vector()),
-            scale: this._InitRange(params.scale),
-            opacity: this._InitRange(params.opacity),
-            rotationSpeed: (params.rotationSpeed || 0)
+            scale: ParamParser.ParseObject(params.scale, { from: 1, to: 0 }),
+            opacity: ParamParser.ParseObject(params.opacity, { from: 1, to: 0 }),
+            rotationSpeed: ParamParser.ParseValue(params.rotationSpeed, 0)
         };
         this._emitting = null;
-    }
-    _InitMinMax(param) {
-        if(param == undefined) {
-            return 0;
-        } else if(typeof param == "number") {
-            return { min: param, max: param };
-        } else {
-            return { min: param.min, max: param.max };
-        }
-    }
-    _InitRange(param) {
-        if(param == undefined) {
-            return null;
-        } else {
-            return { from: param.from == undefined ? 1 : param.from, to: param.to };
-        }
     }
     _CreateParticle() {
         
@@ -120,6 +105,7 @@ class ParticleController extends Component {
         if(this._opacity) {
             sprite.opacity = math.lerp(progress, this._opacity.from, this._opacity.to);
         }
+        this._rotationSpeed -= this._rotationSpeed * decceleration * this._friction;
         sprite.angle += this._rotationSpeed * elapsedTimeS;
     }
 }
