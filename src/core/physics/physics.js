@@ -22,7 +22,7 @@ class Body extends Component {
         this.mass = ParamParser.ParseValue(params.mass, 0);
         this.bounce = ParamParser.ParseValue(params.bounce, 0);
         this.angle = 0;
-        this.rotating = ParamParser.ParseValue(params.rotating, 0);
+        this.rotating = ParamParser.ParseValue(params.rotating, 1);
         this.friction = ParamParser.ParseObject(params.friction, { x: 0, y: 0, angular: 0 });
         this._behavior = [];
         this._collisions = {
@@ -120,16 +120,6 @@ export class Poly extends Body {
         }
         return verts;
     }
-    GetFaceNormals(vertices) {
-        const normals = [];
-        const count = vertices.length;
-        for(let i = 0; i < count; ++i) {
-            const v1 = vertices[i];
-            const v2 = vertices[(i + 1) % count];
-            normals.push(v2.Clone().Sub(v1).Norm().Unit());
-        }
-        return normals;
-    }
     get boundingRect() {
         const verts = this.GetVertices();
         let maxDist = 0;
@@ -149,18 +139,28 @@ export class Poly extends Body {
         }
     }
 
+    static GetFaceNormals(vertices) {
+        let normals = [];
+        for(let i = 0; i < vertices.length; i++) {
+            let v1 = vertices[i].Clone();
+            let v2 = vertices[(i + 1) % vertices.length].Clone();
+            normals[i] = v2.Clone().Sub(v1).Norm().Unit();
+        }
+        return normals;
+    }
+
     static FindSupportPoint(vertices, n, ptOnEdge){
         let max = -Infinity;
         let index =  -1;
         for(let i = 0; i < vertices.length; i++){
             let v = vertices[i].Clone().Sub(ptOnEdge);
             let proj = Vector.Dot(v, n);
-            if(proj >= 0 && proj > max){
+            if(proj > 0 && proj > max){
                 max = proj;
                 index = i;
             }
         }
-        return { sp : vertices[index], depth : max, n: n };
+        return { sp : vertices[index], depth : max };
     }
 }
 
@@ -177,7 +177,7 @@ export class Box extends Poly {
         ]
     }
     get inertia() {
-        return (this._width ** 2 + this._height ** 2) / 6;
+        return (this._width ** 2 + this._height ** 2) / this.inverseMass / this.rotating;
     }
 }
 
@@ -210,22 +210,21 @@ const DetectCollisionBallVsBall = (b1, b2) => {
 }
 
 const DetectCollisionPolyVsPoly = (b1, b2) => {
-    
     const verts1 = b1.GetComputedVertices();
     const verts2 = b2.GetComputedVertices();
-    const normals1 = b1.GetFaceNormals(verts1);
-    const normals2 = b2.GetFaceNormals(verts2);
+    const normals1 = Poly.GetFaceNormals(verts1);
+    const normals2 = Poly.GetFaceNormals(verts2);
     let e1SupportPoints = [];
     for(let i = 0; i < normals1.length; i++){
-        let spInfo = Poly.FindSupportPoint(verts2, normals1[i].Mult(-1), verts1[i]);
-        spInfo.n = normals1[i];
+        let spInfo = Poly.FindSupportPoint(verts2, normals1[i].Clone().Mult(-1), verts1[i]);
+        spInfo.n = normals1[i].Clone();
         e1SupportPoints[i] = spInfo;
         if(spInfo.sp == undefined) return { collide : false };
     }
     let e2SupportPoints = [];
     for(let i = 0; i < normals2.length; i++){
-        let spInfo = Poly.FindSupportPoint(verts1, normals2[i], verts2[i]);
-        spInfo.n = normals2[i];
+        let spInfo = Poly.FindSupportPoint(verts1, normals2[i].Clone().Mult(-1), verts2[i]);
+        spInfo.n = normals2[i].Clone();
         e2SupportPoints[i] = spInfo;
         if(spInfo.sp == undefined) return { collide : false };
     }
@@ -260,11 +259,21 @@ const ResolveCollision = (b1, b2) => {
     const detect = DetectCollision(b1, b2);
     
     if(detect.collide) {
+        if(b1.mass === 0 && b2.mass === 0) return true;
 
         const diff = detect.normal.Clone().Mult(detect.depth / (b1.inverseMass + b2.inverseMass));
         b1.position.Add(diff.Clone().Mult(b1.inverseMass));
-        b1.position.Sub(diff.Clone().Mult(b2.inverseMass));
-        
+        b2.position.Sub(diff.Clone().Mult(b2.inverseMass)); 
+
+        /*
+        let relVel = b1._vel.Clone().Sub(b2._vel);
+        const bounce = Math.max(b1.bounce, b2.bounce);
+        let j = -((1 + bounce) * Vector.Dot(relVel, detect.normal)) / (b1.inverseMass + b2.inverseMass);
+        let jn = detect.normal.Clone().Mult(j);  
+        b1._vel.Add(jn.Clone().Mult(b1.inverseMass));
+        b2._vel.Sub(jn.Clone().Mult(b2.inverseMass));
+        */
+
         const r1 = detect.point.Clone().Sub(b1.position);
         const r2 = detect.point.Clone().Sub(b2.position);
         const w1 = b1.angularVelocity;
@@ -273,15 +282,12 @@ const ResolveCollision = (b1, b2) => {
         const v2 = b2._vel;
         const vp1 = v1.Clone().Add(new Vector(-w1 * r1.y, w1 * r1.x));
         const vp2 = v2.Clone().Add(new Vector(-w2 * r2.y, w2 * r2.x));
-
         const relVel = vp1.Clone().Sub(vp2);
-        
         const bounce = Math.max(b1.bounce, b2.bounce);
-        const j = (-(1 + bounce) * Vector.Dot(relVel, detect.normal)) / (b1.inverseMass + b2.inverseMass + (Vector.Cross(r1, detect.normal) ** 2) / b1.inertia + (Vector.Cross(r2, detect.normal)) / b2.inertia);
+        const j = (-(1 + bounce) * Vector.Dot(relVel, detect.normal)) / (b1.inverseMass + b2.inverseMass + Math.pow(Vector.Cross(r1, detect.normal), 2) / b1.inertia + Math.pow(Vector.Cross(r2, detect.normal), 2) / b2.inertia);
         const jn = detect.normal.Clone().Mult(j);
-
         b1._vel.Add(jn.Clone().Mult(b1.inverseMass));
-        b1._vel.Sub(jn.Clone().Mult(b2.inverseMass));
+        b2._vel.Sub(jn.Clone().Mult(b2.inverseMass));
         b1.angularVelocity += Vector.Cross(r1, jn.Clone().Mult(1 / b1.inertia));
         b2.angularVelocity -= Vector.Cross(r2, jn.Clone().Mult(1 / b2.inertia));
 

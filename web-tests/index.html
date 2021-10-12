@@ -7,7 +7,9 @@
     <title>Document</title>
 </head>
 <body>
-    <script type="module">
+
+    <!--
+        <script type="module">
         import defaultExport from "../src/Lancelot.js";
 
         class Controller extends Lancelot.Component {
@@ -21,6 +23,7 @@
 
                 body.velocity.y += 10;
                 sprite.angle = body.angle;
+                //body.angle += 0.01;
             }
         }
 
@@ -40,14 +43,16 @@
 
                 const myEntity = scene.CreateEntity();
                 myEntity.groupList.add("m1");
-                myEntity.position.y = -200 + i * 80;
+                myEntity.position.y = -200;
+                myEntity.position.x = -100;
 
                 const body = new Lancelot.physics.Box({
                     width: 80,
                     height: 50,
                     friction: { y: 0.01, x: 0.01, angular: 0.01 },
-                    mass: 5
+                    mass: 5,
                 });
+                //body.angle = Math.PI/2;
                 body.AddBehavior("m0", "resolve", (other) => {
                     
                 });
@@ -66,7 +71,6 @@
             }
 
             for (let i = 0; i < 1; ++i) {
-
                     const myEntity = scene.CreateEntity();
                     myEntity.groupList.add("m0");
                     myEntity.position.y = 200;
@@ -75,8 +79,6 @@
                         width: 300,
                         height: 50
                     });
-                    body.angle = 0.5;
-
                     myEntity.AddComponent(body);
 
                     const sprite = new Lancelot.drawable.Rect({
@@ -86,7 +88,80 @@
                         angle: body.angle
                     });
                     myEntity.AddComponent(sprite, "Sprite");
+                }     
+        }
+    </script>
+    -->
+    <script type="module">
+        import defaultExport from "../src/Lancelot.js";
+
+        class Controller extends Lancelot.Component {
+            constructor() {
+                super();
+
+            }
+            Update() {
+                const sprite = this.GetComponent("Sprite");
+                const body = this.parent.body;
+
+                if(body.mass !== 0) {
+                    body.velocity.y += 5;
                 }
+                sprite.angle = body.angle;
+            }
+        }
+
+        const game = new Lancelot.Game({
+            width: 420,
+            height: 480,
+            background: "#242424",
+            init: init
+        });
+
+        function init() {
+            
+            const scene = this.CreateScene("test");
+            this.PlayScene("test");
+
+            const InitEntity = (x, y, a, vx, vy, va, w, h, m = 0) => {
+                const e1 = scene.CreateEntity();
+                e1.groupList.add("m1");
+                e1.position.Set(x, y);
+
+                const body = new Lancelot.physics.Box({
+                    width: w,
+                    height: h,
+                    mass: m,
+                    bounce: 0.9,
+                    friction: { x: 0.01, y: 0.01, angular: 0.01 }
+                });
+                e1.AddComponent(body);
+                body.angle = a;
+                body.velocity.Set(vx, vy);
+                body.angularVelocity = va;
+                body.AddBehavior("m1", "resolve", (other) => {
+                    
+                });
+
+                const sprite = new Lancelot.drawable.Rect({
+                    width: w,
+                    height: h,
+                    fillStyle: "grey",
+                    strokeStyle: "white",
+                    strokeWidth: 1
+                });
+                e1.AddComponent(sprite, "Sprite");
+                e1.AddComponent(new Controller());
+                return e1;
+            }
+
+            InitEntity(0, 220, 0, 0, 0, 0, 420, 20);
+            InitEntity(-200, 0, 0, 0, 0, 0, 20, 480);
+            InitEntity(200, 0, 0, 0, 0, 0, 20, 480);
+            for(let i = 0; i < 8; ++i) {
+                InitEntity(i * 40 - 160, -220, 0, Lancelot.math.rand(-100, 100), 0, 5, 20, 20, 5);
+            }
+            
             
         }
 
