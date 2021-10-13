@@ -103,7 +103,7 @@ class Body extends Component {
     }
 }
 
-export class Poly extends Body {
+class Poly extends Body {
     constructor(params) {
         super(params);
         this._points = params.points;
@@ -176,14 +176,82 @@ export class Box extends Poly {
             [-this._width/2, this._height/2],
         ]
     }
+    get width() {
+        return this._width;
+    }
+    get height() {
+        return this._height;
+    }
     get inertia() {
-        return (this._width ** 2 + this._height ** 2) / this.inverseMass / this.rotating;
+        return ((this.width / 2) ** 2 + (this.height / 2) ** 2) / this.inverseMass / this.rotating;
     }
 }
 
 export class Ball extends Body {
     constructor(params) {
         super(params);
+        this._radius = params.radius;
+    }
+    get radius() {
+        return this._radius;
+    }
+    get boundingRect(){
+        return { width : 2 * this.radius, height : 2 * this.radius };
+    }
+    get inertia() {
+        return (this.radius ** 2) / this.inverseMass / this.rotating;
+    }
+    FindSupportPoint(n, ptOnEdge){
+        let circVerts = [];
+        console.log(n);
+        circVerts[0] = this.position.Clone().Add(n.Clone().Mult(this.radius));
+        circVerts[1] = this.position.Clone().Add(n.Clone().Mult(-this.radius));
+        let max = -Infinity;
+        let index = -1;
+        for(let i = 0; i < circVerts.length; i++){
+            let v = circVerts[i].Clone().Sub(ptOnEdge);
+            let proj = Vector.Dot(v, n);
+            if(proj > 0 && proj > max){
+                max = proj;
+                index = i;
+            }
+        }   
+        return { sp : circVerts[index], depth : max, n : n };
+    }
+    FindNearestVertex(vertices){
+        let dist = Infinity;
+        let index = 0;
+        for(let i = 0; i < vertices.length; i++){
+            let l = Vector.Dist(vertices[i], this.position);
+            if(l < dist){
+                dist = l;
+                index = i;
+            }
+        }
+        return vertices[index];
+    }
+}
+
+export class RegularPolygon extends Poly {
+    constructor(params) {
+        super(params);
+        this._radius = params.radius;
+        this._sides = params.sides;
+        const points = [];
+        for(let i = 0; i < this._sides; ++i) {
+            const angle = Math.PI * 2 / this._sides * i;
+            points.push([Math.cos(angle) * this._radius, Math.sin(angle) * this._radius]);
+        }
+        this._points = points;
+    }
+    get radius() {
+        return this._radius;
+    }
+    get boundingRect(){
+        return { width : 2 * this.radius, height : 2 * this.radius };
+    }
+    get inertia() {
+        return (this.radius ** 2) / this.inverseMass / this.rotating;
     }
 }
 
@@ -204,8 +272,17 @@ const DetectCollision = (b1, b2) => {
 }
 
 const DetectCollisionBallVsBall = (b1, b2) => {
+    let v = b1.position.Clone().Sub(b2.position);
+    let info = {};
+    if(v.Mag() < b1.radius + b2.radius){
+        info.normal = v.Clone().Unit();
+        info.depth = b1.radius + b2.radius - v.Mag();
+        info.point = b1.position.Clone().Add(info.normal.Clone().Mult(b1.radius));
+        info.collide = true;
+        return info;
+    }
     return {
-        collide: false
+        collide: false,
     };
 }
 
@@ -250,8 +327,37 @@ const DetectCollisionPolyVsPoly = (b1, b2) => {
 }
 
 const DetectCollisionBallVsPoly = (b1, b2) => {
+    const verts = b2.GetComputedVertices();
+    const normals = Poly.GetFaceNormals(verts);
+    let e1SupportPoints = [];
+    for(let i = 0; i < normals.length; i++){
+        let info = b1.FindSupportPoint(normals[i].Clone().Mult(-1), verts[i].Clone());
+        if(info.sp == undefined) return { collide : false };
+        e1SupportPoints[i] = info;
+    }
+    let nearestVertex = b1.FindNearestVertex(verts);
+    let normal = nearestVertex.Clone().Sub(b1.position).Unit();
+    let info = b1.FindSupportPoint(verts, normal.Clone(), b1.position.Clone());
+    if(info.sp == undefined) return { collide : false };
+    info.n = normal.Clone();
+    e1SupportPoints.push(info);
+    let max = Infinity;
+    let index = null;
+    for(let i = 0; i < e1SupportPoints.length; i++){
+        if(e1SupportPoints[i].depth < max){
+            max = e1SupportPoints[i].depth;
+            index = i;
+        }
+    }
+    let v = b2.position.Clone().Sub(b1.position);
+    if(Vector.Dot(v, e1SupportPoints[index].n) < 0){
+        e1SupportPoints[index].n.Mult(-1);
+    }
     return {
-        collide: false
+        collide: true,
+        normal : e1SupportPoints[index].n,
+        point : e1SupportPoints[index].sp,
+        depth : e1SupportPoints[index].depth
     };
 }
 
