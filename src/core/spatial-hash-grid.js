@@ -85,4 +85,23 @@ export class SpatialHashGrid {
         }
     }
 
+    Draw(ctx) {
+        const bounds = this._bounds;
+        ctx.save();
+        ctx.strokeStyle = "white";
+        ctx.beginPath();
+        const cellWidth = (bounds[1][0] - bounds[0][0]) / this._dimensions[0];
+        for(let x = 0; x <= this._dimensions[0]; ++x) {
+            ctx.moveTo(bounds[0][0] + x * cellWidth, bounds[0][1]);
+            ctx.lineTo(bounds[0][0] + x * cellWidth, bounds[1][1]);
+        }
+        const cellHeight = (bounds[1][1] - bounds[0][1]) / this._dimensions[1];
+        for(let y = 0; y <= this._dimensions[1]; ++y) {
+            ctx.moveTo(bounds[0][0], bounds[0][1] + y * cellHeight);
+            ctx.lineTo(bounds[1][0], bounds[0][1] + y * cellHeight);
+        }
+        ctx.stroke();
+        ctx.restore();
+    }
+
 }

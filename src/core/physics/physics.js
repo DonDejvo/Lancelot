@@ -3,6 +3,8 @@ import { ParamParser } from "../utils/param-parser.js";
 import { Vector } from "../utils/vector.js";
 import { SpatialHashGrid } from "../spatial-hash-grid.js";
 import { SpatialGridController } from "../spatial-grid-controller.js";
+import { QuadTree } from "../quadtree.js";
+import { QuadtreeController } from "../quadtree-controller.js";
 
 /*
 
@@ -20,12 +22,15 @@ export class World {
         this._relaxationCount = ParamParser.ParseValue(params.relaxationCount, 5);
         this._bounds = ParamParser.ParseValue(params.bounds, [[-1000, -1000], [1000, 1000]]);
         this._cellDimensions = ParamParser.ParseObject(params.cellDimensions, { width: 100, height: 100 });
+        this._limit = ParamParser.ParseValue(params.limit, 5);
         this._bodies = [];
         this._joints = [];
 
         const cellCountX = Math.floor((this._bounds[1][0] - this._bounds[0][0]) / this._cellDimensions.width);
         const cellCountY = Math.floor((this._bounds[1][1] - this._bounds[0][1]) / this._cellDimensions.height);
         this._spatialGrid = new SpatialHashGrid(this._bounds, [cellCountX, cellCountY]);
+
+        this._quadtree = new QuadTree(this._bounds, this._limit);
     }
     _AddJoint(j) {
         this._joints.push(j);
@@ -39,6 +44,12 @@ export class World {
             height: boundingRect.height
         });
         e.AddComponent(gridController);
+        const treeController = new QuadtreeController({
+            quadtree: this._quadtree,
+            width: boundingRect.width,
+            height: boundingRect.height
+        });
+        e.AddComponent(treeController);
         
         this._bodies.push(b);
     }
@@ -72,6 +83,14 @@ export class World {
                 body.HandleBehavior();
             }
         }
+
+        this._quadtree.Clear();
+        
+        for(let body of this._bodies) {
+            const treeController = body.GetComponent("QuadtreeController");
+            treeController.UpdateClient();
+        }
+        
     }
 }
 
@@ -85,7 +104,7 @@ class Body extends Component {
         this.bounce = ParamParser.ParseValue(params.bounce, 0);
         this.angle = 0;
         this.rotating = ParamParser.ParseValue(params.rotating, 1);
-        this.friction = ParamParser.ParseObject(params.friction, { x: 0, y: 0, angular: 0 });
+        this.friction = ParamParser.ParseObject(params.friction, { x: 0, y: 0, angular: 0, collide: 0.3 });
         this._behavior = [];
         this._collisions = {
             left: new Set(), right: new Set(), top: new Set(), bottom: new Set()
@@ -115,9 +134,9 @@ class Body extends Component {
     get collisions() {
         return this._collisions;
     }
-    AddBehavior(group, type, action) {
+    AddBehavior(groups, type, action) {
         this._behavior.push({
-            group: group,
+            groups: groups.split(" "),
             type: type,
             action: action
         });
@@ -132,10 +151,14 @@ class Body extends Component {
         this.angle += this._angVel * elapsedTimeS;
     }
     HandleBehavior() {
-        const gridController = this.GetComponent("SpatialGridController");
+        // const controller = this.GetComponent("SpatialGridController");
+        const controller = this.GetComponent("QuadtreeController");
         const boundingRect = this.boundingRect;
         for(let behavior of this._behavior) {
-            const entities = gridController.FindNearby(boundingRect.width, boundingRect.height).filter(e => e.groupList.has(behavior.group));;
+            const entites0 = controller.FindNearby(boundingRect.width, boundingRect.height);
+            const entities = entites0.filter(e => {
+                return behavior.groups.map((g) => e.groupList.has(g)).some(_ => _);
+            });
             
             entities.sort((a, b) => {
                 const boundingRectA = a.body.boundingRect;
@@ -263,7 +286,7 @@ export class Box extends Poly {
         return this._height;
     }
     get inertia() {
-        return ((this.width) ** 2 + (this.height) ** 2) / this.inverseMass / this.rotating;
+        return ((this.width) ** 2 + (this.height) ** 2) / 1 / this.rotating;
     }
 }
 
@@ -279,7 +302,7 @@ export class Ball extends Body {
         return { width : 2 * this.radius, height : 2 * this.radius };
     }
     get inertia() {
-        return ((this.radius * 2) ** 2) / this.inverseMass / this.rotating;
+        return (Math.PI * this.radius ** 2) / 1 / this.rotating;
     }
     FindSupportPoint(n, ptOnEdge){
         let circVerts = [];
@@ -331,7 +354,7 @@ export class RegularPolygon extends Poly {
         return { width : 2 * this.radius, height : 2 * this.radius };
     }
     get inertia() {
-        return (this.radius ** 2) / this.inverseMass / this.rotating;
+        return (Math.PI * this.radius ** 2) / 1 / this.rotating;
     }
 }
 
@@ -464,14 +487,31 @@ const ResolveCollision = (b1, b2, elapsedTimeS) => {
         const vp2 = v2.Clone().Add(new Vector(-w2 * r2.y, w2 * r2.x));
         const relVel = vp1.Clone().Sub(vp2);
         const bounce = Math.max(b1.bounce, b2.bounce);
+
+        const relVelDotN = Vector.Dot(relVel, detect.normal);
+        if(relVelDotN > 0) return true;
+
         const j = (-(1 + bounce) * Vector.Dot(relVel, detect.normal)) / (b1.inverseMass + b2.inverseMass + Math.pow(Vector.Cross(r1, detect.normal), 2) / b1.inertia + Math.pow(Vector.Cross(r2, detect.normal), 2) / b2.inertia);
         const jn = detect.normal.Clone().Mult(j);
         const vel1 = jn.Clone().Mult(b1.inverseMass);
         const vel2 = jn.Clone().Mult(b2.inverseMass);
         b1._vel.Add(vel1.Clone().Mult(1));
         b2._vel.Sub(vel2.Clone().Mult(1));
-        b1.angularVelocity += Vector.Cross(r1, vel1.Clone()) / b1.inertia;
-        b2.angularVelocity -= Vector.Cross(r2, vel2.Clone()) / b2.inertia;
+        b1.angularVelocity += Vector.Cross(r1, vel1.Clone().Mult(1 / b1.inertia));
+        b2.angularVelocity -= Vector.Cross(r2, vel2.Clone().Mult(1 / b1.inertia));
+        
+        const friction = Math.max(b1.friction.collide, b2.friction.collide);
+        const tangent = detect.normal.Clone().Norm();
+
+        const j2 = (-(1 + bounce) * Vector.Dot(relVel, tangent) * friction) / (b1.inverseMass + b2.inverseMass + Math.pow(Vector.Cross(r1, tangent), 2) / b1.inertia + Math.pow(Vector.Cross(r2, tangent), 2) / b2.inertia);
+        const jt = tangent.Clone().Mult(j2);
+        const vel1a = jt.Clone().Mult(b1.inverseMass);
+        const vel2a = jt.Clone().Mult(b2.inverseMass);
+        b1._vel.Add(vel1a.Clone());
+        b2._vel.Sub(vel2a.Clone());
+        b1.angularVelocity += Vector.Cross(r1, vel1a.Clone().Mult(1 / b1.inertia));
+        b2.angularVelocity -= Vector.Cross(r2, vel2a.Clone().Mult(1 / b2.inertia));
+        
 
         return true;
     }
@@ -499,7 +539,7 @@ class Spring extends Joint {
         super(b1, b2, params);
         this._stiffness = ParamParser.ParseValue(params.stiffness, 0) * 10;
     }
-    Update(elapsedTimeS) {
+    Update() {
         const offset1 = this._offset1.Clone().Rotate(this._body1.angle);
         const offset2 = this._offset2.Clone().Rotate(this._body2.angle);
         const start = this._body1.position.Clone().Add(offset1);
@@ -513,11 +553,11 @@ class Spring extends Joint {
         
         const vel1 = diff.Clone().Mult(this._body1.inverseMass);
         this._body1.velocity.Add(vel1.Clone().Mult(1));
-        this._body1.angularVelocity += Vector.Cross(offset1, vel1) / this._body1.inertia;
+        this._body1.angularVelocity += Vector.Cross(offset1, vel1.Clone().Mult(1 / this._body1.inertia));
 
         const vel2 = diff.Clone().Mult(this._body2.inverseMass);
         this._body2.velocity.Sub(vel2.Clone().Mult(1));
-        this._body2.angularVelocity -= Vector.Cross(offset2, vel2) / this._body2.inertia;
+        this._body2.angularVelocity -= Vector.Cross(offset2, vel2.Clone().Mult(1 / this._body2.inertia));
 
     }
 }
@@ -527,7 +567,7 @@ class Stick extends Joint {
         super(b1, b2, params);
 
     }
-    Update(elapsedTimeS) {
+    Update() {
         const offset1 = this._offset1.Clone().Rotate(this._body1.angle);
         const offset2 = this._offset2.Clone().Rotate(this._body2.angle);
         const start = this._body1.position.Clone().Add(offset1);
