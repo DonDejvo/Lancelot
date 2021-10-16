@@ -16,13 +16,17 @@
                 super();
 
             }
-            Update() {
+            Update(elapsedTimeS) {
                 const sprite = this.GetComponent("Sprite");
                 const body = this.parent.body;
 
                 if(body.mass !== 0) {
-                    body.velocity.y += 5;
+                    body.velocity.y += 400 * elapsedTimeS;
                 }
+                if(body.parent.groupList.has("m3") && body.mass !== 0) {
+                    //body.velocity.x += 200 * elapsedTimeS;
+                    body.angularVelocity += 10 * elapsedTimeS;
+                } 
                 sprite.angle = body.angle;
             }
         }
@@ -37,29 +41,31 @@
         function init() {
             
             const scene = this.CreateScene("test", {
-                cellDimensions: [40, 40],
-                relaxationCount: 5
+                physics: {
+                    cellDimensions: [50, 50],
+                    relaxationCount: 5
+                }
             });
             this.PlayScene("test");
 
-            const InitBall = (x, y, a, vx, vy, va, w, h, m = 0) => {
+            const InitBall = (g, rg, x, y, a, vx, vy, va, w, h, m = 0) => {
                 const e1 = scene.CreateEntity();
-                e1.groupList.add("m1");
+                e1.groupList.add(g);
                 e1.position.Set(x, y);
 
                 const body = new Lancelot.physics.Ball({
                     radius: w / 2,
                     mass: m,
-                    bounce: 0.9,
+                    bounce: 0.5,
                     friction: { x: 0.01, y: 0.01, angular: 0.01 }
                 });
                 e1.AddComponent(body);
                 body.angle = a;
                 body.velocity.Set(vx, vy);
                 body.angularVelocity = va;
-                body.AddBehavior("m1", "resolve", (other) => {
-                    
-                });
+                for(let group of rg) {
+                    body.AddBehavior(group, "resolve");
+                }
 
                 const sprite = new Lancelot.drawable.Circle({
                     radius: w / 2,
@@ -72,25 +78,25 @@
                 return e1;
             }
 
-            const InitBox = (x, y, a, vx, vy, va, w, h, m = 0) => {
+            const InitBox = (g, rg, x, y, a, vx, vy, va, w, h, m = 0) => {
                 const e1 = scene.CreateEntity();
-                e1.groupList.add("m1");
+                e1.groupList.add(g);
                 e1.position.Set(x, y);
 
                 const body = new Lancelot.physics.Box({
                     width: w,
                     height: h,
                     mass: m,
-                    bounce: 0.9,
-                    friction: { x: 0.01, y: 0.01, angular: 0.01 }
+                    bounce: 0.5,
+                    friction: { x: 0.01, y: 0.01, angular: 0.01 },
                 });
                 e1.AddComponent(body);
                 body.angle = a;
                 body.velocity.Set(vx, vy);
                 body.angularVelocity = va;
-                body.AddBehavior("m1", "resolve", (other) => {
-                    
-                });
+                for(let group of rg) {
+                    body.AddBehavior(group, "resolve");
+                }
 
                 const sprite = new Lancelot.drawable.Rect({
                     width: w,
@@ -104,12 +110,58 @@
                 return e1;
             }
 
-            InitBox(0, 220, 0, 0, 0, 0, 420, 20);
-            InitBox(-200, 0, 0, 0, 0, 0, 20, 480);
-            InitBox(200, 0, 0, 0, 0, 0, 20, 480);
-            for(let i = 0; i < 1; ++i) {
-                InitBall((i % 8) * 40 - 160, -220 - Math.floor(i / 8) * 40, 0, Lancelot.math.rand(-100, 100), 0, 5, 20, 20, 5);
+            InitBox("p1", [], 0, 220, 0.2, 0, 0, 0, 420, 20);
+            InitBox("p1", [], 420, 260, 0, 0, 0, 0, 420, 20);
+            InitBox("p1", [], 840, 220, -0.2, 0, 0, 0, 420, 20);
+            // InitBox("p1", [], -200, 0, 0, 0, 0, 0, 20, 480);
+            // InitBox("p1", [], 200, 0, 0, 0, 0, 0, 20, 480);
+            const chain = [];
+            for(let i = 0; i < 8; ++i) {
+                const chainNode = InitBox("m1", ["p1"], (i % 8) * 40 - 160, -20 - Math.floor(i / 8) * 40, 0, 0, 0, 0, 20, 20, (i == 0 || i == 7) ? 0 : 5);
+                if(i > 0) {
+                    chain[i - 1].body.Join(chainNode.body, "spring", {
+                        stiffness: 0.9,
+                        
+                        offset1: { x: 10 },
+                        offset2: { x: -10 }
+
+                    });
+                }
+                chain.push(chainNode);
             }
+
+            const stiffness = 0.8;
+
+            const a = InitBox("m2", ["p1"], -100, 100, 0, 0, 0, 0, 80, 20, 10);
+            const w1 = InitBall("m3", ["p1"], -125, 125, 0, 0, 0, 0, 30, 30, 5);
+            
+            a.body.Join(w1.body, "spring", {
+                offset1: { x: -40, y: 0 },
+                stiffness: stiffness
+            });
+            a.body.Join(w1.body, "spring", {
+                offset1: { x: -25, y: 0 },
+                stiffness: stiffness
+            });
+            a.body.Join(w1.body, "spring", {
+                offset1: { x: -10, y: 0 },
+                stiffness: stiffness
+            });
+            
+            const w2 = InitBall("m3", ["p1"], -75, 125, 0, 0, 0, 0, 30, 30, 5);
+            a.body.Join(w2.body, "spring", {
+                offset1: { x: 40, y: 0 },
+                stiffness: stiffness
+            });
+            a.body.Join(w2.body, "spring", {
+                offset1: { x: 25, y: 0 },
+                stiffness: stiffness
+            });
+            a.body.Join(w2.body, "spring", {
+                offset1: { x: 10, y: 0 },
+                stiffness: stiffness
+            });
+            scene.camera.Follow(a);
             
             
         }

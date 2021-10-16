@@ -1,6 +1,8 @@
 import { Component } from "../component.js";
 import { ParamParser } from "../utils/param-parser.js";
 import { Vector } from "../utils/vector.js";
+import { SpatialHashGrid } from "../spatial-hash-grid.js";
+import { SpatialGridController } from "../spatial-grid-controller.js";
 
 /*
 
@@ -12,6 +14,66 @@ rotating: number
 friction: { x: number, y: number }
 
 */
+
+export class World {
+    constructor(params) {
+        this._relaxationCount = ParamParser.ParseValue(params.relaxationCount, 5);
+        this._bounds = ParamParser.ParseValue(params.bounds, [[-1000, -1000], [1000, 1000]]);
+        this._cellDimensions = ParamParser.ParseObject(params.cellDimensions, { width: 100, height: 100 });
+        this._bodies = [];
+        this._joints = [];
+
+        const cellCountX = Math.floor((this._bounds[1][0] - this._bounds[0][0]) / this._cellDimensions.width);
+        const cellCountY = Math.floor((this._bounds[1][1] - this._bounds[0][1]) / this._cellDimensions.height);
+        this._spatialGrid = new SpatialHashGrid(this._bounds, [cellCountX, cellCountY]);
+    }
+    _AddJoint(j) {
+        this._joints.push(j);
+    }
+    _AddBody(e, b) {
+        e.body = b;
+        const boundingRect = b.boundingRect;
+        const gridController = new SpatialGridController({
+            grid: this._spatialGrid,
+            width: boundingRect.width,
+            height: boundingRect.height
+        });
+        e.AddComponent(gridController);
+        
+        this._bodies.push(b);
+    }
+    _RemoveBody(e, b) {
+        const gridController = e.GetComponent("SpatialGridController");
+        if(gridController) {
+            this._spatialGrid.RemoveClient(gridController._client);
+        }
+
+        const i = this._bodies.indexOf(b);
+        if (i != -1) {
+            this._bodies.splice(i, 1);
+        }
+    }
+    Update(elapsedTimeS) {
+        
+        for(let body of this._bodies) {
+            body._collisions.left.clear();
+            body._collisions.right.clear();
+            body._collisions.top.clear();
+            body._collisions.bottom.clear();
+        }
+        for(let body of this._bodies) {
+            body.UpdatePosition(elapsedTimeS);
+        }
+        for(let joint of this._joints) {
+            joint.Update(elapsedTimeS);
+        }
+        for(let i = 0; i < this._relaxationCount; ++i) {
+            for(let body of this._bodies) {
+                body.HandleBehavior();
+            }
+        }
+    }
+}
 
 class Body extends Component {
     constructor(params) {
@@ -74,6 +136,7 @@ class Body extends Component {
         const boundingRect = this.boundingRect;
         for(let behavior of this._behavior) {
             const entities = gridController.FindNearby(boundingRect.width, boundingRect.height).filter(e => e.groupList.has(behavior.group));;
+            
             entities.sort((a, b) => {
                 const boundingRectA = a.body.boundingRect;
                 const boundingRectB = b.body.boundingRect;
@@ -81,6 +144,7 @@ class Body extends Component {
                 const distB = Vector.Dist(this.position, b.body.position) / new Vector(boundingRect.width + boundingRectB.width, boundingRect.height + boundingRectB.height).Mag();
                 return distA - distB;
             });
+            
             for(let e of entities) {
                 switch(behavior.type) {
                     case "detect":
@@ -100,6 +164,22 @@ class Body extends Component {
                 }
             }
         }
+    }
+    Join(b, type, params) {
+        let joint;
+        switch(type) {
+            case "spring":
+                joint = new Spring(this, b, params);
+                break;
+            case "stick":
+                joint = new Stick(this, b, params);
+                break;
+        }
+        if(!joint) {
+            return;
+        }
+        const world = this.scene._world;
+        world._AddJoint(joint);
     }
 }
 
@@ -183,7 +263,7 @@ export class Box extends Poly {
         return this._height;
     }
     get inertia() {
-        return ((this.width / 2) ** 2 + (this.height / 2) ** 2) / this.inverseMass / this.rotating;
+        return ((this.width) ** 2 + (this.height) ** 2) / this.inverseMass / this.rotating;
     }
 }
 
@@ -199,11 +279,11 @@ export class Ball extends Body {
         return { width : 2 * this.radius, height : 2 * this.radius };
     }
     get inertia() {
-        return (this.radius ** 2) / this.inverseMass / this.rotating;
+        return ((this.radius * 2) ** 2) / this.inverseMass / this.rotating;
     }
     FindSupportPoint(n, ptOnEdge){
         let circVerts = [];
-        console.log(n);
+        
         circVerts[0] = this.position.Clone().Add(n.Clone().Mult(this.radius));
         circVerts[1] = this.position.Clone().Add(n.Clone().Mult(-this.radius));
         let max = -Infinity;
@@ -337,7 +417,7 @@ const DetectCollisionBallVsPoly = (b1, b2) => {
     }
     let nearestVertex = b1.FindNearestVertex(verts);
     let normal = nearestVertex.Clone().Sub(b1.position).Unit();
-    let info = b1.FindSupportPoint(verts, normal.Clone(), b1.position.Clone());
+    let info = Poly.FindSupportPoint(verts, normal.Clone(), b1.position.Clone());
     if(info.sp == undefined) return { collide : false };
     info.n = normal.Clone();
     e1SupportPoints.push(info);
@@ -361,24 +441,18 @@ const DetectCollisionBallVsPoly = (b1, b2) => {
     };
 }
 
-const ResolveCollision = (b1, b2) => {
+const ResolveCollision = (b1, b2, elapsedTimeS) => {
+    if(b1 instanceof Ball && b2 instanceof Poly) {
+        [b1, b2] = [b2, b1];
+    }
     const detect = DetectCollision(b1, b2);
     
     if(detect.collide) {
         if(b1.mass === 0 && b2.mass === 0) return true;
 
-        const diff = detect.normal.Clone().Mult(detect.depth / (b1.inverseMass + b2.inverseMass));
+        const diff = detect.normal.Clone().Mult((detect.depth) / (b1.inverseMass + b2.inverseMass));
         b1.position.Add(diff.Clone().Mult(b1.inverseMass));
         b2.position.Sub(diff.Clone().Mult(b2.inverseMass)); 
-
-        /*
-        let relVel = b1._vel.Clone().Sub(b2._vel);
-        const bounce = Math.max(b1.bounce, b2.bounce);
-        let j = -((1 + bounce) * Vector.Dot(relVel, detect.normal)) / (b1.inverseMass + b2.inverseMass);
-        let jn = detect.normal.Clone().Mult(j);  
-        b1._vel.Add(jn.Clone().Mult(b1.inverseMass));
-        b2._vel.Sub(jn.Clone().Mult(b2.inverseMass));
-        */
 
         const r1 = detect.point.Clone().Sub(b1.position);
         const r2 = detect.point.Clone().Sub(b2.position);
@@ -392,12 +466,79 @@ const ResolveCollision = (b1, b2) => {
         const bounce = Math.max(b1.bounce, b2.bounce);
         const j = (-(1 + bounce) * Vector.Dot(relVel, detect.normal)) / (b1.inverseMass + b2.inverseMass + Math.pow(Vector.Cross(r1, detect.normal), 2) / b1.inertia + Math.pow(Vector.Cross(r2, detect.normal), 2) / b2.inertia);
         const jn = detect.normal.Clone().Mult(j);
-        b1._vel.Add(jn.Clone().Mult(b1.inverseMass));
-        b2._vel.Sub(jn.Clone().Mult(b2.inverseMass));
-        b1.angularVelocity += Vector.Cross(r1, jn.Clone().Mult(1 / b1.inertia));
-        b2.angularVelocity -= Vector.Cross(r2, jn.Clone().Mult(1 / b2.inertia));
+        const vel1 = jn.Clone().Mult(b1.inverseMass);
+        const vel2 = jn.Clone().Mult(b2.inverseMass);
+        b1._vel.Add(vel1.Clone().Mult(1));
+        b2._vel.Sub(vel2.Clone().Mult(1));
+        b1.angularVelocity += Vector.Cross(r1, vel1.Clone()) / b1.inertia;
+        b2.angularVelocity -= Vector.Cross(r2, vel2.Clone()) / b2.inertia;
 
         return true;
     }
     return false;
 }
+
+class Joint {
+    constructor(b1, b2, params) {
+        this._body1 = b1;
+        this._body2 = b2;
+        const offset1 = ParamParser.ParseObject(params.offset1, { x: 0, y: 0 });
+        this._offset1 = new Vector(offset1.x, offset1.y);
+        const offset2 = ParamParser.ParseObject(params.offset2, { x: 0, y: 0 });
+        this._offset2 = new Vector(offset2.x, offset2.y);
+
+        const start = this._body1.position.Clone().Add(this._offset1.Clone().Rotate(this._body1.angle));
+        const end = this._body2.position.Clone().Add(this._offset2.Clone().Rotate(this._body2.angle));
+        this._length = ParamParser.ParseValue(params.length, Vector.Dist(start, end));
+    }
+    Update(_) {}
+}
+
+class Spring extends Joint {
+    constructor(b1, b2, params) {
+        super(b1, b2, params);
+        this._stiffness = ParamParser.ParseValue(params.stiffness, 0) * 10;
+    }
+    Update(elapsedTimeS) {
+        const offset1 = this._offset1.Clone().Rotate(this._body1.angle);
+        const offset2 = this._offset2.Clone().Rotate(this._body2.angle);
+        const start = this._body1.position.Clone().Add(offset1);
+        const end = this._body2.position.Clone().Add(offset2);
+
+        const vec = start.Clone().Sub(end);
+        const n = vec.Clone().Unit();
+        const dist = vec.Mag();
+
+        const diff = n.Clone().Mult((dist - this._length) * -this._stiffness / (this._body1.inverseMass + this._body2.inverseMass));
+        
+        const vel1 = diff.Clone().Mult(this._body1.inverseMass);
+        this._body1.velocity.Add(vel1.Clone().Mult(1));
+        this._body1.angularVelocity += Vector.Cross(offset1, vel1) / this._body1.inertia;
+
+        const vel2 = diff.Clone().Mult(this._body2.inverseMass);
+        this._body2.velocity.Sub(vel2.Clone().Mult(1));
+        this._body2.angularVelocity -= Vector.Cross(offset2, vel2) / this._body2.inertia;
+
+    }
+}
+
+class Stick extends Joint {
+    constructor(b1, b2, params) {
+        super(b1, b2, params);
+
+    }
+    Update(elapsedTimeS) {
+        const offset1 = this._offset1.Clone().Rotate(this._body1.angle);
+        const offset2 = this._offset2.Clone().Rotate(this._body2.angle);
+        const start = this._body1.position.Clone().Add(offset1);
+        const end = this._body2.position.Clone().Add(offset2);
+
+        const vec = start.Clone().Sub(end);
+        const n = vec.Clone().Unit();
+        const dist = vec.Mag();
+
+        const diff = n.Clone().Mult((dist - this._length) * -this._stiffness / (this._body1.inverseMass + this._body2.inverseMass));
+
+    }
+}
+

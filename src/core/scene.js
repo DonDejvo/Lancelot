@@ -1,30 +1,31 @@
-import { SpatialHashGrid } from "./spatial-hash-grid.js";
 import { TimeoutHandler } from "./utils/timeout-handler.js";
 import { EntityManager } from "./entity-manager.js";
 import { Camera } from "./camera.js";
 import { Interactive } from "./interactive.js";
 import { Entity } from "./entity.js";
-import { SpatialGridController } from "./spatial-grid-controller.js";
+import { World } from "./physics/physics.js";
 
 export class Scene {
     constructor(params) {
 
-        this._bounds = (params.bounds || [[-1000, -1000], [1000, 1000]]);
-        this._cellDimensions = (params.cellDimensions || [100, 100]);
-        this._relaxationCount = (params.relaxationCount || 5);
+        // this._bounds = (params.bounds || [[-1000, -1000], [1000, 1000]]);
+        // this._cellDimensions = (params.cellDimensions || [100, 100]);
+        // this._relaxationCount = (params.relaxationCount || 5);
+
+        this._world = new World(params.physics);
 
         this.paused = true;
         this.speed = 1.0;
         this.timeout = new TimeoutHandler();
 
-        this._bodies = [];
+        // this._bodies = [];
         this._drawable = [];
         this._interactiveEntities = [];
 
         this._eventHandlers = new Map();
 
         this._entityManager = new EntityManager();
-        this._spatialGrid = new SpatialHashGrid(this._bounds, [Math.floor((this._bounds[1][0] - this._bounds[0][0]) / this._cellDimensions[0]), Math.floor((this._bounds[1][1] - this._bounds[0][1]) / this._cellDimensions[1])]);
+        // this._spatialGrid = new SpatialHashGrid(this._bounds, [Math.floor((this._bounds[1][0] - this._bounds[0][0]) / this._cellDimensions[0]), Math.floor((this._bounds[1][1] - this._bounds[0][1]) / this._cellDimensions[1])]);
         this._camera = new Camera();
         
     }
@@ -66,7 +67,7 @@ export class Scene {
             }
         }
         if(type == "mousedown") {
-            const entities = this._spatialGrid.FindNear([event.x, event.y], [0, 0]).map(c => c.entity);
+            const entities = this._world._spatialGrid.FindNear([event.x, event.y], [0, 0]).map(c => c.entity);
             for(let e of entities) {
                 if(!e.interactive) { continue; }
                 
@@ -123,6 +124,8 @@ export class Scene {
         }
     }
     _AddBody(e, b) {
+        this._world._AddBody(e, b);
+        /*
         e.body = b;
         const boundingRect = b.boundingRect;
         const gridController = new SpatialGridController({
@@ -133,8 +136,11 @@ export class Scene {
         e.AddComponent(gridController);
         
         this._bodies.push(b);
+        */
     }
     _RemoveBody(e, b) {
+        this._world._RemoveBody(e, b);
+        /*
         const gridController = e.GetComponent("SpatialGridController");
         if(gridController) {
             this._spatialGrid.RemoveClient(gridController._client);
@@ -144,6 +150,7 @@ export class Scene {
         if (i != -1) {
             this._bodies.splice(i, 1);
         }
+        */
     }
     _PhysicsUpdate(elapsedTimeS) {
         for(let body of this._bodies) {
@@ -166,7 +173,8 @@ export class Scene {
         this.timeout.Update(elapsedTimeS * 1000);
         elapsedTimeS *= this.speed;
         this._entityManager.Update(elapsedTimeS);
-        this._PhysicsUpdate(elapsedTimeS);
+        this._world.Update(elapsedTimeS);
+        // this._PhysicsUpdate(elapsedTimeS);
         this._camera.Update(elapsedTimeS);
     }
     Play() {

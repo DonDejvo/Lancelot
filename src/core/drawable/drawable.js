@@ -324,6 +324,7 @@ export class Circle extends Drawable {
         ctx.filter = this.filter;
         ctx.translate(this.position0.x, this.position0.y);
         ctx.scale(this.flip.x ? -this.scale: this.scale, this.flip.y ? -this.scale : this.scale);
+        ctx.rotate(this.angle);
         ctx.fillStyle = this.ParseStyle(ctx, this.fillStyle);
         ctx.strokeStyle = this.ParseStyle(ctx, this.strokeStyle);
         ctx.lineWidth = this.strokeWidth;
@@ -331,6 +332,10 @@ export class Circle extends Drawable {
         ctx.arc(0, 0, this._radius, 0, 2 * Math.PI);
         ctx.fill();
         if(this.strokeWidth > 0) ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(this.radius, 0);
+        ctx.stroke();
         ctx.restore();
     }
 }
