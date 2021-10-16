@@ -22,7 +22,7 @@ export class World {
         this._relaxationCount = ParamParser.ParseValue(params.relaxationCount, 5);
         this._bounds = ParamParser.ParseValue(params.bounds, [[-1000, -1000], [1000, 1000]]);
         this._cellDimensions = ParamParser.ParseObject(params.cellDimensions, { width: 100, height: 100 });
-        this._limit = ParamParser.ParseValue(params.limit, 5);
+        this._limit = ParamParser.ParseValue(params.limit, 10);
         this._bodies = [];
         this._joints = [];
 

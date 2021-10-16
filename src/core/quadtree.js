@@ -109,23 +109,24 @@ export class QuadTree{
         return aabb;
     }
     //Insert aabb into tree
-    _Insert(aabb){
+    _Insert(aabb, depth = 0){
+        const maxRecursionDepth = 5;
         if(!this.aabb._vsAabb(aabb)){
             return false;
         }
         
 
-        if(this.data.length < this.limit){
+        if(this.data.length < this.limit || depth > maxRecursionDepth){
             this.data.push(aabb);
             return true;
         }else{
             if(!this.divided){
                 this._divide();
             }
-            this.topLeft._Insert(aabb);
-            this.topRight._Insert(aabb);
-            this.bottomLeft._Insert(aabb);
-            this.bottomRight._Insert(aabb);
+            this.topLeft._Insert(aabb, depth + 1);
+            this.topRight._Insert(aabb, depth + 1);
+            this.bottomLeft._Insert(aabb, depth + 1);
+            this.bottomRight._Insert(aabb, depth + 1);
         }
     }
     UpdateClient(aabb) {

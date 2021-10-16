@@ -58,7 +58,8 @@
                 physics: {
                     cellDimensions: { width: 50, height: 50 },
                     bounds: [[-500, -500], [2000, 500]],
-                    relaxationCount: 5
+                    relaxationCount: 5,
+                    limit: 5
                 }
             });
             this.PlayScene("test");
@@ -148,7 +149,7 @@
                 chain.push(chainNode);
             }
 
-            for(let i = 0; i < 400; ++i) {
+            for(let i = 0; i < 300; ++i) {
                 InitBall("m5", ["p1", "m5", "m1"], (i % 8) * 40 - 160, -150 - Math.floor(i / 8) * 40, 0, 0, 0, 30, 15, 15, 3);
             }
 
@@ -158,29 +159,29 @@
             const w1 = InitBall("m3", ["p1", "m5"], -140, 135, 0, 0, 0, 0, 45, 30, 30);
             
             a.body.Join(w1.body, "spring", {
-                offset1: { x: -40, y: 0 },
+                offset1: { x: -55, y: 0 },
                 stiffness: stiffness
             });
             a.body.Join(w1.body, "spring", {
-                offset1: { x: -25, y: -5 },
+                offset1: { x: -45, y: -5 },
                 stiffness: stiffness
             });
             a.body.Join(w1.body, "spring", {
-                offset1: { x: -10, y: 0 },
+                offset1: { x: -25, y: 0 },
                 stiffness: stiffness
             });
             
             const w2 = InitBall("m3", ["p1", "m5"], -60, 135, 0, 0, 0, 0, 45, 30, 30);
             a.body.Join(w2.body, "spring", {
-                offset1: { x: 40, y: 0 },
+                offset1: { x: 55, y: 0 },
                 stiffness: stiffness
             });
             a.body.Join(w2.body, "spring", {
-                offset1: { x: 25, y: -5 },
+                offset1: { x: 45, y: -5 },
                 stiffness: stiffness
             });
             a.body.Join(w2.body, "spring", {
-                offset1: { x: 10, y: 0 },
+                offset1: { x: 25, y: 0 },
                 stiffness: stiffness
             });
             scene.camera.Follow(a);
@@ -188,7 +189,7 @@
             scene.timeout.Set(() => {
                 scene.camera.Unfollow();
                 scene.camera.MoveTo(new Lancelot.Vector(0, 0), 1000, "ease-in");
-            }, 15000);
+            }, 12000);
             
             
         }
