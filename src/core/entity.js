@@ -79,6 +79,8 @@ export class Entity {
             case "body":
                 this.scene._AddBody(this, c);
                 break;
+            case "light":
+                this._scene._lights.push(c);
         }
     }
     GetComponent(n) {

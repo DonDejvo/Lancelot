@@ -16,14 +16,14 @@
       randint(min, max) {
         return Math.floor(Math.random() * (max - min + 1) + min);
       },
-      lerp(x, a, b2) {
-        return a + (b2 - a) * x;
+      lerp(x, a, b) {
+        return a + (b - a) * x;
       },
-      clamp(x, a, b2) {
-        return Math.min(Math.max(x, a), b2);
+      clamp(x, a, b) {
+        return Math.min(Math.max(x, a), b);
       },
-      in_range(x, a, b2) {
-        return x >= a && x <= b2;
+      in_range(x, a, b) {
+        return x >= a && x <= b;
       },
       sat(x) {
         return Math.min(Math.max(x, 0), 1);
@@ -220,6 +220,9 @@
     static Dist(v1, v2) {
       return v1.Clone().Sub(v2).Mag();
     }
+    static Cross(v1, v2) {
+      return v1.x * v2.y - v1.y * v2.x;
+    }
     static AngleBetween(v1, v2) {
       const z1 = v1.Mag();
       const z2 = v2.Mag();
@@ -245,12 +248,12 @@
 
   // src/core/renderer.js
   var Renderer = class {
-    constructor(params2) {
-      this._width = params2.width;
-      this._height = params2.height;
+    constructor(params) {
+      this._width = params.width;
+      this._height = params.height;
       this._aspect = this._width / this._height;
       this._scale = 1;
-      this._background = params2.background || "black";
+      this._background = params.background || "black";
       this._InitContainer();
       this._InitCanvas();
       this._OnResize();
@@ -327,7 +330,7 @@
         if (pos.x + width / 2 < -this._width / 2 || pos.x - width / 2 > this._width / 2 || pos.y + height / 2 < -this._height / 2 || pos.y - height / 2 > this._height / 2) {
           continue;
         }
-        elem.Draw(ctx);
+        elem.Draw0(ctx);
       }
       ctx.restore();
     }
@@ -364,76 +367,6 @@
         this._currentScene.Play();
       }
       return this._currentScene;
-    }
-  };
-
-  // src/core/spatial-hash-grid.js
-  var SpatialHashGrid = class {
-    constructor(bounds, dimensions) {
-      const [x, y] = dimensions;
-      this._cells = [...Array(y)].map((_) => [...Array(x)].map((_2) => null));
-      this._dimensions = dimensions;
-      this._bounds = bounds;
-    }
-    NewClient(position, dimensions) {
-      const client = {
-        position,
-        dimensions,
-        indices: null
-      };
-      this._InsertClient(client);
-      return client;
-    }
-    _InsertClient(client) {
-      const [w, h] = client.dimensions;
-      const [x, y] = client.position;
-      const i1 = this._GetCellIndex([x - w / 2, y - h / 2]);
-      const i2 = this._GetCellIndex([x + w / 2, y + h / 2]);
-      client.indices = [i1, i2];
-      for (let y2 = i1[1]; y2 <= i2[1]; ++y2) {
-        for (let x2 = i1[0]; x2 <= i2[0]; ++x2) {
-          if (!this._cells[y2][x2]) {
-            this._cells[y2][x2] = new Set();
-          }
-          this._cells[y2][x2].add(client);
-        }
-      }
-    }
-    _GetCellIndex(position) {
-      const x = math.sat((position[0] - this._bounds[0][0]) / (this._bounds[1][0] - this._bounds[0][0]));
-      const y = math.sat((position[1] - this._bounds[0][1]) / (this._bounds[1][1] - this._bounds[0][1]));
-      const xIndex = Math.floor(x * (this._dimensions[0] - 1));
-      const yIndex = Math.floor(y * (this._dimensions[1] - 1));
-      return [xIndex, yIndex];
-    }
-    FindNear(position, bounds) {
-      const [w, h] = bounds;
-      const [x, y] = position;
-      const i1 = this._GetCellIndex([x - w / 2, y - h / 2]);
-      const i2 = this._GetCellIndex([x + w / 2, y + h / 2]);
-      const clients = new Set();
-      for (let y2 = i1[1]; y2 <= i2[1]; ++y2) {
-        for (let x2 = i1[0]; x2 <= i2[0]; ++x2) {
-          if (this._cells[y2][x2]) {
-            for (let v of this._cells[y2][x2]) {
-              clients.add(v);
-            }
-          }
-        }
-      }
-      return Array.from(clients);
-    }
-    UpdateClient(client) {
-      this.RemoveClient(client);
-      this._InsertClient(client);
-    }
-    RemoveClient(client) {
-      const [i1, i2] = client.indices;
-      for (let y = i1[1]; y <= i2[1]; ++y) {
-        for (let x = i1[0]; x <= i2[0]; ++x) {
-          this._cells[y][x].delete(client);
-        }
-      }
     }
   };
 
@@ -623,6 +556,10 @@
     StopScaling() {
       this._scaling = null;
     }
+    MoveAndScaleTo(p, s, dur, timing = "linear") {
+      this.MoveTo(p, dur, timing);
+      this.ScaleTo(s, dur, timing);
+    }
     Shake(range, dur, count, angle) {
       this._shaking = {
         counter: 0,
@@ -724,9 +661,9 @@
 
   // src/core/interactive.js
   var Interactive = class extends Component {
-    constructor(params2) {
+    constructor(params) {
       super();
-      this._capture = params2.capture === void 0 ? false : params2.capture;
+      this._capture = params.capture === void 0 ? false : params.capture;
       this._eventHandlers = new Map();
     }
     AddEventHandler(type, handler) {
@@ -831,21 +768,857 @@
     }
   };
 
+  // src/core/physics/physics.js
+  var physics_exports = {};
+  __export(physics_exports, {
+    Ball: () => Ball,
+    Box: () => Box,
+    RegularPolygon: () => RegularPolygon,
+    World: () => World
+  });
+
+  // src/core/utils/param-parser.js
+  var ParamParser = function() {
+    return {
+      ParseValue(data, val) {
+        if (data != void 0 && typeof data == typeof val) {
+          return data;
+        }
+        return val;
+      },
+      ParseObject(data, obj) {
+        if (data) {
+          for (let attr in obj) {
+            obj[attr] = typeof obj[attr] == "object" ? this.ParseObject(data[attr], obj[attr]) : this.ParseValue(data[attr], obj[attr]);
+          }
+        }
+        return obj;
+      }
+    };
+  }();
+
+  // src/core/spatial-hash-grid.js
+  var SpatialHashGrid = class {
+    constructor(bounds, dimensions) {
+      const [x, y] = dimensions;
+      this._cells = [...Array(y)].map((_) => [...Array(x)].map((_2) => null));
+      this._dimensions = dimensions;
+      this._bounds = bounds;
+    }
+    NewClient(position, dimensions) {
+      const client = {
+        position,
+        dimensions,
+        indices: null
+      };
+      this._InsertClient(client);
+      return client;
+    }
+    _InsertClient(client) {
+      const [w, h] = client.dimensions;
+      const [x, y] = client.position;
+      const i1 = this._GetCellIndex([x - w / 2, y - h / 2]);
+      const i2 = this._GetCellIndex([x + w / 2, y + h / 2]);
+      client.indices = [i1, i2];
+      for (let y2 = i1[1]; y2 <= i2[1]; ++y2) {
+        for (let x2 = i1[0]; x2 <= i2[0]; ++x2) {
+          if (!this._cells[y2][x2]) {
+            this._cells[y2][x2] = new Set();
+          }
+          this._cells[y2][x2].add(client);
+        }
+      }
+    }
+    _GetCellIndex(position) {
+      const x = math.sat((position[0] - this._bounds[0][0]) / (this._bounds[1][0] - this._bounds[0][0]));
+      const y = math.sat((position[1] - this._bounds[0][1]) / (this._bounds[1][1] - this._bounds[0][1]));
+      const xIndex = Math.floor(x * (this._dimensions[0] - 1));
+      const yIndex = Math.floor(y * (this._dimensions[1] - 1));
+      return [xIndex, yIndex];
+    }
+    FindNear(position, bounds) {
+      const [w, h] = bounds;
+      const [x, y] = position;
+      const i1 = this._GetCellIndex([x - w / 2, y - h / 2]);
+      const i2 = this._GetCellIndex([x + w / 2, y + h / 2]);
+      const clients = new Set();
+      for (let y2 = i1[1]; y2 <= i2[1]; ++y2) {
+        for (let x2 = i1[0]; x2 <= i2[0]; ++x2) {
+          if (this._cells[y2][x2]) {
+            for (let v of this._cells[y2][x2]) {
+              clients.add(v);
+            }
+          }
+        }
+      }
+      return Array.from(clients);
+    }
+    UpdateClient(client) {
+      this.RemoveClient(client);
+      this._InsertClient(client);
+    }
+    RemoveClient(client) {
+      const [i1, i2] = client.indices;
+      for (let y = i1[1]; y <= i2[1]; ++y) {
+        for (let x = i1[0]; x <= i2[0]; ++x) {
+          this._cells[y][x].delete(client);
+        }
+      }
+    }
+    Draw(ctx) {
+      const bounds = this._bounds;
+      ctx.save();
+      ctx.strokeStyle = "white";
+      ctx.beginPath();
+      const cellWidth = (bounds[1][0] - bounds[0][0]) / this._dimensions[0];
+      for (let x = 0; x <= this._dimensions[0]; ++x) {
+        ctx.moveTo(bounds[0][0] + x * cellWidth, bounds[0][1]);
+        ctx.lineTo(bounds[0][0] + x * cellWidth, bounds[1][1]);
+      }
+      const cellHeight = (bounds[1][1] - bounds[0][1]) / this._dimensions[1];
+      for (let y = 0; y <= this._dimensions[1]; ++y) {
+        ctx.moveTo(bounds[0][0], bounds[0][1] + y * cellHeight);
+        ctx.lineTo(bounds[1][0], bounds[0][1] + y * cellHeight);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+  };
+
+  // src/core/spatial-grid-controller.js
+  var SpatialGridController = class extends Component {
+    constructor(params) {
+      super();
+      this._params = params;
+      this._width = this._params.width;
+      this._height = this._params.height;
+      this._grid = this._params.grid;
+    }
+    InitComponent() {
+      const pos = [
+        this._parent.body.position.x,
+        this._parent.body.position.y
+      ];
+      this._client = this._grid.NewClient(pos, [this._width, this._height]);
+      this._client.entity = this._parent;
+    }
+    Update(_) {
+      const pos = [
+        this._parent.body.position.x,
+        this._parent.body.position.y
+      ];
+      if (pos[0] == this._client.position[0] && pos[1] == this._client.position[1]) {
+        return;
+      }
+      this._client.position = pos;
+      this._grid.UpdateClient(this._client);
+    }
+    FindNearby(rangeX, rangeY) {
+      const results = this._grid.FindNear([this._parent.position.x, this._parent.position.y], [rangeX, rangeY]);
+      return results.filter((c) => c.entity != this._parent).map((c) => c.entity);
+    }
+  };
+
+  // src/core/quadtree.js
+  var AABB = class {
+    constructor(x, y, w, h, userData) {
+      this.x = x;
+      this.y = y;
+      this.w = w;
+      this.h = h;
+      this.entity = userData;
+    }
+    _vsAabb(aabb) {
+      if (this.x + this.w / 2 >= aabb.x - aabb.w / 2 && this.x - this.w / 2 <= aabb.x + aabb.w / 2 && this.y + this.h / 2 >= aabb.y - aabb.h / 2 && this.y - this.h / 2 <= aabb.y + aabb.h / 2) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+  var QuadTree = class {
+    constructor(bounds, limit) {
+      this._bounds = bounds;
+      const w = bounds[1][0] - bounds[0][0];
+      const h = bounds[1][1] - bounds[0][1];
+      this.aabb = new AABB(bounds[0][0] + w / 2, bounds[0][1] + h / 2, w, h);
+      this.limit = limit;
+      this.divided = false;
+      this.data = [];
+    }
+    _divide() {
+      const bounds = this._bounds;
+      const w = bounds[1][0] - bounds[0][0];
+      const h = bounds[1][1] - bounds[0][1];
+      this.topLeft = new QuadTree([[bounds[0][0], bounds[0][1]], [bounds[0][0] + w / 2, bounds[0][1] + h / 2]], this.limit);
+      this.topRight = new QuadTree([[bounds[0][0] + w / 2, bounds[0][1]], [bounds[0][0] + w, bounds[0][1] + h / 2]], this.limit);
+      this.bottomLeft = new QuadTree([[bounds[0][0], bounds[0][1] + h / 2], [bounds[0][0] + w / 2, bounds[0][1] + h]], this.limit);
+      this.bottomRight = new QuadTree([[bounds[0][0] + w / 2, bounds[0][1] + h / 2], [bounds[0][0] + w, bounds[0][1] + h]], this.limit);
+      for (let i = 0; i < this.data.length; i++) {
+        this.topLeft._Insert(this.data[i]);
+        this.topRight._Insert(this.data[i]);
+        this.bottomLeft._Insert(this.data[i]);
+        this.bottomRight._Insert(this.data[i]);
+      }
+      this.divided = true;
+    }
+    Clear() {
+      this.data = [];
+      this.divided = false;
+      this.topRight = null;
+      this.topLeft = null;
+      this.bottomLeft = null;
+      this.bottomRight = null;
+    }
+    FindNear(position, bounds) {
+      const [w, h] = bounds;
+      const [x, y] = position;
+      const aabb = new AABB(x, y, w, h);
+      const res = this._Search(aabb);
+      return res == void 0 ? [] : Array.from(res);
+    }
+    _Search(aabb, _res) {
+      if (_res == void 0) {
+        _res = new Set();
+      }
+      if (!aabb._vsAabb(this.aabb))
+        return;
+      if (!this.divided) {
+        for (let i = 0; i < this.data.length; i++) {
+          if (aabb._vsAabb(this.data[i])) {
+            _res.add(this.data[i]);
+          }
+        }
+      } else {
+        this.topLeft._Search(aabb, _res);
+        this.topRight._Search(aabb, _res);
+        this.bottomLeft._Search(aabb, _res);
+        this.bottomRight._Search(aabb, _res);
+      }
+      return _res;
+    }
+    NewClient(position, dimensions) {
+      const aabb = new AABB(position[0], position[1], dimensions[0], dimensions[1]);
+      this._Insert(aabb);
+      return aabb;
+    }
+    _Insert(aabb, depth = 0) {
+      const maxRecursionDepth = 5;
+      if (!this.aabb._vsAabb(aabb)) {
+        return false;
+      }
+      if (this.data.length < this.limit || depth > maxRecursionDepth) {
+        this.data.push(aabb);
+        return true;
+      } else {
+        if (!this.divided) {
+          this._divide();
+        }
+        this.topLeft._Insert(aabb, depth + 1);
+        this.topRight._Insert(aabb, depth + 1);
+        this.bottomLeft._Insert(aabb, depth + 1);
+        this.bottomRight._Insert(aabb, depth + 1);
+      }
+    }
+    UpdateClient(aabb) {
+      this._Insert(aabb);
+    }
+    Draw(ctx) {
+      ctx.beginPath();
+      ctx.save();
+      ctx.strokeStyle = "white";
+      ctx.strokeRect(this.aabb.x - this.aabb.w / 2, this.aabb.y - this.aabb.h / 2, this.aabb.w, this.aabb.h);
+      ctx.restore();
+      if (this.divided) {
+        this.topLeft.Draw(ctx);
+        this.topRight.Draw(ctx);
+        this.bottomLeft.Draw(ctx);
+        this.bottomRight.Draw(ctx);
+      }
+    }
+  };
+
+  // src/core/quadtree-controller.js
+  var QuadtreeController = class extends Component {
+    constructor(params) {
+      super();
+      this._params = params;
+      this._width = this._params.width;
+      this._height = this._params.height;
+      this._quadtree = this._params.quadtree;
+    }
+    InitComponent() {
+      const pos = [
+        this._parent.body.position.x,
+        this._parent.body.position.y
+      ];
+      this._client = this._quadtree.NewClient(pos, [this._width, this._height]);
+      this._client.entity = this._parent;
+    }
+    FindNearby(rangeX, rangeY) {
+      const results = this._quadtree.FindNear([this._parent.position.x, this._parent.position.y], [rangeX, rangeY]);
+      return results.filter((c) => c.entity != this._parent).map((c) => c.entity);
+    }
+    UpdateClient() {
+      const pos = [
+        this._parent.body.position.x,
+        this._parent.body.position.y
+      ];
+      this._client.x = pos[0];
+      this._client.y = pos[1];
+      this._quadtree.UpdateClient(this._client);
+    }
+  };
+
+  // src/core/physics/physics.js
+  var World = class {
+    constructor(params) {
+      this._relaxationCount = ParamParser.ParseValue(params.relaxationCount, 5);
+      this._bounds = ParamParser.ParseValue(params.bounds, [[-1e3, -1e3], [1e3, 1e3]]);
+      this._cellDimensions = ParamParser.ParseObject(params.cellDimensions, { width: 100, height: 100 });
+      this._limit = ParamParser.ParseValue(params.limit, 10);
+      this._bodies = [];
+      this._joints = [];
+      const cellCountX = Math.floor((this._bounds[1][0] - this._bounds[0][0]) / this._cellDimensions.width);
+      const cellCountY = Math.floor((this._bounds[1][1] - this._bounds[0][1]) / this._cellDimensions.height);
+      this._spatialGrid = new SpatialHashGrid(this._bounds, [cellCountX, cellCountY]);
+      this._quadtree = new QuadTree(this._bounds, this._limit);
+    }
+    _AddJoint(j) {
+      this._joints.push(j);
+    }
+    _AddBody(e, b) {
+      e.body = b;
+      const boundingRect = b.boundingRect;
+      const gridController = new SpatialGridController({
+        grid: this._spatialGrid,
+        width: boundingRect.width,
+        height: boundingRect.height
+      });
+      e.AddComponent(gridController);
+      const treeController = new QuadtreeController({
+        quadtree: this._quadtree,
+        width: boundingRect.width,
+        height: boundingRect.height
+      });
+      e.AddComponent(treeController);
+      this._bodies.push(b);
+    }
+    _RemoveBody(e, b) {
+      const gridController = e.GetComponent("SpatialGridController");
+      if (gridController) {
+        this._spatialGrid.RemoveClient(gridController._client);
+      }
+      const i = this._bodies.indexOf(b);
+      if (i != -1) {
+        this._bodies.splice(i, 1);
+      }
+    }
+    Update(elapsedTimeS) {
+      for (let body of this._bodies) {
+        body._collisions.left.clear();
+        body._collisions.right.clear();
+        body._collisions.top.clear();
+        body._collisions.bottom.clear();
+      }
+      for (let body of this._bodies) {
+        body.UpdatePosition(elapsedTimeS);
+      }
+      for (let joint of this._joints) {
+        joint.Update(elapsedTimeS);
+      }
+      for (let i = 0; i < this._relaxationCount; ++i) {
+        for (let body of this._bodies) {
+          body.HandleBehavior();
+        }
+      }
+      this._quadtree.Clear();
+      for (let body of this._bodies) {
+        const treeController = body.GetComponent("QuadtreeController");
+        treeController.UpdateClient();
+      }
+    }
+  };
+  var Body = class extends Component {
+    constructor(params) {
+      super();
+      this._type = "body";
+      this._vel = new Vector2();
+      this._angVel = 0;
+      this.mass = ParamParser.ParseValue(params.mass, 0);
+      this.bounce = ParamParser.ParseValue(params.bounce, 0);
+      this.angle = 0;
+      this.rotating = ParamParser.ParseValue(params.rotating, 1);
+      this.friction = ParamParser.ParseObject(params.friction, { x: 0, y: 0, angular: 0, collide: 0.3 });
+      this._behavior = [];
+      this._collisions = {
+        left: new Set(),
+        right: new Set(),
+        top: new Set(),
+        bottom: new Set()
+      };
+    }
+    get velocity() {
+      return this._vel;
+    }
+    set velocity(vec) {
+      this._vel.Copy(vec);
+    }
+    get angularVelocity() {
+      return this._angVel;
+    }
+    set angularVelocity(num) {
+      this._angVel = num;
+    }
+    get inverseMass() {
+      return this.mass === 0 ? 0 : 1 / this.mass;
+    }
+    get inertia() {
+      return 0;
+    }
+    get boundingRect() {
+      return { width: 0, height: 0 };
+    }
+    get collisions() {
+      return this._collisions;
+    }
+    Draw(ctx) {
+      const bb = this.boundingRect;
+      ctx.beginPath();
+      ctx.save();
+      ctx.strokeStyle = "white";
+      ctx.strokeRect(this.position.x - bb.width / 2, this.position.y - bb.height / 2, bb.width, bb.height);
+      ctx.restore();
+    }
+    AddBehavior(groups, type, action) {
+      this._behavior.push({
+        groups: groups.split(" "),
+        type,
+        action
+      });
+    }
+    UpdatePosition(elapsedTimeS) {
+      const decceleration = 60;
+      const frame_decceleration = new Vector2(this._vel.x * this.friction.x * decceleration, this._vel.y * this.friction.y * decceleration);
+      this._vel.Sub(frame_decceleration.Mult(elapsedTimeS));
+      const vel = this._vel.Clone().Mult(elapsedTimeS);
+      this.position.Add(vel);
+      this._angVel -= this._angVel * this.friction.angular * decceleration * elapsedTimeS;
+      this.angle += this._angVel * elapsedTimeS;
+    }
+    HandleBehavior() {
+      const controller = this.GetComponent("QuadtreeController");
+      const boundingRect = this.boundingRect;
+      for (let behavior of this._behavior) {
+        const entites0 = controller.FindNearby(boundingRect.width, boundingRect.height);
+        const entities = entites0.filter((e) => {
+          return behavior.groups.map((g) => e.groupList.has(g)).some((_) => _);
+        });
+        entities.sort((a, b) => {
+          const boundingRectA = a.body.boundingRect;
+          const boundingRectB = b.body.boundingRect;
+          const distA = Vector2.Dist(this.position, a.body.position) / new Vector2(boundingRect.width + boundingRectA.width, boundingRect.height + boundingRectA.height).Mag();
+          const distB = Vector2.Dist(this.position, b.body.position) / new Vector2(boundingRect.width + boundingRectB.width, boundingRect.height + boundingRectB.height).Mag();
+          return distA - distB;
+        });
+        for (let e of entities) {
+          switch (behavior.type) {
+            case "detect":
+              if (DetectCollision(this, e.body).collide) {
+                if (behavior.action) {
+                  behavior.action(e.body);
+                }
+              }
+              break;
+            case "resolve":
+              if (ResolveCollision(this, e.body)) {
+                if (behavior.action) {
+                  behavior.action(e.body);
+                }
+              }
+              break;
+          }
+        }
+      }
+    }
+    Join(b, type, params) {
+      let joint;
+      switch (type) {
+        case "spring":
+          joint = new Spring(this, b, params);
+          break;
+        case "stick":
+          joint = new Stick(this, b, params);
+          break;
+      }
+      if (!joint) {
+        return;
+      }
+      const world = this.scene._world;
+      world._AddJoint(joint);
+    }
+  };
+  var Poly = class extends Body {
+    constructor(params) {
+      super(params);
+      this._points = params.points;
+    }
+    GetVertices() {
+      return this._points.map((v) => new Vector2(v[0], v[1]));
+    }
+    GetComputedVertices() {
+      const verts = this.GetVertices();
+      for (let i = 0; i < verts.length; ++i) {
+        const v = verts[i];
+        v.Rotate(this.angle);
+        v.Add(this.position);
+      }
+      return verts;
+    }
+    get boundingRect() {
+      const verts = this.GetVertices();
+      let maxDist = 0;
+      let idx = 0;
+      for (let i = 0; i < verts.length; ++i) {
+        const v = verts[i];
+        const dist = v.Mag();
+        if (dist > maxDist) {
+          maxDist = dist;
+          idx = i;
+        }
+      }
+      const d = maxDist * 2;
+      return {
+        width: d,
+        height: d
+      };
+    }
+    static GetFaceNormals(vertices) {
+      let normals = [];
+      for (let i = 0; i < vertices.length; i++) {
+        let v1 = vertices[i].Clone();
+        let v2 = vertices[(i + 1) % vertices.length].Clone();
+        normals[i] = v2.Clone().Sub(v1).Norm().Unit();
+      }
+      return normals;
+    }
+    static FindSupportPoint(vertices, n, ptOnEdge) {
+      let max = -Infinity;
+      let index = -1;
+      for (let i = 0; i < vertices.length; i++) {
+        let v = vertices[i].Clone().Sub(ptOnEdge);
+        let proj = Vector2.Dot(v, n);
+        if (proj > 0 && proj > max) {
+          max = proj;
+          index = i;
+        }
+      }
+      return { sp: vertices[index], depth: max };
+    }
+  };
+  var Box = class extends Poly {
+    constructor(params) {
+      super(params);
+      this._width = params.width;
+      this._height = params.height;
+      this._points = [
+        [-this._width / 2, -this._height / 2],
+        [this._width / 2, -this._height / 2],
+        [this._width / 2, this._height / 2],
+        [-this._width / 2, this._height / 2]
+      ];
+    }
+    get width() {
+      return this._width;
+    }
+    get height() {
+      return this._height;
+    }
+    get inertia() {
+      return (this.width ** 2 + this.height ** 2) / 1 / this.rotating;
+    }
+  };
+  var Ball = class extends Body {
+    constructor(params) {
+      super(params);
+      this._radius = params.radius;
+    }
+    get radius() {
+      return this._radius;
+    }
+    get boundingRect() {
+      return { width: 2 * this.radius, height: 2 * this.radius };
+    }
+    get inertia() {
+      return Math.PI * this.radius ** 2 / 1 / this.rotating;
+    }
+    FindSupportPoint(n, ptOnEdge) {
+      let circVerts = [];
+      circVerts[0] = this.position.Clone().Add(n.Clone().Mult(this.radius));
+      circVerts[1] = this.position.Clone().Add(n.Clone().Mult(-this.radius));
+      let max = -Infinity;
+      let index = -1;
+      for (let i = 0; i < circVerts.length; i++) {
+        let v = circVerts[i].Clone().Sub(ptOnEdge);
+        let proj = Vector2.Dot(v, n);
+        if (proj > 0 && proj > max) {
+          max = proj;
+          index = i;
+        }
+      }
+      return { sp: circVerts[index], depth: max, n };
+    }
+    FindNearestVertex(vertices) {
+      let dist = Infinity;
+      let index = 0;
+      for (let i = 0; i < vertices.length; i++) {
+        let l = Vector2.Dist(vertices[i], this.position);
+        if (l < dist) {
+          dist = l;
+          index = i;
+        }
+      }
+      return vertices[index];
+    }
+  };
+  var RegularPolygon = class extends Poly {
+    constructor(params) {
+      super(params);
+      this._radius = params.radius;
+      this._sides = params.sides;
+      const points = [];
+      for (let i = 0; i < this._sides; ++i) {
+        const angle = Math.PI * 2 / this._sides * i;
+        points.push([Math.cos(angle) * this._radius, Math.sin(angle) * this._radius]);
+      }
+      this._points = points;
+    }
+    get radius() {
+      return this._radius;
+    }
+    get boundingRect() {
+      return { width: 2 * this.radius, height: 2 * this.radius };
+    }
+    get inertia() {
+      return Math.PI * this.radius ** 2 / 1 / this.rotating;
+    }
+  };
+  var DetectCollision = (b1, b2) => {
+    if (b1 instanceof Ball && b2 instanceof Ball) {
+      return DetectCollisionBallVsBall(b1, b2);
+    } else if (b1 instanceof Poly && b2 instanceof Poly) {
+      return DetectCollisionPolyVsPoly(b1, b2);
+    } else if (b1 instanceof Ball && b2 instanceof Poly) {
+      return DetectCollisionBallVsPoly(b1, b2);
+    } else if (b1 instanceof Poly && b2 instanceof Ball) {
+      return DetectCollisionBallVsPoly(b2, b1);
+    } else {
+      return {
+        collide: false
+      };
+    }
+  };
+  var DetectCollisionBallVsBall = (b1, b2) => {
+    let v = b1.position.Clone().Sub(b2.position);
+    let info = {};
+    if (v.Mag() < b1.radius + b2.radius) {
+      info.normal = v.Clone().Unit();
+      info.depth = b1.radius + b2.radius - v.Mag();
+      info.point = b1.position.Clone().Add(info.normal.Clone().Mult(b1.radius));
+      info.collide = true;
+      return info;
+    }
+    return {
+      collide: false
+    };
+  };
+  var DetectCollisionPolyVsPoly = (b1, b2) => {
+    const verts1 = b1.GetComputedVertices();
+    const verts2 = b2.GetComputedVertices();
+    const normals1 = Poly.GetFaceNormals(verts1);
+    const normals2 = Poly.GetFaceNormals(verts2);
+    let e1SupportPoints = [];
+    for (let i = 0; i < normals1.length; i++) {
+      let spInfo = Poly.FindSupportPoint(verts2, normals1[i].Clone().Mult(-1), verts1[i]);
+      spInfo.n = normals1[i].Clone();
+      e1SupportPoints[i] = spInfo;
+      if (spInfo.sp == void 0)
+        return { collide: false };
+    }
+    let e2SupportPoints = [];
+    for (let i = 0; i < normals2.length; i++) {
+      let spInfo = Poly.FindSupportPoint(verts1, normals2[i].Clone().Mult(-1), verts2[i]);
+      spInfo.n = normals2[i].Clone();
+      e2SupportPoints[i] = spInfo;
+      if (spInfo.sp == void 0)
+        return { collide: false };
+    }
+    e1SupportPoints = e1SupportPoints.concat(e2SupportPoints);
+    let max = Infinity;
+    let index = 0;
+    for (let i = 0; i < e1SupportPoints.length; i++) {
+      if (e1SupportPoints[i].depth < max) {
+        max = e1SupportPoints[i].depth;
+        index = i;
+      }
+    }
+    let v = b2.position.Clone().Sub(b1.position);
+    if (Vector2.Dot(v, e1SupportPoints[index].n) > 0) {
+      e1SupportPoints[index].n.Mult(-1);
+    }
+    return {
+      collide: true,
+      normal: e1SupportPoints[index].n,
+      depth: e1SupportPoints[index].depth,
+      point: e1SupportPoints[index].sp
+    };
+  };
+  var DetectCollisionBallVsPoly = (b1, b2) => {
+    const verts = b2.GetComputedVertices();
+    const normals = Poly.GetFaceNormals(verts);
+    let e1SupportPoints = [];
+    for (let i = 0; i < normals.length; i++) {
+      let info2 = b1.FindSupportPoint(normals[i].Clone().Mult(-1), verts[i].Clone());
+      if (info2.sp == void 0)
+        return { collide: false };
+      e1SupportPoints[i] = info2;
+    }
+    let nearestVertex = b1.FindNearestVertex(verts);
+    let normal = nearestVertex.Clone().Sub(b1.position).Unit();
+    let info = Poly.FindSupportPoint(verts, normal.Clone(), b1.position.Clone());
+    if (info.sp == void 0)
+      return { collide: false };
+    info.n = normal.Clone();
+    e1SupportPoints.push(info);
+    let max = Infinity;
+    let index = null;
+    for (let i = 0; i < e1SupportPoints.length; i++) {
+      if (e1SupportPoints[i].depth < max) {
+        max = e1SupportPoints[i].depth;
+        index = i;
+      }
+    }
+    let v = b2.position.Clone().Sub(b1.position);
+    if (Vector2.Dot(v, e1SupportPoints[index].n) < 0) {
+      e1SupportPoints[index].n.Mult(-1);
+    }
+    return {
+      collide: true,
+      normal: e1SupportPoints[index].n,
+      point: e1SupportPoints[index].sp,
+      depth: e1SupportPoints[index].depth
+    };
+  };
+  var ResolveCollision = (b1, b2, elapsedTimeS) => {
+    if (b1 instanceof Ball && b2 instanceof Poly) {
+      [b1, b2] = [b2, b1];
+    }
+    const detect = DetectCollision(b1, b2);
+    if (detect.collide) {
+      if (b1.mass === 0 && b2.mass === 0)
+        return true;
+      const diff = detect.normal.Clone().Mult(detect.depth / (b1.inverseMass + b2.inverseMass));
+      b1.position.Add(diff.Clone().Mult(b1.inverseMass));
+      b2.position.Sub(diff.Clone().Mult(b2.inverseMass));
+      const r1 = detect.point.Clone().Sub(b1.position);
+      const r2 = detect.point.Clone().Sub(b2.position);
+      const w1 = b1.angularVelocity;
+      const w2 = b2.angularVelocity;
+      const v1 = b1._vel;
+      const v2 = b2._vel;
+      const vp1 = v1.Clone().Add(new Vector2(-w1 * r1.y, w1 * r1.x));
+      const vp2 = v2.Clone().Add(new Vector2(-w2 * r2.y, w2 * r2.x));
+      const relVel = vp1.Clone().Sub(vp2);
+      const bounce = Math.max(b1.bounce, b2.bounce);
+      const relVelDotN = Vector2.Dot(relVel, detect.normal);
+      if (relVelDotN > 0)
+        return true;
+      const j = -(1 + bounce) * Vector2.Dot(relVel, detect.normal) / (b1.inverseMass + b2.inverseMass + Math.pow(Vector2.Cross(r1, detect.normal), 2) / b1.inertia + Math.pow(Vector2.Cross(r2, detect.normal), 2) / b2.inertia);
+      const jn = detect.normal.Clone().Mult(j);
+      const vel1 = jn.Clone().Mult(b1.inverseMass);
+      const vel2 = jn.Clone().Mult(b2.inverseMass);
+      b1._vel.Add(vel1.Clone().Mult(1));
+      b2._vel.Sub(vel2.Clone().Mult(1));
+      b1.angularVelocity += Vector2.Cross(r1, vel1.Clone().Mult(1 / b1.inertia));
+      b2.angularVelocity -= Vector2.Cross(r2, vel2.Clone().Mult(1 / b1.inertia));
+      const friction = Math.max(b1.friction.collide, b2.friction.collide);
+      const tangent = detect.normal.Clone().Norm();
+      const j2 = -(1 + bounce) * Vector2.Dot(relVel, tangent) * friction / (b1.inverseMass + b2.inverseMass + Math.pow(Vector2.Cross(r1, tangent), 2) / b1.inertia + Math.pow(Vector2.Cross(r2, tangent), 2) / b2.inertia);
+      const jt = tangent.Clone().Mult(j2);
+      const vel1a = jt.Clone().Mult(b1.inverseMass);
+      const vel2a = jt.Clone().Mult(b2.inverseMass);
+      b1._vel.Add(vel1a.Clone());
+      b2._vel.Sub(vel2a.Clone());
+      b1.angularVelocity += Vector2.Cross(r1, vel1a.Clone().Mult(1 / b1.inertia));
+      b2.angularVelocity -= Vector2.Cross(r2, vel2a.Clone().Mult(1 / b2.inertia));
+      return true;
+    }
+    return false;
+  };
+  var Joint = class {
+    constructor(b1, b2, params) {
+      this._body1 = b1;
+      this._body2 = b2;
+      const offset1 = ParamParser.ParseObject(params.offset1, { x: 0, y: 0 });
+      this._offset1 = new Vector2(offset1.x, offset1.y);
+      const offset2 = ParamParser.ParseObject(params.offset2, { x: 0, y: 0 });
+      this._offset2 = new Vector2(offset2.x, offset2.y);
+      const start = this._body1.position.Clone().Add(this._offset1.Clone().Rotate(this._body1.angle));
+      const end = this._body2.position.Clone().Add(this._offset2.Clone().Rotate(this._body2.angle));
+      this._length = ParamParser.ParseValue(params.length, Vector2.Dist(start, end));
+    }
+    Update(_) {
+    }
+  };
+  var Spring = class extends Joint {
+    constructor(b1, b2, params) {
+      super(b1, b2, params);
+      this._stiffness = ParamParser.ParseValue(params.stiffness, 0) * 10;
+    }
+    Update() {
+      const offset1 = this._offset1.Clone().Rotate(this._body1.angle);
+      const offset2 = this._offset2.Clone().Rotate(this._body2.angle);
+      const start = this._body1.position.Clone().Add(offset1);
+      const end = this._body2.position.Clone().Add(offset2);
+      const vec = start.Clone().Sub(end);
+      const n = vec.Clone().Unit();
+      const dist = vec.Mag();
+      const diff = n.Clone().Mult((dist - this._length) * -this._stiffness / (this._body1.inverseMass + this._body2.inverseMass));
+      const vel1 = diff.Clone().Mult(this._body1.inverseMass);
+      this._body1.velocity.Add(vel1.Clone().Mult(1));
+      this._body1.angularVelocity += Vector2.Cross(offset1, vel1.Clone().Mult(1 / this._body1.inertia));
+      const vel2 = diff.Clone().Mult(this._body2.inverseMass);
+      this._body2.velocity.Sub(vel2.Clone().Mult(1));
+      this._body2.angularVelocity -= Vector2.Cross(offset2, vel2.Clone().Mult(1 / this._body2.inertia));
+    }
+  };
+  var Stick = class extends Joint {
+    constructor(b1, b2, params) {
+      super(b1, b2, params);
+    }
+    Update() {
+      const offset1 = this._offset1.Clone().Rotate(this._body1.angle);
+      const offset2 = this._offset2.Clone().Rotate(this._body2.angle);
+      const start = this._body1.position.Clone().Add(offset1);
+      const end = this._body2.position.Clone().Add(offset2);
+      const vec = start.Clone().Sub(end);
+      const n = vec.Clone().Unit();
+      const dist = vec.Mag();
+      const diff = n.Clone().Mult((dist - this._length) * -this._stiffness / (this._body1.inverseMass + this._body2.inverseMass));
+    }
+  };
+
   // src/core/scene.js
   var Scene = class {
-    constructor(params2) {
-      this._bounds = params2.bounds || [[-1e3, -1e3], [1e3, 1e3]];
-      this._cellDimensions = params2.cellDimensions || [100, 100];
-      this._relaxationCount = params2.relaxationCount || 5;
+    constructor(params) {
+      this._world = new World(params.physics);
       this.paused = true;
       this.speed = 1;
       this.timeout = new TimeoutHandler();
-      this._bodies = [];
       this._drawable = [];
       this._interactiveEntities = [];
       this._eventHandlers = new Map();
       this._entityManager = new EntityManager();
-      this._spatialGrid = new SpatialHashGrid(this._bounds, [Math.floor((this._bounds[1][0] - this._bounds[0][0]) / this._cellDimensions[0]), Math.floor((this._bounds[1][1] - this._bounds[0][1]) / this._cellDimensions[1])]);
       this._camera = new Camera();
     }
     get camera() {
@@ -873,9 +1646,9 @@
         handlers.splice(idx, 1);
       }
     }
-    SetInteractive(entity, params2 = {}) {
+    SetInteractive(entity, params = {}) {
       this._interactiveEntities.push(entity);
-      const interactive = new Interactive(params2);
+      const interactive = new Interactive(params);
       entity.AddComponent(interactive);
       entity.interactive = interactive;
     }
@@ -887,7 +1660,7 @@
         }
       }
       if (type == "mousedown") {
-        const entities = this._spatialGrid.FindNear([event.x, event.y], [0, 0]).map((c) => c.entity);
+        const entities = this._world._spatialGrid.FindNear([event.x, event.y], [0, 0]).map((c) => c.entity);
         for (let e of entities) {
           if (!e.interactive) {
             continue;
@@ -927,7 +1700,7 @@
         if (c._type == "drawable") {
           this._RemoveDrawable(c);
         } else if (c._type == "body") {
-          this._RemoveBody(e, b);
+          this._RemoveBody(e, c);
         }
       });
     }
@@ -946,25 +1719,11 @@
         this._drawable.splice(i, 1);
       }
     }
-    _AddBody(e, b2) {
-      e.body = b2;
-      const gridController = new SpatialGridController({
-        grid: this._spatialGrid,
-        width: b2.width,
-        height: b2.height
-      });
-      e.AddComponent(gridController);
-      this._bodies.push(b2);
+    _AddBody(e, b) {
+      this._world._AddBody(e, b);
     }
-    _RemoveBody(e, b2) {
-      const gridController = e.GetComponent("SpatialGridController");
-      if (gridController) {
-        this._spatialGrid.RemoveClient(gridController._client);
-      }
-      const i = this._bodies.indexOf(b2);
-      if (i != -1) {
-        this._bodies.splice(i, 1);
-      }
+    _RemoveBody(e, b) {
+      this._world._RemoveBody(e, b);
     }
     _PhysicsUpdate(elapsedTimeS) {
       for (let body of this._bodies) {
@@ -989,7 +1748,7 @@
       this.timeout.Update(elapsedTimeS * 1e3);
       elapsedTimeS *= this.speed;
       this._entityManager.Update(elapsedTimeS);
-      this._PhysicsUpdate(elapsedTimeS);
+      this._world.Update(elapsedTimeS);
       this._camera.Update(elapsedTimeS);
     }
     Play() {
@@ -1114,17 +1873,17 @@
 
   // src/core/game.js
   var Game = class {
-    constructor(params2) {
-      this._width = params2.width;
-      this._height = params2.height;
-      this._preload = params2.preload == void 0 ? null : params2.preload.bind(this);
-      this._init = params2.init.bind(this);
+    constructor(params) {
+      this._width = params.width;
+      this._height = params.height;
+      this._preload = params.preload == void 0 ? null : params.preload.bind(this);
+      this._init = params.init.bind(this);
       this._resources = null;
       this._loader = new Loader();
       this._renderer = new Renderer({
         width: this._width,
         height: this._height,
-        background: params2.background
+        background: params.background
       });
       this._engine = new Engine();
       this._sceneManager = new SceneManager();
@@ -1242,8 +2001,8 @@
     HideSection(id) {
       this.GetSection(id).style.display = "none";
     }
-    CreateScene(n, params2 = {}) {
-      const scene = new Scene(params2);
+    CreateScene(n, params = {}) {
+      const scene = new Scene(params);
       this._sceneManager.Add(scene, n);
       return scene;
     }
@@ -1270,10 +2029,10 @@
     Text: () => Text
   });
   var Drawable = class extends Component {
-    constructor(params2) {
+    constructor(params = {}) {
       super();
       this._type = "drawable";
-      this._params = params2;
+      this._params = params;
       this._width = this._params.width || 0;
       this._height = this._params.height || 0;
       this._vertices = [];
@@ -1282,15 +2041,17 @@
         x: this._params.flipX || false,
         y: this._params.flipY || false
       };
-      this._scale = params2.scale || 1;
+      this._scale = params.scale || 1;
       this._rotationCount = this._params.rotationCount || 0;
       this.opacity = this._params.opacity !== void 0 ? this._params.opacity : 1;
       this.filter = this._params.filter || "";
       this._angle = this._params.angle || this._rotationCount * Math.PI / 2 || 0;
       this.fillStyle = this._params.fillStyle || "black";
-      this.strokeStyle = this._params.fillStyle || "black";
+      this.strokeStyle = this._params.strokeStyle || "black";
       this.strokeWidth = this._params.strokeWidth || 0;
       this.mode = this._params.mode || "source-over";
+      this._offset = new Vector2();
+      this._shaking = null;
     }
     get zIndex() {
       return this._zIndex;
@@ -1336,35 +2097,50 @@
       this._scale = num;
     }
     get boundingBox() {
-      const vertices = this._vertices;
-      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-      for (let v of vertices) {
-        if (v.x < minX) {
-          minX = v.x;
-        } else if (v.x > maxX) {
-          maxX = v.x;
-        }
-        if (v.y < minY) {
-          minY = v.y;
-        } else if (v.y > maxY) {
-          maxY = v.y;
+      const verts = this._vertices;
+      let maxDist = 0;
+      let idx = 0;
+      for (let i = 0; i < verts.length; ++i) {
+        const v = verts[i];
+        const dist = v.Mag();
+        if (dist > maxDist) {
+          maxDist = dist;
+          idx = i;
         }
       }
-      const width = maxX - minX;
-      const height = maxY - minY;
-      const centerX = this.position.x + minX + width / 2;
-      const centerY = this.position.y + minY + height / 2;
-      return { x: centerX, y: centerY, width, height };
+      const d = maxDist * 2;
+      return {
+        width: d,
+        height: d,
+        x: this.position.x,
+        y: this.position.y
+      };
+    }
+    get position0() {
+      return this.position;
+    }
+    Shake(range, dur, count, angle) {
+      this._shaking = {
+        counter: 0,
+        count,
+        angle,
+        dur,
+        range
+      };
+    }
+    StopShaking() {
+      this._shaking = null;
+      this._offset = new Vector2();
     }
     ParseStyle(ctx, s) {
-      const params2 = s.split(";");
-      const len = params2.length;
+      const params = s.split(";");
+      const len = params.length;
       if (len === 1) {
         return s;
       }
       let grd;
-      const values = params2[1].split(",").map((s2) => parseFloat(s2));
-      switch (params2[0]) {
+      const values = params[1].split(",").map((s2) => parseFloat(s2));
+      switch (params[0]) {
         case "linear":
           grd = ctx.createLinearGradient(...values);
           break;
@@ -1375,7 +2151,7 @@
           return "black";
       }
       for (let i = 2; i < len; ++i) {
-        const colorValuePair = params2[i].split("=");
+        const colorValuePair = params[i].split("=");
         grd.addColorStop(parseFloat(colorValuePair[1]), colorValuePair[0]);
       }
       return grd;
@@ -1406,14 +2182,46 @@
     }
     Draw(_) {
     }
+    Draw0(ctx) {
+      ctx.save();
+      ctx.translate(-this._offset.x, -this._offset.y);
+      ctx.save();
+      ctx.globalCompositeOperation = this.mode;
+      ctx.globalAlpha = this.opacity;
+      ctx.filter = this.filter;
+      ctx.translate(this.position0.x, this.position0.y);
+      ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
+      ctx.rotate(this.angle);
+      ctx.fillStyle = this.ParseStyle(ctx, this.fillStyle);
+      ctx.strokeStyle = this.ParseStyle(ctx, this.strokeStyle);
+      ctx.lineWidth = this.strokeWidth;
+      this.Draw(ctx);
+      ctx.restore();
+      ctx.restore();
+      const bb = this.boundingBox;
+      ctx.beginPath();
+      ctx.strokeStyle = "orange";
+      ctx.strokeRect(bb.x - bb.width / 2, bb.y - bb.height / 2, bb.width, bb.height);
+    }
+    Update(elapsedTimeS) {
+      if (this._shaking) {
+        const anim = this._shaking;
+        anim.counter += elapsedTimeS * 1e3;
+        const progress = Math.min(anim.counter / anim.dur, 1);
+        this._offset.Copy(new Vector2(Math.sin(progress * Math.PI * 2 * anim.count) * anim.range, 0).Rotate(anim.angle));
+        if (progress == 1) {
+          this.StopShaking();
+        }
+      }
+    }
   };
   var Text = class extends Drawable {
-    constructor(params2) {
-      super(params2);
+    constructor(params) {
+      super(params);
       this._text = this._params.text;
       this._lines = this._text.split(/\n/);
       this._padding = this._params.padding || 0;
-      this._align = params2.align || "center";
+      this._align = params.align || "center";
       this._fontSize = this._params.fontSize || 16;
       this._fontFamily = this._params.fontFamily || "Arial";
       this._ComputeDimensions();
@@ -1477,7 +2285,7 @@
       ctx.save();
       ctx.globalCompositeOperation = this.mode;
       ctx.globalAlpha = this.opacity;
-      ctx.translate(this.position.x, this.position.y);
+      ctx.translate(this.position0.x, this.position0.y);
       ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
       ctx.rotate(this.angle);
       ctx.fillStyle = this.ParseStyle(ctx, this.fillStyle);
@@ -1492,8 +2300,8 @@
     }
   };
   var Picture = class extends Drawable {
-    constructor(params2) {
-      super(params2);
+    constructor(params) {
+      super(params);
       this._image = this._params.image;
       this._frameWidth = this._params.frameWidth || this._image.width;
       this._frameHeight = this._params.frameHeight || this._image.height;
@@ -1506,7 +2314,7 @@
       ctx.save();
       ctx.globalCompositeOperation = this.mode;
       ctx.globalAlpha = this.opacity;
-      ctx.translate(this.position.x, this.position.y);
+      ctx.translate(this.position0.x, this.position0.y);
       ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
       ctx.rotate(this.angle);
       ctx.drawImage(this._image, this._framePos.x * this._frameWidth, this._framePos.y * this._frameHeight, this._frameWidth, this._frameHeight, -this._width / 2, -this._height / 2, this._width, this._height);
@@ -1514,31 +2322,20 @@
     }
   };
   var Rect = class extends Drawable {
-    constructor(params2) {
-      super(params2);
+    constructor(params) {
+      super(params);
     }
     Draw(ctx) {
-      ctx.save();
-      ctx.globalCompositeOperation = this.mode;
-      ctx.globalAlpha = this.opacity;
-      ctx.filter = this.filter;
-      ctx.translate(this.position.x, this.position.y);
-      ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
-      ctx.rotate(this.angle);
-      ctx.fillStyle = this.ParseStyle(ctx, this.fillStyle);
-      ctx.strokeStyle = this.ParseStyle(ctx, this.strokeStyle);
-      ctx.lineWidth = this.strokeWidth;
       ctx.beginPath();
       ctx.rect(-this._width / 2, -this._height / 2, this._width, this._height);
       ctx.fill();
       if (this.strokeWidth > 0)
         ctx.stroke();
-      ctx.restore();
     }
   };
   var Circle = class extends Drawable {
-    constructor(params2) {
-      super(params2);
+    constructor(params) {
+      super(params);
       this._radius = this._params.radius;
       this._width = this._radius * 2;
       this._height = this._radius * 2;
@@ -1553,26 +2350,20 @@
       this._ComputeVertices();
     }
     Draw(ctx) {
-      ctx.save();
-      ctx.globalCompositeOperation = this.mode;
-      ctx.globalAlpha = this.opacity;
-      ctx.filter = this.filter;
-      ctx.translate(this.position.x, this.position.y);
-      ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
-      ctx.fillStyle = this.ParseStyle(ctx, this.fillStyle);
-      ctx.strokeStyle = this.ParseStyle(ctx, this.strokeStyle);
-      ctx.lineWidth = this.strokeWidth;
       ctx.beginPath();
       ctx.arc(0, 0, this._radius, 0, 2 * Math.PI);
       ctx.fill();
       if (this.strokeWidth > 0)
         ctx.stroke();
-      ctx.restore();
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(this.radius, 0);
+      ctx.stroke();
     }
   };
   var Polygon = class extends Drawable {
-    constructor(params2) {
-      super(params2);
+    constructor(params) {
+      super(params);
       this._points = this._params.points;
     }
     GetVertices() {
@@ -1583,7 +2374,7 @@
       ctx.globalCompositeOperation = this.mode;
       ctx.globalAlpha = this.opacity;
       ctx.filter = this.filter;
-      ctx.translate(this.position.x, this.position.y);
+      ctx.translate(this.position0.x, this.position0.y);
       ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
       ctx.fillStyle = this.ParseStyle(ctx, this.fillStyle);
       ctx.strokeStyle = this.ParseStyle(ctx, this.strokeStyle);
@@ -1604,8 +2395,8 @@
     }
   };
   var Sprite = class extends Drawable {
-    constructor(params2) {
-      super(params2);
+    constructor(params) {
+      super(params);
       this._anims = new Map();
       this._currentAnim = null;
       this._paused = true;
@@ -1644,13 +2435,14 @@
         this._paused = false;
       }
     }
-    Update(timeElapsed) {
+    Update(timeElapsedS) {
+      super.Update(timeElapsedS);
       if (this._paused) {
         return;
       }
       const currentAnim = this._currentAnim;
       const frames = this._anims.get(currentAnim.name);
-      currentAnim.counter += timeElapsed * 1e3;
+      currentAnim.counter += timeElapsedS * 1e3;
       if (currentAnim.counter >= currentAnim.rate) {
         currentAnim.counter = 0;
         ++currentAnim.frame;
@@ -1677,7 +2469,7 @@
       ctx.save();
       ctx.globalCompositeOperation = this.mode;
       ctx.globalAlpha = this.opacity;
-      ctx.translate(this.position.x, this.position.y);
+      ctx.translate(this.position0.x, this.position0.y);
       ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
       ctx.rotate(this.angle);
       ctx.drawImage(this._params.image, this._framePos.x * this._params.frameWidth, this._framePos.y * this._params.frameHeight, this._params.frameWidth, this._params.frameHeight, -this._width / 2, -this._height / 2, this._width, this._height);
@@ -1685,42 +2477,23 @@
     }
   };
 
-  // src/core/physics/physics.js
-  var physics_exports = {};
-  __markAsModule(physics_exports);
-
   // src/core/particle.js
   var Emitter = class extends Component {
-    constructor(params2) {
+    constructor(params) {
       super();
       this._particles = [];
       this._options = {
-        lifetime: params2.lifetime,
-        friction: params2.friction || 0,
-        angleVariance: params2.angleVariance || 0,
-        angle: this._InitMinMax(params2.angle),
-        speed: this._InitMinMax(params2.speed),
-        acceleration: params2.acceleration || new Vector2(),
-        scale: this._InitRange(params2.scale),
-        opacity: this._InitRange(params2.opacity)
+        lifetime: ParamParser.ParseObject(params.lifetime, { min: 1e3, max: 1e3 }),
+        friction: ParamParser.ParseValue(params.friction, 0),
+        angleVariance: ParamParser.ParseValue(params.angleVariance, 0),
+        angle: ParamParser.ParseObject(params.angle, { min: 0, max: 0 }),
+        speed: ParamParser.ParseObject(params.speed, { min: 0, max: 0 }),
+        acceleration: params.acceleration || new Vector2(),
+        scale: ParamParser.ParseObject(params.scale, { from: 1, to: 0 }),
+        opacity: ParamParser.ParseObject(params.opacity, { from: 1, to: 0 }),
+        rotationSpeed: ParamParser.ParseValue(params.rotationSpeed, 0)
       };
       this._emitting = null;
-    }
-    _InitMinMax(param) {
-      if (param == void 0) {
-        return 0;
-      } else if (typeof param == "number") {
-        return { min: param, max: param };
-      } else {
-        return { min: param.min, max: param.max };
-      }
-    }
-    _InitRange(param) {
-      if (param == void 0) {
-        return null;
-      } else {
-        return { from: param.from == void 0 ? 1 : param.from, to: param.to };
-      }
     }
     _CreateParticle() {
       const particle2 = this.scene.CreateEntity();
@@ -1730,8 +2503,8 @@
       particle2.AddComponent(new particleType[0](particleType[1]), "Sprite");
       particle2.AddComponent(new ParticleController(this._options));
     }
-    AddParticle(type, params2) {
-      this._particles.push([type, params2]);
+    AddParticle(type, params) {
+      this._particles.push([type, params]);
     }
     Emit(count, repeat = false, delay = 0) {
       if (repeat) {
@@ -1758,16 +2531,17 @@
     }
   };
   var ParticleController = class extends Component {
-    constructor(params2) {
+    constructor(params) {
       super();
-      this._friction = params2.friction || 0;
-      this._lifetime = params2.lifetime;
-      this._angleVariance = params2.angleVariance || 0;
-      this._acc = params2.acceleration || new Vector2();
+      this._friction = params.friction || 0;
+      this._lifetime = this._InitMinMax(params.lifetime);
+      this._angleVariance = params.angleVariance || 0;
+      this._acc = params.acceleration || new Vector2();
       this._counter = 0;
-      this._scale = this._InitRange(params2.scale);
-      this._opacity = this._InitRange(params2.opacity);
-      this._vel = new Vector2(this._InitMinMax(params2.speed), 0).Rotate(this._InitMinMax(params2.angle));
+      this._scale = this._InitRange(params.scale);
+      this._opacity = this._InitRange(params.opacity);
+      this._vel = new Vector2(this._InitMinMax(params.speed), 0).Rotate(this._InitMinMax(params.angle));
+      this._rotationSpeed = params.rotationSpeed || 0;
     }
     _InitMinMax(param) {
       return math.rand(param.min, param.max);
@@ -1789,7 +2563,7 @@
       const decceleration = 60;
       const frameDecceleration = new Vector2(this._vel.x * decceleration * this._friction, this._vel.y * decceleration * this._friction);
       this._vel.Sub(frameDecceleration.Mult(elapsedTimeS));
-      this._vel.Rotate(math.rand(-this._angleVariance, this._angleVariance));
+      this._vel.Rotate(math.rand(-this._angleVariance, this._angleVariance) * elapsedTimeS);
       this.position.Add(this._vel.Clone().Mult(elapsedTimeS));
       const sprite = this.GetComponent("Sprite");
       const progress = Math.min(this._counter / this._lifetime, 1);
@@ -1799,6 +2573,8 @@
       if (this._opacity) {
         sprite.opacity = math.lerp(progress, this._opacity.from, this._opacity.to);
       }
+      this._rotationSpeed -= this._rotationSpeed * decceleration * this._friction;
+      sprite.angle += this._rotationSpeed * elapsedTimeS;
     }
   };
   var particle = {
@@ -1813,7 +2589,8 @@
     Component,
     particle,
     drawable: drawable_exports,
-    physics: physics_exports
+    physics: physics_exports,
+    math
   };
   if (typeof module === "object" && typeof module.exports === "object") {
     module.exports = __export2;

@@ -1,8 +1,9 @@
 import { Component } from "../component.js";
 import { Vector } from "../utils/vector.js";
+import { StyleParser } from "../utils/style-parser.js";
 
 export class Drawable extends Component {
-    constructor(params) {
+    constructor(params = {}) {
         super();
         this._type = "drawable";
         this._params = params;
@@ -70,29 +71,28 @@ export class Drawable extends Component {
         this._scale = num;
     }
     get boundingBox() {
-        const vertices = this._vertices;
-        
-        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-        for(let v of vertices) {
-            if(v.x < minX) {
-                minX = v.x;
-            } else if(v.x > maxX) {
-                maxX = v.x;
-            }
-            if(v.y < minY) {
-                minY = v.y;
-            } else if(v.y > maxY) {
-                maxY = v.y;
+        const verts = this._vertices;
+
+        let maxDist = 0;
+        let idx = 0;
+        for(let i = 0; i < verts.length; ++i) {
+            const v = verts[i];
+            const dist = v.Mag();
+            if(dist > maxDist) {
+                maxDist = dist;
+                idx = i;
             }
         }
-        const width = maxX - minX;
-        const height = maxY - minY;
-        const centerX = this.position.x + minX + width / 2;
-        const centerY = this.position.y + minY + height / 2;
-        return { x: centerX, y: centerY, width: width, height: height };
+        const d = maxDist * 2;
+        return {
+            width: d,
+            height: d,
+            x: this.position.x,
+            y: this.position.y
+        }
     }
     get position0() {
-        return this.position.Clone().Add(this._offset);
+        return this.position;
     }
     Shake(range, dur, count, angle) {
         this._shaking = {
@@ -106,30 +106,6 @@ export class Drawable extends Component {
     StopShaking() {
         this._shaking = null;
         this._offset = new Vector();
-    }
-    ParseStyle(ctx, s) {
-        const params = s.split(";");
-        const len = params.length;
-        if(len === 1) {
-            return s;
-        }
-        let grd;
-        const values = params[1].split(",").map((s) => parseFloat(s));
-        switch(params[0]) {
-            case "linear":
-                grd = ctx.createLinearGradient(...values);
-                break;
-            case "radial":
-                grd = ctx.createRadialGradient(...values);
-                break;
-            default:
-                return "black";
-        }
-        for(let i = 2; i < len; ++i) {
-            const colorValuePair = params[i].split("=");
-            grd.addColorStop(parseFloat(colorValuePair[1]), colorValuePair[0]);
-        }
-        return grd;
     }
     InitComponent() {
         this._ComputeVertices();
@@ -156,6 +132,33 @@ export class Drawable extends Component {
         this._height = h;
     }
     Draw(_) { }
+    Draw0(ctx) {
+        ctx.save();
+        ctx.translate(-this._offset.x, - this._offset.y);
+
+        ctx.save();
+        //ctx.globalCompositeOperation = this.mode;
+        ctx.globalAlpha = this.opacity;
+        //ctx.filter = this.filter;
+        ctx.translate(this.position0.x, this.position0.y);
+        ctx.scale(this.flip.x ? -this.scale: this.scale, this.flip.y ? -this.scale : this.scale);
+        ctx.rotate(this.angle);
+        ctx.fillStyle = StyleParser.ParseStyle(ctx, this.fillStyle);
+        ctx.strokeStyle = StyleParser.ParseStyle(ctx, this.strokeStyle);
+        ctx.lineWidth = this.strokeWidth;
+        
+        this.Draw(ctx);
+
+        ctx.restore();
+
+        ctx.restore();
+
+        const bb = this.boundingBox;
+        ctx.beginPath();
+        ctx.strokeStyle = "orange";
+        ctx.strokeRect(bb.x - bb.width/2, bb.y - bb.height/2, bb.width, bb.height);
+        
+    }
     Update(elapsedTimeS) {
         if(this._shaking) {
             const anim = this._shaking;
@@ -178,6 +181,7 @@ export class Text extends Drawable {
         this._align = (params.align || "center");
         this._fontSize = (this._params.fontSize || 16);
         this._fontFamily = (this._params.fontFamily || "Arial");
+        this._fontStyle = (this._params.fontStyle || "normal");
 
         this._ComputeDimensions();
     }
@@ -226,7 +230,7 @@ export class Text extends Drawable {
         this._height = this.lineHeight * this.linesCount;
         let maxWidth = 0;
         const ctx = document.createElement("canvas").getContext("2d");
-        ctx.font = `${this._fontSize}px '${this._fontFamily}'`;
+        ctx.font = `${this._fontStyle} ${this._fontSize}px '${this._fontFamily}'`;
         for(let line of this._lines) {
             const lineWidth = ctx.measureText(line).width;
             if(lineWidth > maxWidth) {
@@ -236,7 +240,7 @@ export class Text extends Drawable {
         this._width = maxWidth + this._padding * 2;
     }
     Draw(ctx) {
-        let offsetX = this._align == "left" ? -this._width / 2 : this._align == "right" ? this._width / 2 : 0;
+        /*
         ctx.save();
         ctx.globalCompositeOperation = this.mode;
         ctx.globalAlpha = this.opacity;
@@ -244,14 +248,18 @@ export class Text extends Drawable {
         ctx.scale(this.flip.x ? -this.scale: this.scale, this.flip.y ? -this.scale : this.scale);
         ctx.rotate(this.angle);
         ctx.fillStyle = this.ParseStyle(ctx, this.fillStyle);
-        ctx.font = `${this._fontSize}px '${this._fontFamily}'`;
+        */
+        let offsetX = this._align == "left" ? -this._width / 2 : this._align == "right" ? this._width / 2 : 0;
+        ctx.font = `${this._fontStyle} ${this._fontSize}px '${this._fontFamily}'`;
         ctx.textAlign = this._align;
         ctx.textBaseline = "middle";
         ctx.beginPath();
         for(let i = 0; i < this.linesCount; ++i) {
             ctx.fillText(this._lines[i], offsetX + this._padding, this.lineHeight * i - (this.linesCount - 1) / 2 * this.lineHeight);
         }
+        /*
         ctx.restore();
+        */
     }
 }
 
@@ -267,14 +275,18 @@ export class Picture extends Drawable {
         };
     }
     Draw(ctx) {
+        /*
         ctx.save();
         ctx.globalCompositeOperation = this.mode;
         ctx.globalAlpha = this.opacity;
         ctx.translate(this.position0.x, this.position0.y);
         ctx.scale(this.flip.x ? -this.scale: this.scale, this.flip.y ? -this.scale : this.scale);
         ctx.rotate(this.angle);
+        */
         ctx.drawImage(this._image, this._framePos.x * this._frameWidth, this._framePos.y * this._frameHeight, this._frameWidth, this._frameHeight, -this._width / 2, -this._height / 2, this._width, this._height);
+        /*
         ctx.restore();
+        */
     }
 }
 
@@ -283,6 +295,7 @@ export class Rect extends Drawable {
         super(params);
     }
     Draw(ctx) {
+        /*
         ctx.save();
         ctx.globalCompositeOperation = this.mode;
         ctx.globalAlpha = this.opacity;
@@ -293,11 +306,14 @@ export class Rect extends Drawable {
         ctx.fillStyle = this.ParseStyle(ctx, this.fillStyle);
         ctx.strokeStyle = this.ParseStyle(ctx, this.strokeStyle);
         ctx.lineWidth = this.strokeWidth;
+        */
         ctx.beginPath();
         ctx.rect(-this._width / 2, -this._height / 2, this._width, this._height);
         ctx.fill();
         if(this.strokeWidth > 0) ctx.stroke();
+        /*
         ctx.restore();
+        */
     }
 }
 
@@ -318,6 +334,7 @@ export class Circle extends Drawable {
         this._ComputeVertices();
     }
     Draw(ctx) {
+        /*
         ctx.save();
         ctx.globalCompositeOperation = this.mode;
         ctx.globalAlpha = this.opacity;
@@ -328,6 +345,7 @@ export class Circle extends Drawable {
         ctx.fillStyle = this.ParseStyle(ctx, this.fillStyle);
         ctx.strokeStyle = this.ParseStyle(ctx, this.strokeStyle);
         ctx.lineWidth = this.strokeWidth;
+        */
         ctx.beginPath();
         ctx.arc(0, 0, this._radius, 0, 2 * Math.PI);
         ctx.fill();
@@ -336,7 +354,9 @@ export class Circle extends Drawable {
         ctx.moveTo(0, 0);
         ctx.lineTo(this.radius, 0);
         ctx.stroke();
+        /*
         ctx.restore();
+        */
     }
 }
 
@@ -349,6 +369,7 @@ export class Polygon extends Drawable {
         return this._points.map((v) => new Vector(v[0], v[1]));
     }
     Draw(ctx) {
+        /*
         ctx.save();
         ctx.globalCompositeOperation = this.mode;
         ctx.globalAlpha = this.opacity;
@@ -358,6 +379,7 @@ export class Polygon extends Drawable {
         ctx.fillStyle = this.ParseStyle(ctx, this.fillStyle);
         ctx.strokeStyle = this.ParseStyle(ctx, this.strokeStyle);
         ctx.lineWidth = this.strokeWidth;
+        */
         ctx.beginPath();
         for(let i = 0; i < this._vertices.length; ++i) {
             const v = this._vertices[i];
@@ -367,7 +389,9 @@ export class Polygon extends Drawable {
         ctx.closePath();
         ctx.fill();
         if(this.strokeWidth > 0) ctx.stroke();
+        /*
         ctx.restore();
+        */
     }
 }
 
@@ -441,17 +465,21 @@ export class Sprite extends Drawable {
         return null;
     }
     Draw(ctx) {
+        /*
         ctx.save();
         ctx.globalCompositeOperation = this.mode;
         ctx.globalAlpha = this.opacity;
         ctx.translate(this.position0.x, this.position0.y);
         ctx.scale(this.flip.x ? -this.scale: this.scale, this.flip.y ? -this.scale : this.scale);
         ctx.rotate(this.angle);
+        */
         ctx.drawImage(
             this._params.image,
             this._framePos.x * this._params.frameWidth, this._framePos.y * this._params.frameHeight, this._params.frameWidth, this._params.frameHeight,  
             -this._width / 2, -this._height / 2, this._width, this._height
         );
+        /*
         ctx.restore();
+        */
     }
 }

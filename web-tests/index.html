@@ -31,6 +31,20 @@
             }
         }
 
+        class CarController extends Lancelot.Component {
+            constructor() {
+                super();
+
+            }
+            Update(elapsedTimeS) {
+                const light = this.GetComponent("RadialLight");
+                const body = this.parent.body;
+
+                light.angle = body.angle;
+                light.offset = new Lancelot.Vector(50, 0).Rotate(body.angle);
+            }
+        }
+
         class QuadtreeVisualizer extends Lancelot.drawable.Drawable {
             constructor(params) {
                 super(params);
@@ -45,10 +59,20 @@
             }
         }
 
+        class BodyBB extends Lancelot.drawable.Drawable {
+            constructor(params) {
+                super(params);
+                
+            }
+            Draw(ctx) {
+                
+                this.parent.body.Draw(ctx);
+            }
+        }
+
         const game = new Lancelot.Game({
             width: 420,
             height: 480,
-            background: "#242424",
             init: init
         });
 
@@ -59,10 +83,15 @@
                     cellDimensions: { width: 50, height: 50 },
                     bounds: [[-500, -500], [2000, 500]],
                     relaxationCount: 5,
-                    limit: 5
-                }
+                    limit: 5,
+                },
+                background: "silver"
             });
             this.PlayScene("test");
+
+            scene.SetLight({
+                color: "#222"
+            });
 
             const something = scene.CreateEntity();
             something.AddComponent(new QuadtreeVisualizer({
@@ -96,6 +125,7 @@
                 });
                 e1.AddComponent(sprite, "Sprite");
                 e1.AddComponent(new Controller());
+                e1.AddComponent(new BodyBB());
                 return e1;
             }
 
@@ -128,6 +158,7 @@
                 });
                 e1.AddComponent(sprite, "Sprite");
                 e1.AddComponent(new Controller());
+                e1.AddComponent(new BodyBB());
                 return e1;
             }
 
@@ -156,6 +187,15 @@
             const stiffness = 1.0;
 
             const a = InitBox("m2", ["p1", "m5"], -100, 100, 0, 0, 0, 0, 120, 30, 40);
+            let light;
+            a.AddComponent(light = new Lancelot.light.RadialLight({
+                color: "radial;0,0,0,0,0,200;white=0;rgba(255,255,255,0)=1",
+                angleRange: 0.6,
+                radius: 200
+            }));
+            light.offset.x = 60;
+            a.AddComponent(new CarController());
+
             const w1 = InitBall("m3", ["p1", "m5"], -140, 135, 0, 0, 0, 0, 45, 30, 30);
             
             a.body.Join(w1.body, "spring", {
@@ -190,6 +230,16 @@
                 scene.camera.Unfollow();
                 scene.camera.MoveTo(new Lancelot.Vector(0, 0), 1000, "ease-in");
             }, 12000);
+
+            const title = scene.CreateEntity();
+            title.AddComponent(new Lancelot.drawable.Text({
+                text: "1000% PRO\nFuck YEAH",
+                fontSize: 42,
+                fillStyle: "radial;0,0,0,0,0,100;red=0;pink=1",
+                fontStyle: "italic"
+            }));
+            scene.camera.Clip(title);
+            title.position.Set(0, -240);
             
             
         }

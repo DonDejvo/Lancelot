@@ -1,3 +1,4 @@
+import { StyleParser } from "./utils/style-parser.js";
 import { Vector } from "./utils/vector.js";
 
 export class Renderer {
@@ -6,7 +7,6 @@ export class Renderer {
         this._height = params.height;
         this._aspect = this._width / this._height;
         this._scale = 1.0;
-        this._background = (params.background || "black");
 
         this._InitContainer();
         this._InitCanvas();
@@ -79,17 +79,44 @@ export class Renderer {
 
         const ctx = this._context;
         
-        ctx.beginPath();
-        ctx.fillStyle = this.background;
-        ctx.fillRect(0, 0, this._width, this._height);
-
+        
+        
         if(!scene) return;
 
+
+        // ambient
+        
+        ctx.globalCompositeOperation = "source-over";
+        scene._ambientLight.Draw(ctx);
+        
         const cam = scene.camera;
 
+        // radial
+
+        ctx.globalCompositeOperation = "lighter";
         ctx.save();
         ctx.translate(-cam.position.x * cam.scale + this._width / 2, -cam.position.y * cam.scale + this._height / 2);
         ctx.scale(cam.scale, cam.scale);
+        
+        for(let light of scene._lights) {
+            light.Draw(ctx);
+        }
+        
+        ctx.restore();
+
+        ctx.globalCompositeOperation = "multiply";
+
+        const buffer = document.createElement("canvas").getContext("2d");
+        buffer.canvas.width = this._width;
+        buffer.canvas.height = this._height;
+
+        buffer.beginPath();
+        buffer.fillStyle = StyleParser.ParseStyle(buffer, scene.background);
+        buffer.fillRect(0, 0, this._width, this._height);
+
+        buffer.save();
+        buffer.translate(-cam.position.x * cam.scale + this._width / 2, -cam.position.y * cam.scale + this._height / 2);
+        buffer.scale(cam.scale, cam.scale);
 
         for(let elem of scene._drawable) {
             const boundingBox = elem.boundingBox;
@@ -105,10 +132,14 @@ export class Renderer {
             ) {
                 continue;
             }
-            elem.Draw(ctx);
+            elem.Draw0(buffer);
         }
 
-        ctx.restore();
+        buffer.restore();
+
+        ctx.drawImage(buffer.canvas, 0, 0);
+
+
     }
     DisplayToSceneCoords(scene, x, y) {
         const boundingRect = this.dimension;

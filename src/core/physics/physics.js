@@ -134,6 +134,12 @@ class Body extends Component {
     get collisions() {
         return this._collisions;
     }
+    Draw(ctx) {
+        const bb = this.boundingRect;
+        ctx.beginPath();
+        ctx.strokeStyle = "lime";
+        ctx.strokeRect(-bb.width/2, -bb.height/2, bb.width, bb.height);
+    }
     AddBehavior(groups, type, action) {
         this._behavior.push({
             groups: groups.split(" "),
@@ -224,6 +230,7 @@ class Poly extends Body {
         return verts;
     }
     get boundingRect() {
+
         const verts = this.GetVertices();
         let maxDist = 0;
         let idx = 0;

@@ -4,6 +4,7 @@ import { Camera } from "./camera.js";
 import { Interactive } from "./interactive.js";
 import { Entity } from "./entity.js";
 import { World } from "./physics/physics.js";
+import { AmbientLight } from "./light/light.js";
 
 export class Scene {
     constructor(params) {
@@ -12,11 +13,18 @@ export class Scene {
         // this._cellDimensions = (params.cellDimensions || [100, 100]);
         // this._relaxationCount = (params.relaxationCount || 5);
 
+        this.background = params.background;
+
         this._world = new World(params.physics);
 
         this.paused = true;
         this.speed = 1.0;
         this.timeout = new TimeoutHandler();
+
+        this._lights = [];
+        this._ambientLight = new AmbientLight({
+            color: "white"
+        });
 
         // this._bodies = [];
         this._drawable = [];
@@ -31,6 +39,9 @@ export class Scene {
     }
     get camera() {
         return this._camera;
+    }
+    SetLight(params) {
+        this._ambientLight = new AmbientLight(params);
     }
     CreateEntity(n) {
         const e = new Entity();
@@ -105,6 +116,9 @@ export class Scene {
                 this._RemoveDrawable(c);
             } else if(c._type == "body") {
                 this._RemoveBody(e, c);
+            } else if(c._type == "light") {
+                const idx = this._lights.indexOf(c);
+                this._lights.splice(idx, 1);
             }
         });
     }

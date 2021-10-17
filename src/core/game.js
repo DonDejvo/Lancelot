@@ -18,8 +18,7 @@ export class Game {
 
         this._renderer = new Renderer({
             width: this._width,
-            height: this._height,
-            background: params.background
+            height: this._height
         });
         this._engine = new Engine();
         this._sceneManager = new SceneManager();
@@ -78,12 +77,6 @@ export class Game {
             this._init();
         }
 
-    }
-    get background() {
-        return this._renderer.background;
-    }
-    set background(col) {
-        this._renderer.background = col;
     }
     get loader() {
         return this._loader;

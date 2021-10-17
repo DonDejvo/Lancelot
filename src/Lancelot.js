@@ -5,6 +5,7 @@ import { Vector } from "./core/utils/vector.js";
 import * as physics from "./core/physics/physics.js";
 import { particle } from "./core/particle.js";
 import { math } from "./core/utils/math.js";
+import * as light from "./core/light/light.js";
 
 const __name = 'Lancelot';
 
@@ -15,7 +16,8 @@ let __export = {
     particle,
     drawable,
     physics,
-    math
+    math,
+    light
 };
 
 if (typeof module === 'object' && typeof module.exports === 'object') {

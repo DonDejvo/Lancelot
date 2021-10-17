@@ -134,10 +134,8 @@ export class QuadTree{
     }
     Draw(ctx) {
         ctx.beginPath();
-        ctx.save();
         ctx.strokeStyle = "white";
         ctx.strokeRect(this.aabb.x - this.aabb.w/2, this.aabb.y - this.aabb.h/2, this.aabb.w, this.aabb.h);
-        ctx.restore();
         if(this.divided){ 
             this.topLeft.Draw(ctx); 
             this.topRight.Draw(ctx); 
