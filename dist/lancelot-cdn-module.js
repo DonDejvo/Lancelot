@@ -143,8 +143,41 @@ var Engine = class {
   }
 };
 
+// src/core/utils/style-parser.js
+var StyleParser = function() {
+  return {
+    ParseStyle(ctx, s) {
+      if (s == void 0) {
+        return "black";
+      }
+      const params = s.split(";");
+      const len = params.length;
+      if (len === 1) {
+        return s;
+      }
+      let grd;
+      const values = params[1].split(",").map((s2) => parseFloat(s2));
+      switch (params[0]) {
+        case "linear":
+          grd = ctx.createLinearGradient(...values);
+          break;
+        case "radial":
+          grd = ctx.createRadialGradient(...values);
+          break;
+        default:
+          return "black";
+      }
+      for (let i = 2; i < len; ++i) {
+        const colorValuePair = params[i].split("=");
+        grd.addColorStop(parseFloat(colorValuePair[1]), colorValuePair[0]);
+      }
+      return grd;
+    }
+  };
+}();
+
 // src/core/utils/vector.js
-var Vector2 = class {
+var Vector = class {
   constructor(x = 0, y = 0) {
     this._x = x;
     this._y = y;
@@ -170,7 +203,7 @@ var Vector2 = class {
     return this;
   }
   Clone() {
-    return new Vector2(this.x, this.y);
+    return new Vector(this.x, this.y);
   }
   Add(v1) {
     this.Set(this.x + v1.x, this.y + v1.y);
@@ -203,7 +236,7 @@ var Vector2 = class {
     return this.Add(v1.Clone().Sub(this).Mult(alpha));
   }
   Angle() {
-    return Math.atan2(this.y, this_x);
+    return Math.atan2(this.y, this.x);
   }
   Rotate(angle) {
     const sin = Math.sin(angle);
@@ -228,10 +261,10 @@ var Vector2 = class {
     if (z1 === 0 || z2 === 0) {
       return 0;
     }
-    return Math.acos(Vector2.Dot(v1, v2) / (z1 * z2));
+    return Math.acos(Vector.Dot(v1, v2) / (z1 * z2));
   }
 };
-var PositionVector = class extends Vector2 {
+var PositionVector = class extends Vector {
   constructor(positionFunction, x = 0, y = 0) {
     super(x, y);
     this._positionFunction = positionFunction;
@@ -252,7 +285,6 @@ var Renderer = class {
     this._height = params.height;
     this._aspect = this._width / this._height;
     this._scale = 1;
-    this._background = params.background || "black";
     this._InitContainer();
     this._InitCanvas();
     this._OnResize();
@@ -311,27 +343,42 @@ var Renderer = class {
   }
   Render(scene) {
     const ctx = this._context;
-    ctx.beginPath();
-    ctx.fillStyle = this.background;
-    ctx.fillRect(0, 0, this._width, this._height);
     if (!scene)
       return;
+    ctx.globalCompositeOperation = "source-over";
+    scene._ambientLight.Draw(ctx);
     const cam = scene.camera;
+    ctx.globalCompositeOperation = "lighter";
     ctx.save();
     ctx.translate(-cam.position.x * cam.scale + this._width / 2, -cam.position.y * cam.scale + this._height / 2);
     ctx.scale(cam.scale, cam.scale);
+    for (let light of scene._lights) {
+      light.Draw(ctx);
+    }
+    ctx.restore();
+    ctx.globalCompositeOperation = "multiply";
+    const buffer = document.createElement("canvas").getContext("2d");
+    buffer.canvas.width = this._width;
+    buffer.canvas.height = this._height;
+    buffer.beginPath();
+    buffer.fillStyle = StyleParser.ParseStyle(buffer, scene.background);
+    buffer.fillRect(0, 0, this._width, this._height);
+    buffer.save();
+    buffer.translate(-cam.position.x * cam.scale + this._width / 2, -cam.position.y * cam.scale + this._height / 2);
+    buffer.scale(cam.scale, cam.scale);
     for (let elem of scene._drawable) {
       const boundingBox = elem.boundingBox;
-      const pos = new Vector2(boundingBox.x, boundingBox.y);
+      const pos = new Vector(boundingBox.x, boundingBox.y);
       pos.Sub(cam.position);
       pos.Mult(cam.scale);
       const [width, height] = [boundingBox.width, boundingBox.height].map((_) => _ * cam.scale);
       if (pos.x + width / 2 < -this._width / 2 || pos.x - width / 2 > this._width / 2 || pos.y + height / 2 < -this._height / 2 || pos.y - height / 2 > this._height / 2) {
         continue;
       }
-      elem.Draw0(ctx);
+      elem.Draw0(buffer);
     }
-    ctx.restore();
+    buffer.restore();
+    ctx.drawImage(buffer.canvas, 0, 0);
   }
   DisplayToSceneCoords(scene, x, y) {
     const boundingRect = this.dimension;
@@ -499,10 +546,10 @@ var Camera = class {
     this._position = new Position();
     this.scale = 1;
     this._target = null;
-    this._vel = new Vector2();
+    this._vel = new Vector();
     this._scaling = null;
     this._shaking = null;
-    this._offset = new Vector2();
+    this._offset = new Vector();
   }
   get position() {
     return this._position.position;
@@ -570,7 +617,7 @@ var Camera = class {
   }
   StopShaking() {
     this._shaking = null;
-    this._offset = new Vector2();
+    this._offset = new Vector();
   }
   Update(elapsedTimeS) {
     if (this.moving) {
@@ -609,7 +656,7 @@ var Camera = class {
       anim.counter += elapsedTimeS * 1e3;
       const progress = Math.min(anim.counter / anim.dur, 1);
       this.position.Sub(this._offset);
-      this._offset.Copy(new Vector2(Math.sin(progress * Math.PI * 2 * anim.count) * anim.range, 0).Rotate(anim.angle));
+      this._offset.Copy(new Vector(Math.sin(progress * Math.PI * 2 * anim.count) * anim.range, 0).Rotate(anim.angle));
       this.position.Add(this._offset);
       if (progress == 1) {
         this.StopShaking();
@@ -757,6 +804,8 @@ var Entity = class {
       case "body":
         this.scene._AddBody(this, c);
         break;
+      case "light":
+        this._scene._lights.push(c);
     }
   }
   GetComponent(n) {
@@ -772,6 +821,7 @@ var physics_exports = {};
 __export(physics_exports, {
   Ball: () => Ball,
   Box: () => Box,
+  Ray: () => Ray,
   RegularPolygon: () => RegularPolygon,
   World: () => World
 });
@@ -884,40 +934,6 @@ var SpatialHashGrid = class {
   }
 };
 
-// src/core/spatial-grid-controller.js
-var SpatialGridController = class extends Component {
-  constructor(params) {
-    super();
-    this._params = params;
-    this._width = this._params.width;
-    this._height = this._params.height;
-    this._grid = this._params.grid;
-  }
-  InitComponent() {
-    const pos = [
-      this._parent.body.position.x,
-      this._parent.body.position.y
-    ];
-    this._client = this._grid.NewClient(pos, [this._width, this._height]);
-    this._client.entity = this._parent;
-  }
-  Update(_) {
-    const pos = [
-      this._parent.body.position.x,
-      this._parent.body.position.y
-    ];
-    if (pos[0] == this._client.position[0] && pos[1] == this._client.position[1]) {
-      return;
-    }
-    this._client.position = pos;
-    this._grid.UpdateClient(this._client);
-  }
-  FindNearby(rangeX, rangeY) {
-    const results = this._grid.FindNear([this._parent.position.x, this._parent.position.y], [rangeX, rangeY]);
-    return results.filter((c) => c.entity != this._parent).map((c) => c.entity);
-  }
-};
-
 // src/core/quadtree.js
 var AABB = class {
   constructor(x, y, w, h, userData) {
@@ -1024,10 +1040,8 @@ var QuadTree = class {
   }
   Draw(ctx) {
     ctx.beginPath();
-    ctx.save();
     ctx.strokeStyle = "white";
     ctx.strokeRect(this.aabb.x - this.aabb.w / 2, this.aabb.y - this.aabb.h / 2, this.aabb.w, this.aabb.h);
-    ctx.restore();
     if (this.divided) {
       this.topLeft.Draw(ctx);
       this.topRight.Draw(ctx);
@@ -1071,7 +1085,7 @@ var QuadtreeController = class extends Component {
 
 // src/core/physics/physics.js
 var World = class {
-  constructor(params) {
+  constructor(params = {}) {
     this._relaxationCount = ParamParser.ParseValue(params.relaxationCount, 5);
     this._bounds = ParamParser.ParseValue(params.bounds, [[-1e3, -1e3], [1e3, 1e3]]);
     this._cellDimensions = ParamParser.ParseObject(params.cellDimensions, { width: 100, height: 100 });
@@ -1089,12 +1103,6 @@ var World = class {
   _AddBody(e, b) {
     e.body = b;
     const boundingRect = b.boundingRect;
-    const gridController = new SpatialGridController({
-      grid: this._spatialGrid,
-      width: boundingRect.width,
-      height: boundingRect.height
-    });
-    e.AddComponent(gridController);
     const treeController = new QuadtreeController({
       quadtree: this._quadtree,
       width: boundingRect.width,
@@ -1104,10 +1112,6 @@ var World = class {
     this._bodies.push(b);
   }
   _RemoveBody(e, b) {
-    const gridController = e.GetComponent("SpatialGridController");
-    if (gridController) {
-      this._spatialGrid.RemoveClient(gridController._client);
-    }
     const i = this._bodies.indexOf(b);
     if (i != -1) {
       this._bodies.splice(i, 1);
@@ -1119,6 +1123,7 @@ var World = class {
       body._collisions.right.clear();
       body._collisions.top.clear();
       body._collisions.bottom.clear();
+      body._collisions.other.clear();
     }
     for (let body of this._bodies) {
       body.UpdatePosition(elapsedTimeS);
@@ -1142,7 +1147,7 @@ var Body = class extends Component {
   constructor(params) {
     super();
     this._type = "body";
-    this._vel = new Vector2();
+    this._vel = new Vector();
     this._angVel = 0;
     this.mass = ParamParser.ParseValue(params.mass, 0);
     this.bounce = ParamParser.ParseValue(params.bounce, 0);
@@ -1154,7 +1159,8 @@ var Body = class extends Component {
       left: new Set(),
       right: new Set(),
       top: new Set(),
-      bottom: new Set()
+      bottom: new Set(),
+      other: new Set()
     };
   }
   get velocity() {
@@ -1184,21 +1190,20 @@ var Body = class extends Component {
   Draw(ctx) {
     const bb = this.boundingRect;
     ctx.beginPath();
-    ctx.save();
-    ctx.strokeStyle = "white";
-    ctx.strokeRect(this.position.x - bb.width / 2, this.position.y - bb.height / 2, bb.width, bb.height);
-    ctx.restore();
+    ctx.strokeStyle = "lime";
+    ctx.strokeRect(-bb.width / 2, -bb.height / 2, bb.width, bb.height);
   }
-  AddBehavior(groups, type, action) {
+  AddBehavior(groups, type, action, elseAction) {
     this._behavior.push({
       groups: groups.split(" "),
       type,
-      action
+      action,
+      elseAction
     });
   }
   UpdatePosition(elapsedTimeS) {
     const decceleration = 60;
-    const frame_decceleration = new Vector2(this._vel.x * this.friction.x * decceleration, this._vel.y * this.friction.y * decceleration);
+    const frame_decceleration = new Vector(this._vel.x * this.friction.x * decceleration, this._vel.y * this.friction.y * decceleration);
     this._vel.Sub(frame_decceleration.Mult(elapsedTimeS));
     const vel = this._vel.Clone().Mult(elapsedTimeS);
     this.position.Add(vel);
@@ -1209,30 +1214,37 @@ var Body = class extends Component {
     const controller = this.GetComponent("QuadtreeController");
     const boundingRect = this.boundingRect;
     for (let behavior of this._behavior) {
-      const entites0 = controller.FindNearby(boundingRect.width, boundingRect.height);
-      const entities = entites0.filter((e) => {
+      const entities0 = controller.FindNearby(boundingRect.width, boundingRect.height);
+      const entities = entities0.filter((e) => {
         return behavior.groups.map((g) => e.groupList.has(g)).some((_) => _);
       });
       entities.sort((a, b) => {
         const boundingRectA = a.body.boundingRect;
         const boundingRectB = b.body.boundingRect;
-        const distA = Vector2.Dist(this.position, a.body.position) / new Vector2(boundingRect.width + boundingRectA.width, boundingRect.height + boundingRectA.height).Mag();
-        const distB = Vector2.Dist(this.position, b.body.position) / new Vector2(boundingRect.width + boundingRectB.width, boundingRect.height + boundingRectB.height).Mag();
+        const distA = Vector.Dist(this.position, a.body.position) / new Vector(boundingRect.width + boundingRectA.width, boundingRect.height + boundingRectA.height).Mag();
+        const distB = Vector.Dist(this.position, b.body.position) / new Vector(boundingRect.width + boundingRectB.width, boundingRect.height + boundingRectB.height).Mag();
         return distA - distB;
       });
       for (let e of entities) {
+        let info;
         switch (behavior.type) {
           case "detect":
-            if (DetectCollision(this, e.body).collide) {
+            info = DetectCollision(this, e.body);
+            if (info.collide) {
               if (behavior.action) {
-                behavior.action(e.body);
+                behavior.action(e.body, info.point);
+              }
+            } else {
+              if (behavior.elseAction) {
+                behavior.elseAction();
               }
             }
             break;
           case "resolve":
-            if (ResolveCollision(this, e.body)) {
+            info = ResolveCollision(this, e.body);
+            if (info.collide) {
               if (behavior.action) {
-                behavior.action(e.body);
+                behavior.action(e.body, info.point);
               }
             }
             break;
@@ -1256,6 +1268,15 @@ var Body = class extends Component {
     const world = this.scene._world;
     world._AddJoint(joint);
   }
+  Contains(p) {
+    return false;
+  }
+  ApplyForce(v, point) {
+    const rPoint = this.position.Clone().Sub(point);
+    const vel = v.Clone().Mult(1 / this.inverseMass);
+    this.velocity.Add(vel);
+    this.angularVelocity += Vector.Cross(rPoint, vel.Clone().Mult(1 / this.inertia));
+  }
 };
 var Poly = class extends Body {
   constructor(params) {
@@ -1263,7 +1284,7 @@ var Poly = class extends Body {
     this._points = params.points;
   }
   GetVertices() {
-    return this._points.map((v) => new Vector2(v[0], v[1]));
+    return this._points.map((v) => new Vector(v[0], v[1]));
   }
   GetComputedVertices() {
     const verts = this.GetVertices();
@@ -1306,13 +1327,26 @@ var Poly = class extends Body {
     let index = -1;
     for (let i = 0; i < vertices.length; i++) {
       let v = vertices[i].Clone().Sub(ptOnEdge);
-      let proj = Vector2.Dot(v, n);
+      let proj = Vector.Dot(v, n);
       if (proj > 0 && proj > max) {
         max = proj;
         index = i;
       }
     }
     return { sp: vertices[index], depth: max };
+  }
+  Contains(p) {
+    const verts = this.GetComputedVertices();
+    const vertsLen = verts.length;
+    let count = 0;
+    for (let i = 0; i < vertsLen; ++i) {
+      const v1 = verts[i];
+      const v2 = verts[(i + 1) % vertsLen];
+      if ((p.y - v1.y) * (p.y - v2.y) <= 0 && (p.x <= v1.x || p.x <= v2.x) && (v1.x >= p.x && v2.x >= p.x || (v2.x - v1.x) * (p.y - v1.y) / (v2.y - v1.y) >= p.x - v1.x)) {
+        ++count;
+      }
+    }
+    return count % 2;
   }
 };
 var Box = class extends Poly {
@@ -1359,7 +1393,7 @@ var Ball = class extends Body {
     let index = -1;
     for (let i = 0; i < circVerts.length; i++) {
       let v = circVerts[i].Clone().Sub(ptOnEdge);
-      let proj = Vector2.Dot(v, n);
+      let proj = Vector.Dot(v, n);
       if (proj > 0 && proj > max) {
         max = proj;
         index = i;
@@ -1371,13 +1405,16 @@ var Ball = class extends Body {
     let dist = Infinity;
     let index = 0;
     for (let i = 0; i < vertices.length; i++) {
-      let l = Vector2.Dist(vertices[i], this.position);
+      let l = Vector.Dist(vertices[i], this.position);
       if (l < dist) {
         dist = l;
         index = i;
       }
     }
     return vertices[index];
+  }
+  Contains(p) {
+    return Vector.Dist(p, this.position) <= this.radius;
   }
 };
 var RegularPolygon = class extends Poly {
@@ -1402,6 +1439,24 @@ var RegularPolygon = class extends Poly {
     return Math.PI * this.radius ** 2 / 1 / this.rotating;
   }
 };
+var Ray = class extends Body {
+  constructor(params) {
+    super(params);
+    this._range = params.range;
+  }
+  get range() {
+    return this._range;
+  }
+  set range(num) {
+    this._range = num;
+  }
+  get boundingRect() {
+    return { width: 2 * this.range, height: 2 * this.range };
+  }
+  get point() {
+    return this.position.Clone().Add(new Vector(this.range, 0).Rotate(this.angle));
+  }
+};
 var DetectCollision = (b1, b2) => {
   if (b1 instanceof Ball && b2 instanceof Ball) {
     return DetectCollisionBallVsBall(b1, b2);
@@ -1411,11 +1466,92 @@ var DetectCollision = (b1, b2) => {
     return DetectCollisionBallVsPoly(b1, b2);
   } else if (b1 instanceof Poly && b2 instanceof Ball) {
     return DetectCollisionBallVsPoly(b2, b1);
+  } else if (b1 instanceof Ray && b2 instanceof Poly) {
+    return DetectCollisionRayVsPoly(b1, b2);
+  } else if (b1 instanceof Poly && b2 instanceof Ray) {
+    return DetectCollisionRayVsPoly(b2, b1);
+  } else if (b1 instanceof Ray && b2 instanceof Ball) {
+    return DetectCollisionRayVsBall(b1, b2);
+  } else if (b1 instanceof Ball && b2 instanceof Ray) {
+    return DetectCollisionRayVsBall(b2, b1);
   } else {
     return {
       collide: false
     };
   }
+};
+var DetectCollisionLineVsLine = (a, b, c, d) => {
+  const r = b.Clone().Sub(a);
+  const s = d.Clone().Sub(c);
+  const den = r.x * s.y - r.y * s.x;
+  const u = ((c.x - a.x) * r.y - (c.y - a.y) * r.x) / den;
+  const t = ((c.x - a.x) * s.y - (c.y - a.y) * s.x) / den;
+  if (0 <= u && u <= 1 && 0 <= t && t <= 1) {
+    return {
+      collide: true,
+      point: a.Clone().Add(r.Clone().Mult(t))
+    };
+  }
+  return {
+    collide: false
+  };
+};
+var DetectCollisionRayVsPoly = (ray, b) => {
+  let minDist = Infinity;
+  let point = null;
+  const vertices = b.GetComputedVertices();
+  for (let i = 0; i < vertices.length; ++i) {
+    const v1 = vertices[i];
+    const v2 = vertices[(i + 1) % vertices.length];
+    const info = DetectCollisionLineVsLine(ray.position, ray.point, v1, v2);
+    if (info.collide) {
+      const dist = Vector.Dist(ray.position, info.point);
+      if (dist < minDist) {
+        minDist = dist;
+        point = info.point;
+      }
+    }
+  }
+  if (point != null) {
+    ray._collisions.other.add(b);
+    return {
+      collide: true,
+      point
+    };
+  }
+  return {
+    collide: false
+  };
+};
+var DetectCollisionRayVsBall = (ray, b) => {
+  const rayVec = ray.point.Clone().Sub(ray.position).Unit();
+  const originToBall = b.position.Clone().Sub(ray.position);
+  const r2 = b.radius ** 2;
+  const originToBallLength2 = originToBall.Mag() ** 2;
+  const a = Vector.Dot(originToBall, rayVec);
+  const bsq = originToBallLength2 - a * a;
+  if (r2 - bsq < 0) {
+    return {
+      collide: false
+    };
+  }
+  const f = Math.sqrt(r2 - bsq);
+  let t;
+  if (originToBallLength2 < r2) {
+    t = a + f;
+  } else {
+    t = a - f;
+  }
+  const point = ray.position.Clone().Add(rayVec.Clone().Mult(t));
+  if (Vector.Dot(point.Clone().Sub(ray.position), ray.point.Clone().Sub(ray.position)) < 0 || Vector.Dist(point, ray.position) > ray.range) {
+    return {
+      collide: false
+    };
+  }
+  return {
+    collide: true,
+    point
+  };
 };
 var DetectCollisionBallVsBall = (b1, b2) => {
   let v = b1.position.Clone().Sub(b2.position);
@@ -1462,7 +1598,7 @@ var DetectCollisionPolyVsPoly = (b1, b2) => {
     }
   }
   let v = b2.position.Clone().Sub(b1.position);
-  if (Vector2.Dot(v, e1SupportPoints[index].n) > 0) {
+  if (Vector.Dot(v, e1SupportPoints[index].n) > 0) {
     e1SupportPoints[index].n.Mult(-1);
   }
   return {
@@ -1498,7 +1634,7 @@ var DetectCollisionBallVsPoly = (b1, b2) => {
     }
   }
   let v = b2.position.Clone().Sub(b1.position);
-  if (Vector2.Dot(v, e1SupportPoints[index].n) < 0) {
+  if (Vector.Dot(v, e1SupportPoints[index].n) < 0) {
     e1SupportPoints[index].n.Mult(-1);
   }
   return {
@@ -1508,14 +1644,18 @@ var DetectCollisionBallVsPoly = (b1, b2) => {
     depth: e1SupportPoints[index].depth
   };
 };
-var ResolveCollision = (b1, b2, elapsedTimeS) => {
+var ResolveCollision = (b1, b2) => {
   if (b1 instanceof Ball && b2 instanceof Poly) {
     [b1, b2] = [b2, b1];
   }
   const detect = DetectCollision(b1, b2);
   if (detect.collide) {
+    const res = {
+      collide: true,
+      point: detect.point
+    };
     if (b1.mass === 0 && b2.mass === 0)
-      return true;
+      return res;
     const diff = detect.normal.Clone().Mult(detect.depth / (b1.inverseMass + b2.inverseMass));
     b1.position.Add(diff.Clone().Mult(b1.inverseMass));
     b2.position.Sub(diff.Clone().Mult(b2.inverseMass));
@@ -1525,46 +1665,67 @@ var ResolveCollision = (b1, b2, elapsedTimeS) => {
     const w2 = b2.angularVelocity;
     const v1 = b1._vel;
     const v2 = b2._vel;
-    const vp1 = v1.Clone().Add(new Vector2(-w1 * r1.y, w1 * r1.x));
-    const vp2 = v2.Clone().Add(new Vector2(-w2 * r2.y, w2 * r2.x));
+    const vp1 = v1.Clone().Add(new Vector(-w1 * r1.y, w1 * r1.x));
+    const vp2 = v2.Clone().Add(new Vector(-w2 * r2.y, w2 * r2.x));
     const relVel = vp1.Clone().Sub(vp2);
     const bounce = Math.max(b1.bounce, b2.bounce);
-    const relVelDotN = Vector2.Dot(relVel, detect.normal);
+    const relVelDotN = Vector.Dot(relVel, detect.normal);
     if (relVelDotN > 0)
-      return true;
-    const j = -(1 + bounce) * Vector2.Dot(relVel, detect.normal) / (b1.inverseMass + b2.inverseMass + Math.pow(Vector2.Cross(r1, detect.normal), 2) / b1.inertia + Math.pow(Vector2.Cross(r2, detect.normal), 2) / b2.inertia);
+      return res;
+    const j = -(1 + bounce) * Vector.Dot(relVel, detect.normal) / (b1.inverseMass + b2.inverseMass + Math.pow(Vector.Cross(r1, detect.normal), 2) / b1.inertia + Math.pow(Vector.Cross(r2, detect.normal), 2) / b2.inertia);
     const jn = detect.normal.Clone().Mult(j);
     const vel1 = jn.Clone().Mult(b1.inverseMass);
     const vel2 = jn.Clone().Mult(b2.inverseMass);
     b1._vel.Add(vel1.Clone().Mult(1));
     b2._vel.Sub(vel2.Clone().Mult(1));
-    b1.angularVelocity += Vector2.Cross(r1, vel1.Clone().Mult(1 / b1.inertia));
-    b2.angularVelocity -= Vector2.Cross(r2, vel2.Clone().Mult(1 / b1.inertia));
+    b1.angularVelocity += Vector.Cross(r1, vel1.Clone().Mult(1 / b1.inertia));
+    b2.angularVelocity -= Vector.Cross(r2, vel2.Clone().Mult(1 / b1.inertia));
     const friction = Math.max(b1.friction.collide, b2.friction.collide);
     const tangent = detect.normal.Clone().Norm();
-    const j2 = -(1 + bounce) * Vector2.Dot(relVel, tangent) * friction / (b1.inverseMass + b2.inverseMass + Math.pow(Vector2.Cross(r1, tangent), 2) / b1.inertia + Math.pow(Vector2.Cross(r2, tangent), 2) / b2.inertia);
+    const j2 = -(1 + bounce) * Vector.Dot(relVel, tangent) * friction / (b1.inverseMass + b2.inverseMass + Math.pow(Vector.Cross(r1, tangent), 2) / b1.inertia + Math.pow(Vector.Cross(r2, tangent), 2) / b2.inertia);
     const jt = tangent.Clone().Mult(j2);
     const vel1a = jt.Clone().Mult(b1.inverseMass);
     const vel2a = jt.Clone().Mult(b2.inverseMass);
     b1._vel.Add(vel1a.Clone());
     b2._vel.Sub(vel2a.Clone());
-    b1.angularVelocity += Vector2.Cross(r1, vel1a.Clone().Mult(1 / b1.inertia));
-    b2.angularVelocity -= Vector2.Cross(r2, vel2a.Clone().Mult(1 / b2.inertia));
-    return true;
+    b1.angularVelocity += Vector.Cross(r1, vel1a.Clone().Mult(1 / b1.inertia));
+    b2.angularVelocity -= Vector.Cross(r2, vel2a.Clone().Mult(1 / b2.inertia));
+    const directions = {
+      left: new Vector(-1, 0),
+      right: new Vector(1, 0),
+      top: new Vector(0, -1),
+      bottom: new Vector(0, 1)
+    };
+    if (Vector.Dot(detect.normal, directions.left) >= Math.SQRT2 / 2) {
+      b1._collisions.right.add(b2);
+      b2._collisions.left.add(b1);
+    } else if (Vector.Dot(detect.normal, directions.right) >= Math.SQRT2 / 2) {
+      b1._collisions.left.add(b2);
+      b2._collisions.right.add(b1);
+    } else if (Vector.Dot(detect.normal, directions.top) >= Math.SQRT2 / 2) {
+      b1._collisions.bottom.add(b2);
+      b2._collisions.top.add(b1);
+    } else if (Vector.Dot(detect.normal, directions.bottom) >= Math.SQRT2 / 2) {
+      b1._collisions.top.add(b2);
+      b2._collisions.bottom.add(b1);
+    }
+    return res;
   }
-  return false;
+  return {
+    collide: false
+  };
 };
 var Joint = class {
   constructor(b1, b2, params) {
     this._body1 = b1;
     this._body2 = b2;
     const offset1 = ParamParser.ParseObject(params.offset1, { x: 0, y: 0 });
-    this._offset1 = new Vector2(offset1.x, offset1.y);
+    this._offset1 = new Vector(offset1.x, offset1.y);
     const offset2 = ParamParser.ParseObject(params.offset2, { x: 0, y: 0 });
-    this._offset2 = new Vector2(offset2.x, offset2.y);
+    this._offset2 = new Vector(offset2.x, offset2.y);
     const start = this._body1.position.Clone().Add(this._offset1.Clone().Rotate(this._body1.angle));
     const end = this._body2.position.Clone().Add(this._offset2.Clone().Rotate(this._body2.angle));
-    this._length = ParamParser.ParseValue(params.length, Vector2.Dist(start, end));
+    this._length = ParamParser.ParseValue(params.length, Vector.Dist(start, end));
   }
   Update(_) {
   }
@@ -1585,10 +1746,10 @@ var Spring = class extends Joint {
     const diff = n.Clone().Mult((dist - this._length) * -this._stiffness / (this._body1.inverseMass + this._body2.inverseMass));
     const vel1 = diff.Clone().Mult(this._body1.inverseMass);
     this._body1.velocity.Add(vel1.Clone().Mult(1));
-    this._body1.angularVelocity += Vector2.Cross(offset1, vel1.Clone().Mult(1 / this._body1.inertia));
+    this._body1.angularVelocity += Vector.Cross(offset1, vel1.Clone().Mult(1 / this._body1.inertia));
     const vel2 = diff.Clone().Mult(this._body2.inverseMass);
     this._body2.velocity.Sub(vel2.Clone().Mult(1));
-    this._body2.angularVelocity -= Vector2.Cross(offset2, vel2.Clone().Mult(1 / this._body2.inertia));
+    this._body2.angularVelocity -= Vector.Cross(offset2, vel2.Clone().Mult(1 / this._body2.inertia));
   }
 };
 var Stick = class extends Joint {
@@ -1607,13 +1768,57 @@ var Stick = class extends Joint {
   }
 };
 
+// src/core/light/light.js
+var light_exports = {};
+__export(light_exports, {
+  AmbientLight: () => AmbientLight,
+  RadialLight: () => RadialLight
+});
+var AmbientLight = class {
+  constructor(params) {
+    this.color = ParamParser.ParseValue(params.color, "white");
+  }
+  Draw(ctx) {
+    ctx.beginPath();
+    ctx.fillStyle = StyleParser.ParseStyle(ctx, this.color);
+    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  }
+};
+var RadialLight = class extends Component {
+  constructor(params) {
+    super();
+    this._type = "light";
+    this.color = ParamParser.ParseValue(params.color, "white");
+    this.radius = ParamParser.ParseValue(params.radius, 100);
+    this.angle = 0;
+    this.angleRange = ParamParser.ParseValue(params.angleRange, Math.PI * 2);
+  }
+  Draw(ctx) {
+    ctx.beginPath();
+    ctx.save();
+    ctx.translate(this.position.x, this.position.y);
+    ctx.rotate(this.angle);
+    ctx.fillStyle = StyleParser.ParseStyle(ctx, this.color);
+    ctx.arc(0, 0, this.radius, -this.angleRange / 2, this.angleRange / 2);
+    ctx.lineTo(0, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+};
+
 // src/core/scene.js
 var Scene = class {
   constructor(params) {
+    this.background = params.background;
     this._world = new World(params.physics);
     this.paused = true;
     this.speed = 1;
     this.timeout = new TimeoutHandler();
+    this._lights = [];
+    this._ambientLight = new AmbientLight({
+      color: params.light || "white"
+    });
     this._drawable = [];
     this._interactiveEntities = [];
     this._eventHandlers = new Map();
@@ -1622,6 +1827,9 @@ var Scene = class {
   }
   get camera() {
     return this._camera;
+  }
+  set light(color) {
+    this._ambientLight.color = color;
   }
   CreateEntity(n) {
     const e = new Entity();
@@ -1659,7 +1867,7 @@ var Scene = class {
       }
     }
     if (type == "mousedown") {
-      const entities = this._world._spatialGrid.FindNear([event.x, event.y], [0, 0]).map((c) => c.entity);
+      const entities = this._world._quadtree.FindNear([event.x, event.y], [0, 0]).map((c) => c.entity);
       for (let e of entities) {
         if (!e.interactive) {
           continue;
@@ -1700,6 +1908,9 @@ var Scene = class {
         this._RemoveDrawable(c);
       } else if (c._type == "body") {
         this._RemoveBody(e, c);
+      } else if (c._type == "light") {
+        const idx = this._lights.indexOf(c);
+        this._lights.splice(idx, 1);
       }
     });
   }
@@ -1881,8 +2092,7 @@ var Game = class {
     this._loader = new Loader();
     this._renderer = new Renderer({
       width: this._width,
-      height: this._height,
-      background: params.background
+      height: this._height
     });
     this._engine = new Engine();
     this._sceneManager = new SceneManager();
@@ -1935,12 +2145,6 @@ var Game = class {
       this._resources = new Map();
       this._init();
     }
-  }
-  get background() {
-    return this._renderer.background;
-  }
-  set background(col) {
-    this._renderer.background = col;
   }
   get loader() {
     return this._loader;
@@ -2021,6 +2225,7 @@ var drawable_exports = {};
 __export(drawable_exports, {
   Circle: () => Circle,
   Drawable: () => Drawable,
+  Line: () => Line,
   Picture: () => Picture,
   Polygon: () => Polygon,
   Rect: () => Rect,
@@ -2049,7 +2254,7 @@ var Drawable = class extends Component {
     this.strokeStyle = this._params.strokeStyle || "black";
     this.strokeWidth = this._params.strokeWidth || 0;
     this.mode = this._params.mode || "source-over";
-    this._offset = new Vector2();
+    this._offset = new Vector();
     this._shaking = null;
   }
   get zIndex() {
@@ -2129,41 +2334,17 @@ var Drawable = class extends Component {
   }
   StopShaking() {
     this._shaking = null;
-    this._offset = new Vector2();
-  }
-  ParseStyle(ctx, s) {
-    const params = s.split(";");
-    const len = params.length;
-    if (len === 1) {
-      return s;
-    }
-    let grd;
-    const values = params[1].split(",").map((s2) => parseFloat(s2));
-    switch (params[0]) {
-      case "linear":
-        grd = ctx.createLinearGradient(...values);
-        break;
-      case "radial":
-        grd = ctx.createRadialGradient(...values);
-        break;
-      default:
-        return "black";
-    }
-    for (let i = 2; i < len; ++i) {
-      const colorValuePair = params[i].split("=");
-      grd.addColorStop(parseFloat(colorValuePair[1]), colorValuePair[0]);
-    }
-    return grd;
+    this._offset = new Vector();
   }
   InitComponent() {
     this._ComputeVertices();
   }
   GetVertices() {
     return [
-      new Vector2(-this._width / 2, -this._height / 2),
-      new Vector2(this._width / 2, -this._height / 2),
-      new Vector2(-this._width / 2, this._height / 2),
-      new Vector2(this._width / 2, this._height / 2)
+      new Vector(-this._width / 2, -this._height / 2),
+      new Vector(this._width / 2, -this._height / 2),
+      new Vector(-this._width / 2, this._height / 2),
+      new Vector(this._width / 2, this._height / 2)
     ];
   }
   _ComputeVertices() {
@@ -2185,14 +2366,12 @@ var Drawable = class extends Component {
     ctx.save();
     ctx.translate(-this._offset.x, -this._offset.y);
     ctx.save();
-    ctx.globalCompositeOperation = this.mode;
     ctx.globalAlpha = this.opacity;
-    ctx.filter = this.filter;
     ctx.translate(this.position0.x, this.position0.y);
     ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
     ctx.rotate(this.angle);
-    ctx.fillStyle = this.ParseStyle(ctx, this.fillStyle);
-    ctx.strokeStyle = this.ParseStyle(ctx, this.strokeStyle);
+    ctx.fillStyle = StyleParser.ParseStyle(ctx, this.fillStyle);
+    ctx.strokeStyle = StyleParser.ParseStyle(ctx, this.strokeStyle);
     ctx.lineWidth = this.strokeWidth;
     this.Draw(ctx);
     ctx.restore();
@@ -2207,7 +2386,7 @@ var Drawable = class extends Component {
       const anim = this._shaking;
       anim.counter += elapsedTimeS * 1e3;
       const progress = Math.min(anim.counter / anim.dur, 1);
-      this._offset.Copy(new Vector2(Math.sin(progress * Math.PI * 2 * anim.count) * anim.range, 0).Rotate(anim.angle));
+      this._offset.Copy(new Vector(Math.sin(progress * Math.PI * 2 * anim.count) * anim.range, 0).Rotate(anim.angle));
       if (progress == 1) {
         this.StopShaking();
       }
@@ -2223,6 +2402,7 @@ var Text = class extends Drawable {
     this._align = params.align || "center";
     this._fontSize = this._params.fontSize || 16;
     this._fontFamily = this._params.fontFamily || "Arial";
+    this._fontStyle = this._params.fontStyle || "normal";
     this._ComputeDimensions();
   }
   get linesCount() {
@@ -2270,7 +2450,7 @@ var Text = class extends Drawable {
     this._height = this.lineHeight * this.linesCount;
     let maxWidth = 0;
     const ctx = document.createElement("canvas").getContext("2d");
-    ctx.font = `${this._fontSize}px '${this._fontFamily}'`;
+    ctx.font = `${this._fontStyle} ${this._fontSize}px '${this._fontFamily}'`;
     for (let line of this._lines) {
       const lineWidth = ctx.measureText(line).width;
       if (lineWidth > maxWidth) {
@@ -2281,21 +2461,13 @@ var Text = class extends Drawable {
   }
   Draw(ctx) {
     let offsetX = this._align == "left" ? -this._width / 2 : this._align == "right" ? this._width / 2 : 0;
-    ctx.save();
-    ctx.globalCompositeOperation = this.mode;
-    ctx.globalAlpha = this.opacity;
-    ctx.translate(this.position0.x, this.position0.y);
-    ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
-    ctx.rotate(this.angle);
-    ctx.fillStyle = this.ParseStyle(ctx, this.fillStyle);
-    ctx.font = `${this._fontSize}px '${this._fontFamily}'`;
+    ctx.font = `${this._fontStyle} ${this._fontSize}px '${this._fontFamily}'`;
     ctx.textAlign = this._align;
     ctx.textBaseline = "middle";
     ctx.beginPath();
     for (let i = 0; i < this.linesCount; ++i) {
       ctx.fillText(this._lines[i], offsetX + this._padding, this.lineHeight * i - (this.linesCount - 1) / 2 * this.lineHeight);
     }
-    ctx.restore();
   }
 };
 var Picture = class extends Drawable {
@@ -2310,14 +2482,7 @@ var Picture = class extends Drawable {
     };
   }
   Draw(ctx) {
-    ctx.save();
-    ctx.globalCompositeOperation = this.mode;
-    ctx.globalAlpha = this.opacity;
-    ctx.translate(this.position0.x, this.position0.y);
-    ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
-    ctx.rotate(this.angle);
     ctx.drawImage(this._image, this._framePos.x * this._frameWidth, this._framePos.y * this._frameHeight, this._frameWidth, this._frameHeight, -this._width / 2, -this._height / 2, this._width, this._height);
-    ctx.restore();
   }
 };
 var Rect = class extends Drawable {
@@ -2336,17 +2501,20 @@ var Circle = class extends Drawable {
   constructor(params) {
     super(params);
     this._radius = this._params.radius;
-    this._width = this._radius * 2;
-    this._height = this._radius * 2;
   }
   get radius() {
     return this._radius;
   }
+  get boundingBox() {
+    return {
+      width: this._radius * 2,
+      height: this._radius * 2,
+      x: this.position.x,
+      y: this.position.y
+    };
+  }
   set radius(val) {
     this._radius = val;
-    this._width = this._radius * 2;
-    this._height = this._radius * 2;
-    this._ComputeVertices();
   }
   Draw(ctx) {
     ctx.beginPath();
@@ -2366,18 +2534,9 @@ var Polygon = class extends Drawable {
     this._points = this._params.points;
   }
   GetVertices() {
-    return this._points.map((v) => new Vector2(v[0], v[1]));
+    return this._points.map((v) => new Vector(v[0], v[1]));
   }
   Draw(ctx) {
-    ctx.save();
-    ctx.globalCompositeOperation = this.mode;
-    ctx.globalAlpha = this.opacity;
-    ctx.filter = this.filter;
-    ctx.translate(this.position0.x, this.position0.y);
-    ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
-    ctx.fillStyle = this.ParseStyle(ctx, this.fillStyle);
-    ctx.strokeStyle = this.ParseStyle(ctx, this.strokeStyle);
-    ctx.lineWidth = this.strokeWidth;
     ctx.beginPath();
     for (let i = 0; i < this._vertices.length; ++i) {
       const v = this._vertices[i];
@@ -2390,7 +2549,6 @@ var Polygon = class extends Drawable {
     ctx.fill();
     if (this.strokeWidth > 0)
       ctx.stroke();
-    ctx.restore();
   }
 };
 var Sprite = class extends Drawable {
@@ -2465,14 +2623,27 @@ var Sprite = class extends Drawable {
     return null;
   }
   Draw(ctx) {
-    ctx.save();
-    ctx.globalCompositeOperation = this.mode;
-    ctx.globalAlpha = this.opacity;
-    ctx.translate(this.position0.x, this.position0.y);
-    ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
-    ctx.rotate(this.angle);
     ctx.drawImage(this._params.image, this._framePos.x * this._params.frameWidth, this._framePos.y * this._params.frameHeight, this._params.frameWidth, this._params.frameHeight, -this._width / 2, -this._height / 2, this._width, this._height);
-    ctx.restore();
+  }
+};
+var Line = class extends Drawable {
+  constructor(params) {
+    super(params);
+    this.range = params.range;
+  }
+  get boundingBox() {
+    return {
+      width: this.range * 2,
+      height: this.range * 2,
+      x: this.position.x,
+      y: this.position.y
+    };
+  }
+  Draw(ctx) {
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(this.range, 0);
+    ctx.stroke();
   }
 };
 
@@ -2487,7 +2658,7 @@ var Emitter = class extends Component {
       angleVariance: ParamParser.ParseValue(params.angleVariance, 0),
       angle: ParamParser.ParseObject(params.angle, { min: 0, max: 0 }),
       speed: ParamParser.ParseObject(params.speed, { min: 0, max: 0 }),
-      acceleration: params.acceleration || new Vector2(),
+      acceleration: params.acceleration || new Vector(),
       scale: ParamParser.ParseObject(params.scale, { from: 1, to: 0 }),
       opacity: ParamParser.ParseObject(params.opacity, { from: 1, to: 0 }),
       rotationSpeed: ParamParser.ParseValue(params.rotationSpeed, 0)
@@ -2535,11 +2706,11 @@ var ParticleController = class extends Component {
     this._friction = params.friction || 0;
     this._lifetime = this._InitMinMax(params.lifetime);
     this._angleVariance = params.angleVariance || 0;
-    this._acc = params.acceleration || new Vector2();
+    this._acc = params.acceleration || new Vector();
     this._counter = 0;
     this._scale = this._InitRange(params.scale);
     this._opacity = this._InitRange(params.opacity);
-    this._vel = new Vector2(this._InitMinMax(params.speed), 0).Rotate(this._InitMinMax(params.angle));
+    this._vel = new Vector(this._InitMinMax(params.speed), 0).Rotate(this._InitMinMax(params.angle));
     this._rotationSpeed = params.rotationSpeed || 0;
   }
   _InitMinMax(param) {
@@ -2560,7 +2731,7 @@ var ParticleController = class extends Component {
     }
     this._vel.Add(this._acc.Mult(elapsedTimeS));
     const decceleration = 60;
-    const frameDecceleration = new Vector2(this._vel.x * decceleration * this._friction, this._vel.y * decceleration * this._friction);
+    const frameDecceleration = new Vector(this._vel.x * decceleration * this._friction, this._vel.y * decceleration * this._friction);
     this._vel.Sub(frameDecceleration.Mult(elapsedTimeS));
     this._vel.Rotate(math.rand(-this._angleVariance, this._angleVariance) * elapsedTimeS);
     this.position.Add(this._vel.Clone().Mult(elapsedTimeS));
@@ -2583,13 +2754,14 @@ var particle = {
 // src/Lancelot.js
 var __name = "Lancelot";
 var __export2 = {
-  Vector: Vector2,
+  Vector,
   Game,
   Component,
   particle,
   drawable: drawable_exports,
   physics: physics_exports,
-  math
+  math,
+  light: light_exports
 };
 if (typeof module === "object" && typeof module.exports === "object") {
   module.exports = __export2;

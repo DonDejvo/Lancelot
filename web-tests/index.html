@@ -11,239 +11,124 @@
     <script type="module">
         import defaultExport from "../src/Lancelot.js";
 
-        class Controller extends Lancelot.Component {
+        class Controller01 extends Lancelot.Component {
             constructor() {
                 super();
-
             }
             Update(elapsedTimeS) {
-                const sprite = this.GetComponent("Sprite");
-                const body = this.parent.body;
-
-                if(body.mass !== 0) {
-                    body.velocity.y += 400 * elapsedTimeS;
+                const line = this.GetComponent("Line");
+                line.angle = this.parent.body.angle;
+                if(this.parent.body.collisions.all.size == 0) {
+                    line.range = 500;
                 }
-                if(body.parent.groupList.has("m3") && body.mass !== 0) {
-                    
-                    body.angularVelocity += 14 * elapsedTimeS;
-                } 
-                sprite.angle = body.angle;
+                
             }
         }
 
-        class CarController extends Lancelot.Component {
+        class Controller02 extends Lancelot.Component {
             constructor() {
                 super();
-
             }
             Update(elapsedTimeS) {
-                const light = this.GetComponent("RadialLight");
-                const body = this.parent.body;
-
-                light.angle = body.angle;
-                light.offset = new Lancelot.Vector(50, 0).Rotate(body.angle);
-            }
-        }
-
-        class QuadtreeVisualizer extends Lancelot.drawable.Drawable {
-            constructor(params) {
-                super(params);
-                this._quadtree = params.quadtree;
-                const bounds = this._quadtree._bounds;
-                this.width = bounds[1][0] - bounds[0][0];
-                this.height = bounds[1][1] - bounds[0][1];
-            }
-            Draw(ctx) {
-                
-                this._quadtree.Draw(ctx);
-            }
-        }
-
-        class BodyBB extends Lancelot.drawable.Drawable {
-            constructor(params) {
-                super(params);
-                
-            }
-            Draw(ctx) {
-                
-                this.parent.body.Draw(ctx);
+                const rect = this.GetComponent("Rect");
+                rect.angle = this.parent.body.angle;
             }
         }
 
         const game = new Lancelot.Game({
-            width: 420,
-            height: 480,
+            width: 800,
+            height: 540,
             init: init
         });
 
         function init() {
-            
-            const scene = this.CreateScene("test", {
-                physics: {
-                    cellDimensions: { width: 50, height: 50 },
-                    bounds: [[-500, -500], [2000, 500]],
-                    relaxationCount: 5,
-                    limit: 5,
-                },
-                background: "silver"
+
+            const scene = this.CreateScene("scene01", {
+                background: "#4A4A4A",
+                light: "#111"
             });
-            this.PlayScene("test");
+            this.PlayScene("scene01");
 
-            scene.SetLight({
-                color: "#222"
-            });
+            const createEntity01 = () => {
 
-            const something = scene.CreateEntity();
-            something.AddComponent(new QuadtreeVisualizer({
-                quadtree: scene._world._quadtree
-            }));
-
-            const InitBall = (g, rg, x, y, a, vx, vy, va, w, h, m = 0) => {
-                const e1 = scene.CreateEntity();
-                e1.groupList.add(g);
-                e1.position.Set(x, y);
-
-                const body = new Lancelot.physics.Ball({
-                    radius: w / 2,
-                    mass: m,
-                    bounce: 0.9,
-                    friction: { x: 0.01, y: 0.01, angular: 0.01 }
+                const entity = scene.CreateEntity();
+                let line;
+                entity.AddComponent(line = new Lancelot.drawable.Line({
+                    range: 500,
+                    strokeStyle: "linear;0,-4,0,4;red=0;pink=0.5;red=1",
+                    strokeWidth: 10,
+                    zIndex: 99
+                }));
+                let body;
+                entity.AddComponent(body = new Lancelot.physics.Ray({
+                    range: 500
+                }));
+                entity.AddComponent(new Controller01());
+                
+                body.angularVelocity = 0.3;
+                body.angle = 0.1
+                body.AddBehavior("e02", "detect", (other, point) => {
+                    line.range = Lancelot.Vector.Dist(body.position, point);
                 });
-                e1.AddComponent(body);
+
+                return entity;
+            }
+
+            const createEntity02 = (x, y, a) => {
+                const entity = scene.CreateEntity();
+                entity.groupList.add("e02");
+                entity.position.Set(x, y);
+
+                let box;
+                entity.AddComponent(box = new Lancelot.drawable.Rect({
+                    width: 100,
+                    height: 100,
+                    fillStyle: "lime"
+                }));
+                box.angle = a;
+                let body;
+                entity.AddComponent(body = new Lancelot.physics.Box({
+                    width: 100,
+                    height: 100
+                }));
+                entity.AddComponent(new Controller02());
                 body.angle = a;
-                body.velocity.Set(vx, vy);
-                body.angularVelocity = va;
-                for(let group of rg) {
-                    body.AddBehavior(group, "resolve");
-                }
+                body.angularVelocity = 0.5;
 
-                const sprite = new Lancelot.drawable.Circle({
-                    radius: w / 2,
-                    fillStyle: "grey",
-                    strokeStyle: "white",
-                    strokeWidth: 1
-                });
-                e1.AddComponent(sprite, "Sprite");
-                e1.AddComponent(new Controller());
-                e1.AddComponent(new BodyBB());
-                return e1;
+                return entity;
             }
 
-            const InitBox = (g, rg, x, y, a, vx, vy, va, w, h, m = 0) => {
-                const e1 = scene.CreateEntity();
-                e1.groupList.add(g);
-                e1.position.Set(x, y);
+            const createEntity03 = (x, y) => {
+                const entity = scene.CreateEntity();
+                entity.groupList.add("e02");
+                entity.position.Set(x, y);
 
-                const body = new Lancelot.physics.Box({
-                    width: w,
-                    height: h,
-                    mass: m,
-                    bounce: 0.9,
-                    friction: { x: 0.01, y: 0.01, angular: 0.01 },
-                });
-                e1.AddComponent(body);
-                body.angle = a;
-                body.velocity.Set(vx, vy);
-                body.angularVelocity = va;
-                for(let group of rg) {
-                    body.AddBehavior(group, "resolve");
-                }
+                let box;
+                entity.AddComponent(box = new Lancelot.drawable.Circle({
+                    radius: 60,
+                    fillStyle: "cyan"
+                }));
+                
+                let body;
+                entity.AddComponent(body = new Lancelot.physics.Ball({
+                    radius: 60
+                }));
 
-                const sprite = new Lancelot.drawable.Rect({
-                    width: w,
-                    height: h,
-                    fillStyle: "grey",
-                    strokeStyle: "white",
-                    strokeWidth: 1
-                });
-                e1.AddComponent(sprite, "Sprite");
-                e1.AddComponent(new Controller());
-                e1.AddComponent(new BodyBB());
-                return e1;
+                return entity;
             }
 
-            InitBox("p1", [], 0, 220, 0.2, 0, 0, 0, 420, 20);
-            InitBox("p1", [], 420, 260, 0, 0, 0, 0, 420, 20);
-            InitBox("p1", [], 840, 220, -0.2, 0, 0, 0, 420, 20);
-            const chain = [];
-            for(let i = 0; i < 8; ++i) {
-                const chainNode = InitBox("m1", ["p1"], (i % 8) * 40 - 160, -20 - Math.floor(i / 8) * 40, 0, 0, 0, 0, 40, 20, (i == 0 || i == 7) ? 0 : 40);
-                if(i > 0) {
-                    chain[i - 1].body.Join(chainNode.body, "spring", {
-                        stiffness: 1.0,
-                        
-                        offset1: { x: 10 },
-                        offset2: { x: -10 }
-
-                    });
-                }
-                chain.push(chainNode);
-            }
-
-            for(let i = 0; i < 300; ++i) {
-                InitBall("m5", ["p1", "m5", "m1"], (i % 8) * 40 - 160, -150 - Math.floor(i / 8) * 40, 0, 0, 0, 30, 15, 15, 3);
-            }
-
-            const stiffness = 1.0;
-
-            const a = InitBox("m2", ["p1", "m5"], -100, 100, 0, 0, 0, 0, 120, 30, 40);
-            let light;
-            a.AddComponent(light = new Lancelot.light.RadialLight({
-                color: "radial;0,0,0,0,0,200;white=0;rgba(255,255,255,0)=1",
-                angleRange: 0.6,
-                radius: 200
+            const ray = createEntity01();
+            ray.AddComponent(new Lancelot.light.RadialLight({
+                color: "radial;0,0,0,0,0,250;white=0;rgba(255,255,255,0)=1",
+                radius: 250
             }));
-            light.offset.x = 60;
-            a.AddComponent(new CarController());
 
-            const w1 = InitBall("m3", ["p1", "m5"], -140, 135, 0, 0, 0, 0, 45, 30, 30);
-            
-            a.body.Join(w1.body, "spring", {
-                offset1: { x: -55, y: 0 },
-                stiffness: stiffness
-            });
-            a.body.Join(w1.body, "spring", {
-                offset1: { x: -45, y: -5 },
-                stiffness: stiffness
-            });
-            a.body.Join(w1.body, "spring", {
-                offset1: { x: -25, y: 0 },
-                stiffness: stiffness
-            });
-            
-            const w2 = InitBall("m3", ["p1", "m5"], -60, 135, 0, 0, 0, 0, 45, 30, 30);
-            a.body.Join(w2.body, "spring", {
-                offset1: { x: 55, y: 0 },
-                stiffness: stiffness
-            });
-            a.body.Join(w2.body, "spring", {
-                offset1: { x: 45, y: -5 },
-                stiffness: stiffness
-            });
-            a.body.Join(w2.body, "spring", {
-                offset1: { x: 25, y: 0 },
-                stiffness: stiffness
-            });
-            scene.camera.Follow(a);
-            scene.camera.scale = 0.5;
-            scene.timeout.Set(() => {
-                scene.camera.Unfollow();
-                scene.camera.MoveTo(new Lancelot.Vector(0, 0), 1000, "ease-in");
-            }, 12000);
-
-            const title = scene.CreateEntity();
-            title.AddComponent(new Lancelot.drawable.Text({
-                text: "1000% PRO\nFuck YEAH",
-                fontSize: 42,
-                fillStyle: "radial;0,0,0,0,0,100;red=0;pink=1",
-                fontStyle: "italic"
-            }));
-            scene.camera.Clip(title);
-            title.position.Set(0, -240);
-            
-            
+            createEntity03(300, 0, 0.7);
+            createEntity02(100, 200, 0.1);
+            createEntity03(-100, 150);
+            createEntity02(-250, -100, 0.3);
+            createEntity03(0, -200);
         }
-
         
     </script>
     

@@ -321,17 +321,20 @@ export class Circle extends Drawable {
     constructor(params) {
         super(params);
         this._radius = this._params.radius;
-        this._width = this._radius * 2;
-        this._height = this._radius * 2;
     }
     get radius() {
         return this._radius;
     }
+    get boundingBox() {
+        return { 
+            width: this._radius * 2,
+            height: this._radius * 2,
+            x: this.position.x,
+            y: this.position.y
+        };
+    }
     set radius(val) {
         this._radius = val;
-        this._width = this._radius * 2;
-        this._height = this._radius * 2;
-        this._ComputeVertices();
     }
     Draw(ctx) {
         /*
@@ -481,5 +484,26 @@ export class Sprite extends Drawable {
         /*
         ctx.restore();
         */
+    }
+}
+
+export class Line extends Drawable {
+    constructor(params) {
+        super(params);
+        this.range = params.range;
+    }
+    get boundingBox() {
+        return { 
+            width: this.range * 2,
+            height: this.range * 2,
+            x: this.position.x,
+            y: this.position.y
+        };
+    }
+    Draw(ctx) {
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(this.range, 0);
+        ctx.stroke();
     }
 }

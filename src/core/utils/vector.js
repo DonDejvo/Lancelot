@@ -64,7 +64,7 @@ export class Vector {
         return this.Add(v1.Clone().Sub(this).Mult(alpha));
     }
     Angle() {
-        return Math.atan2(this.y, this_x);
+        return Math.atan2(this.y, this.x);
     }
     Rotate(angle) {
         const sin =  Math.sin(angle);

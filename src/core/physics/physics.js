@@ -18,7 +18,7 @@ friction: { x: number, y: number }
 */
 
 export class World {
-    constructor(params) {
+    constructor(params = {}) {
         this._relaxationCount = ParamParser.ParseValue(params.relaxationCount, 5);
         this._bounds = ParamParser.ParseValue(params.bounds, [[-1000, -1000], [1000, 1000]]);
         this._cellDimensions = ParamParser.ParseObject(params.cellDimensions, { width: 100, height: 100 });
@@ -38,12 +38,14 @@ export class World {
     _AddBody(e, b) {
         e.body = b;
         const boundingRect = b.boundingRect;
+        /*
         const gridController = new SpatialGridController({
             grid: this._spatialGrid,
             width: boundingRect.width,
             height: boundingRect.height
         });
         e.AddComponent(gridController);
+        */
         const treeController = new QuadtreeController({
             quadtree: this._quadtree,
             width: boundingRect.width,
@@ -54,10 +56,12 @@ export class World {
         this._bodies.push(b);
     }
     _RemoveBody(e, b) {
+        /*
         const gridController = e.GetComponent("SpatialGridController");
         if(gridController) {
             this._spatialGrid.RemoveClient(gridController._client);
         }
+        */
 
         const i = this._bodies.indexOf(b);
         if (i != -1) {
@@ -71,6 +75,7 @@ export class World {
             body._collisions.right.clear();
             body._collisions.top.clear();
             body._collisions.bottom.clear();
+            body._collisions.all.clear();
         }
         for(let body of this._bodies) {
             body.UpdatePosition(elapsedTimeS);
@@ -92,6 +97,7 @@ export class World {
         }
         
     }
+    
 }
 
 class Body extends Component {
@@ -107,7 +113,7 @@ class Body extends Component {
         this.friction = ParamParser.ParseObject(params.friction, { x: 0, y: 0, angular: 0, collide: 0.3 });
         this._behavior = [];
         this._collisions = {
-            left: new Set(), right: new Set(), top: new Set(), bottom: new Set()
+            left: new Set(), right: new Set(), top: new Set(), bottom: new Set(), all: new Set()
         };
     }
     get velocity() {
@@ -140,11 +146,12 @@ class Body extends Component {
         ctx.strokeStyle = "lime";
         ctx.strokeRect(-bb.width/2, -bb.height/2, bb.width, bb.height);
     }
-    AddBehavior(groups, type, action) {
+    AddBehavior(groups, type, action, elseAction) {
         this._behavior.push({
             groups: groups.split(" "),
             type: type,
-            action: action
+            action: action,
+            elseAction: elseAction
         });
     }
     UpdatePosition(elapsedTimeS) {
@@ -161,8 +168,8 @@ class Body extends Component {
         const controller = this.GetComponent("QuadtreeController");
         const boundingRect = this.boundingRect;
         for(let behavior of this._behavior) {
-            const entites0 = controller.FindNearby(boundingRect.width, boundingRect.height);
-            const entities = entites0.filter(e => {
+            const entities0 = controller.FindNearby(boundingRect.width, boundingRect.height);
+            const entities = entities0.filter(e => {
                 return behavior.groups.map((g) => e.groupList.has(g)).some(_ => _);
             });
             
@@ -175,18 +182,26 @@ class Body extends Component {
             });
             
             for(let e of entities) {
+                let info;
                 switch(behavior.type) {
                     case "detect":
-                        if(DetectCollision(this, e.body).collide) {
+                        info = DetectCollision(this, e.body);
+                        
+                        if(info.collide) {
                             if(behavior.action) {
-                                behavior.action(e.body);
+                                behavior.action(e.body, info.point);
+                            }
+                        } else {
+                            if(behavior.elseAction) {
+                                behavior.elseAction();
                             }
                         }
                         break;
                     case "resolve":
-                        if(ResolveCollision(this, e.body)) {
+                        info = ResolveCollision(this, e.body);
+                        if(info.collide) {
                             if(behavior.action) {
-                                behavior.action(e.body);
+                                behavior.action(e.body, info.point);
                             }
                         }
                         break;
@@ -209,6 +224,15 @@ class Body extends Component {
         }
         const world = this.scene._world;
         world._AddJoint(joint);
+    }
+    Contains(p) {
+        return false;
+    }
+    ApplyForce(v, point) {
+        const rPoint = this.position.Clone().Sub(point);
+        const vel = v.Clone().Mult(1 / this.inverseMass);
+        this.velocity.Add(vel);
+        this.angularVelocity += Vector.Cross(rPoint, vel.Clone().Mult(1 / this.inertia));
     }
 }
 
@@ -271,6 +295,19 @@ class Poly extends Body {
             }
         }
         return { sp : vertices[index], depth : max };
+    }
+    Contains(p) {
+        const verts = this.GetComputedVertices();
+        const vertsLen = verts.length;
+        let count = 0;
+        for(let i = 0; i < vertsLen; ++i) {
+            const v1 = verts[i];
+            const v2 = verts[(i + 1) % vertsLen];
+            if((p.y - v1.y) * (p.y - v2.y) <= 0 && (p.x <= v1.x || p.x <= v2.x) && (v1.x >= p.x && v2.x >= p.x || (v2.x - v1.x) * (p.y - v1.y) / (v2.y - v1.y) >= p.x - v1.x)) {
+                ++count;
+            }
+        }
+        return count % 2;
     }
 }
 
@@ -340,6 +377,9 @@ export class Ball extends Body {
         }
         return vertices[index];
     }
+    Contains(p) {
+        return Vector.Dist(p, this.position) <= this.radius;
+    }
 }
 
 export class RegularPolygon extends Poly {
@@ -365,6 +405,25 @@ export class RegularPolygon extends Poly {
     }
 }
 
+export class Ray extends Body {
+    constructor(params) {
+        super(params);
+        this._range = params.range;
+    }
+    get range() {
+        return this._range;
+    }
+    set range(num) {
+        this._range = num;
+    }
+    get boundingRect(){
+        return { width : 2 * this.range, height : 2 * this.range };
+    }
+    get point() {
+        return this.position.Clone().Add(new Vector(this.range, 0).Rotate(this.angle));
+    }
+}
+
 const DetectCollision = (b1, b2) => {
     if(b1 instanceof Ball && b2 instanceof Ball) {
         return DetectCollisionBallVsBall(b1, b2);
@@ -374,11 +433,114 @@ const DetectCollision = (b1, b2) => {
         return DetectCollisionBallVsPoly(b1, b2);
     } else if(b1 instanceof Poly && b2 instanceof Ball) {
         return DetectCollisionBallVsPoly(b2, b1);
+    } else if(b1 instanceof Ray && b2 instanceof Poly) {
+        return DetectCollisionRayVsPoly(b1, b2);
+    } else if(b1 instanceof Poly && b2 instanceof Ray) {
+        return DetectCollisionRayVsPoly(b2, b1);
+    } else if(b1 instanceof Ray && b2 instanceof Ball) {
+        return DetectCollisionRayVsBall(b1, b2);
+    } else if(b1 instanceof Ball && b2 instanceof Ray) {
+        return DetectCollisionRayVsBall(b2, b1);
     } else {
         return {
             collide: false
         }
     }
+}
+
+const DetectCollisionLineVsLine = (a, b, c, d) => {
+    const r = b.Clone().Sub(a);
+    const s = d.Clone().Sub(c);
+    
+    const den = r.x * s.y - r.y * s.x; 
+	const u = ((c.x - a.x) * r.y - (c.y - a.y) * r.x) / den;
+	const t = ((c.x - a.x) * s.y - (c.y - a.y) * s.x) / den;
+
+
+
+    if((0 <= u && u <= 1 && 0 <= t && t <= 1)) {
+        return {
+            collide: true,
+            point: a.Clone().Add(r.Clone().Mult(t))
+        }
+    }
+    return {
+        collide: false
+    }
+}
+
+const DetectCollisionRayVsPoly = (ray, b) => {
+    const rayPoint = ray.point;
+    let minDist = Infinity;
+    let point = null;
+    const vertices = b.GetComputedVertices();
+    for(let i = 0; i < vertices.length; ++i) {
+        const v1 = vertices[i];
+        const v2 = vertices[(i + 1) % vertices.length];
+        const info = DetectCollisionLineVsLine(ray.position, rayPoint, v1, v2);
+        if(info.collide) {
+            const dist = Vector.Dist(ray.position, info.point);
+            
+            if(dist < minDist) {
+                minDist = dist;
+                point = info.point;
+            }
+        }
+    }
+    if(point != null) {
+        ray._collisions.all.add(b);
+        b._collisions.all.add(ray);
+        return {
+            collide: true,
+            point: point
+        };
+    }
+    return {
+        collide: false
+    };
+
+}
+
+const DetectCollisionRayVsBall = (ray, b) => {
+    
+    const rayPoint = ray.point;
+    const rayVec = rayPoint.Clone().Sub(ray.position).Unit();
+    const originToBall = b.position.Clone().Sub(ray.position);
+    const r2 = b.radius ** 2;
+    const originToBallLength2 = originToBall.Mag() ** 2;
+
+    const a = Vector.Dot(originToBall, rayVec);
+    const bsq = originToBallLength2 - a * a;
+
+    if(r2 - bsq < 0) {
+        return {
+            collide: false
+        };
+    }
+
+    const f = Math.sqrt(r2 - bsq);
+    let t;
+    if(originToBallLength2 < r2) {
+        t = a + f;
+    } else {
+        t = a - f;
+    }
+
+    const point = ray.position.Clone().Add(rayVec.Clone().Mult(t));
+
+    if(Vector.Dot(point.Clone().Sub(ray.position), rayPoint.Clone().Sub(ray.position)) < 0 || Vector.Dist(point, ray.position) > ray.range) {
+        return {
+            collide: false
+        }
+    }
+
+    ray._collisions.all.add(b);
+    b._collisions.all.add(ray);
+
+    return {
+        collide: true,
+        point: point
+    };
 }
 
 const DetectCollisionBallVsBall = (b1, b2) => {
@@ -389,6 +551,8 @@ const DetectCollisionBallVsBall = (b1, b2) => {
         info.depth = b1.radius + b2.radius - v.Mag();
         info.point = b1.position.Clone().Add(info.normal.Clone().Mult(b1.radius));
         info.collide = true;
+        b1._collisions.all.add(b2);
+        b2._collisions.all.add(b1);
         return info;
     }
     return {
@@ -428,6 +592,8 @@ const DetectCollisionPolyVsPoly = (b1, b2) => {
     if(Vector.Dot(v, e1SupportPoints[index].n) > 0){
         e1SupportPoints[index].n.Mult(-1);
     }
+    b1._collisions.all.add(b2);
+    b2._collisions.all.add(b1);
     return {
         collide: true,
         normal: e1SupportPoints[index].n,
@@ -463,6 +629,8 @@ const DetectCollisionBallVsPoly = (b1, b2) => {
     if(Vector.Dot(v, e1SupportPoints[index].n) < 0){
         e1SupportPoints[index].n.Mult(-1);
     }
+    b1._collisions.all.add(b2);
+    b2._collisions.all.add(b1);
     return {
         collide: true,
         normal : e1SupportPoints[index].n,
@@ -471,14 +639,18 @@ const DetectCollisionBallVsPoly = (b1, b2) => {
     };
 }
 
-const ResolveCollision = (b1, b2, elapsedTimeS) => {
+const ResolveCollision = (b1, b2) => {
     if(b1 instanceof Ball && b2 instanceof Poly) {
         [b1, b2] = [b2, b1];
     }
     const detect = DetectCollision(b1, b2);
     
     if(detect.collide) {
-        if(b1.mass === 0 && b2.mass === 0) return true;
+        const res = {
+            collide: true,
+            point: detect.point
+        };
+        if(b1.mass === 0 && b2.mass === 0) return res;
 
         const diff = detect.normal.Clone().Mult((detect.depth) / (b1.inverseMass + b2.inverseMass));
         b1.position.Add(diff.Clone().Mult(b1.inverseMass));
@@ -496,7 +668,7 @@ const ResolveCollision = (b1, b2, elapsedTimeS) => {
         const bounce = Math.max(b1.bounce, b2.bounce);
 
         const relVelDotN = Vector.Dot(relVel, detect.normal);
-        if(relVelDotN > 0) return true;
+        if(relVelDotN > 0) return res;
 
         const j = (-(1 + bounce) * Vector.Dot(relVel, detect.normal)) / (b1.inverseMass + b2.inverseMass + Math.pow(Vector.Cross(r1, detect.normal), 2) / b1.inertia + Math.pow(Vector.Cross(r2, detect.normal), 2) / b2.inertia);
         const jn = detect.normal.Clone().Mult(j);
@@ -519,10 +691,32 @@ const ResolveCollision = (b1, b2, elapsedTimeS) => {
         b1.angularVelocity += Vector.Cross(r1, vel1a.Clone().Mult(1 / b1.inertia));
         b2.angularVelocity -= Vector.Cross(r2, vel2a.Clone().Mult(1 / b2.inertia));
         
+        const directions = {
+            left: new Vector(-1, 0),
+            right: new Vector(1, 0),
+            top: new Vector(0, -1),
+            bottom: new Vector(0, 1),
+        };
+        
+        if (Vector.Dot(detect.normal, directions.left) >= Math.SQRT2 / 2) {
+            b1._collisions.right.add(b2);
+            b2._collisions.left.add(b1);
+        } else if (Vector.Dot(detect.normal, directions.right) >= Math.SQRT2 / 2) {
+            b1._collisions.left.add(b2);
+            b2._collisions.right.add(b1);
+        } else if (Vector.Dot(detect.normal, directions.top) >= Math.SQRT2 / 2) {
+            b1._collisions.bottom.add(b2);
+            b2._collisions.top.add(b1);
+        } else if (Vector.Dot(detect.normal, directions.bottom) >= Math.SQRT2 / 2) {
+            b1._collisions.top.add(b2);
+            b2._collisions.bottom.add(b1);
+        }
 
-        return true;
+        return res;
     }
-    return false;
+    return {
+        collide: false
+    };
 }
 
 class Joint {

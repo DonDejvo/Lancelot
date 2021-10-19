@@ -5,6 +5,7 @@ import { Interactive } from "./interactive.js";
 import { Entity } from "./entity.js";
 import { World } from "./physics/physics.js";
 import { AmbientLight } from "./light/light.js";
+import { Vector } from "./utils/vector.js";
 
 export class Scene {
     constructor(params) {
@@ -23,7 +24,7 @@ export class Scene {
 
         this._lights = [];
         this._ambientLight = new AmbientLight({
-            color: "white"
+            color: (params.light || "white")
         });
 
         // this._bodies = [];
@@ -40,8 +41,8 @@ export class Scene {
     get camera() {
         return this._camera;
     }
-    SetLight(params) {
-        this._ambientLight = new AmbientLight(params);
+    set light(color) {
+        this._ambientLight.color = color;
     }
     CreateEntity(n) {
         const e = new Entity();
@@ -78,7 +79,8 @@ export class Scene {
             }
         }
         if(type == "mousedown") {
-            const entities = this._world._spatialGrid.FindNear([event.x, event.y], [0, 0]).map(c => c.entity);
+            // const entities = this._world._spatialGrid.FindNear([event.x, event.y], [0, 0]).map(c => c.entity);
+            const entities = this._world._quadtree.FindNear([event.x, event.y], [0, 0]).map(c => c.entity);
             for(let e of entities) {
                 if(!e.interactive) { continue; }
                 
