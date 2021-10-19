@@ -398,6 +398,21 @@ export class Polygon extends Drawable {
     }
 }
 
+export class RegularPolygon extends Polygon {
+    constructor(params) {
+        super(params);
+        this.radius = params.radius;
+        this.sides = params.sides;
+
+        const points = [];
+        for(let i = 0; i < this.sides; ++i) {
+            const angle = Math.PI * 2 / this.sides * i;
+            points.push([Math.cos(angle) * this.radius, Math.sin(angle) * this.radius]);
+        }
+        this._points = points;
+    }
+}
+
 export class Sprite extends Drawable {
     constructor(params) {
         super(params);

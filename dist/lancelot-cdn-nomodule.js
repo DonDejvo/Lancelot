@@ -2241,6 +2241,7 @@
     Picture: () => Picture,
     Polygon: () => Polygon,
     Rect: () => Rect,
+    RegularPolygon: () => RegularPolygon2,
     Sprite: () => Sprite,
     Text: () => Text
   });
@@ -2561,6 +2562,19 @@
       ctx.fill();
       if (this.strokeWidth > 0)
         ctx.stroke();
+    }
+  };
+  var RegularPolygon2 = class extends Polygon {
+    constructor(params) {
+      super(params);
+      this.radius = params.radius;
+      this.sides = params.sides;
+      const points = [];
+      for (let i = 0; i < this.sides; ++i) {
+        const angle = Math.PI * 2 / this.sides * i;
+        points.push([Math.cos(angle) * this.radius, Math.sin(angle) * this.radius]);
+      }
+      this._points = points;
     }
   };
   var Sprite = class extends Drawable {

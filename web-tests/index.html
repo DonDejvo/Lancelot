@@ -35,6 +35,16 @@
             }
         }
 
+        class Controller04 extends Lancelot.Component {
+            constructor() {
+                super();
+            }
+            Update(elapsedTimeS) {
+                const poly = this.GetComponent("Shape");
+                poly.angle = this.parent.body.angle;
+            }
+        }
+
         const game = new Lancelot.Game({
             width: 800,
             height: 540,
@@ -81,15 +91,15 @@
 
                 let box;
                 entity.AddComponent(box = new Lancelot.drawable.Rect({
-                    width: 100,
-                    height: 100,
+                    width: 120,
+                    height: 80,
                     fillStyle: "lime"
                 }));
                 box.angle = a;
                 let body;
                 entity.AddComponent(body = new Lancelot.physics.Box({
-                    width: 100,
-                    height: 100
+                    width: 120,
+                    height: 80
                 }));
                 entity.AddComponent(new Controller02());
                 body.angle = a;
@@ -117,17 +127,41 @@
                 return entity;
             }
 
+            const createEntity04 = (x, y, a, sides) => {
+                const entity = scene.CreateEntity();
+                entity.groupList.add("e02");
+                entity.position.Set(x, y);
+
+                let box;
+                entity.AddComponent(box = new Lancelot.drawable.RegularPolygon({
+                    radius: 60,
+                    sides: sides,
+                    fillStyle: "pink"
+                }), "Shape");
+                
+                let body;
+                entity.AddComponent(body = new Lancelot.physics.RegularPolygon({
+                    radius: 60,
+                    sides: sides
+                }));
+                entity.AddComponent(new Controller04());
+                body.angle = a;
+                body.angularVelocity = 0.5;
+
+                return entity;
+            }
+
             const ray = createEntity01();
             ray.AddComponent(new Lancelot.light.RadialLight({
                 color: "radial;0,0,0,0,0,250;white=0;rgba(255,255,255,0)=1",
                 radius: 250
             }));
 
-            createEntity03(300, 0, 0.7);
-            createEntity02(100, 200, 0.1);
+            createEntity04(200, 0, 0.7, 5);
+            createEntity04(100, 200, 0.1, 3);
             createEntity03(-100, 150);
             createEntity02(-250, -100, 0.3);
-            createEntity03(0, -200);
+            createEntity02(0, -200, 1.4);
         }
         
     </script>
