@@ -1123,7 +1123,7 @@ var World = class {
       body._collisions.right.clear();
       body._collisions.top.clear();
       body._collisions.bottom.clear();
-      body._collisions.other.clear();
+      body._collisions.all.clear();
     }
     for (let body of this._bodies) {
       body.UpdatePosition(elapsedTimeS);
@@ -1160,7 +1160,7 @@ var Body = class extends Component {
       right: new Set(),
       top: new Set(),
       bottom: new Set(),
-      other: new Set()
+      all: new Set()
     };
   }
   get velocity() {
@@ -1497,13 +1497,14 @@ var DetectCollisionLineVsLine = (a, b, c, d) => {
   };
 };
 var DetectCollisionRayVsPoly = (ray, b) => {
+  const rayPoint = ray.point;
   let minDist = Infinity;
   let point = null;
   const vertices = b.GetComputedVertices();
   for (let i = 0; i < vertices.length; ++i) {
     const v1 = vertices[i];
     const v2 = vertices[(i + 1) % vertices.length];
-    const info = DetectCollisionLineVsLine(ray.position, ray.point, v1, v2);
+    const info = DetectCollisionLineVsLine(ray.position, rayPoint, v1, v2);
     if (info.collide) {
       const dist = Vector.Dist(ray.position, info.point);
       if (dist < minDist) {
@@ -1513,7 +1514,8 @@ var DetectCollisionRayVsPoly = (ray, b) => {
     }
   }
   if (point != null) {
-    ray._collisions.other.add(b);
+    ray._collisions.all.add(b);
+    b._collisions.all.add(ray);
     return {
       collide: true,
       point
@@ -1524,7 +1526,8 @@ var DetectCollisionRayVsPoly = (ray, b) => {
   };
 };
 var DetectCollisionRayVsBall = (ray, b) => {
-  const rayVec = ray.point.Clone().Sub(ray.position).Unit();
+  const rayPoint = ray.point;
+  const rayVec = rayPoint.Clone().Sub(ray.position).Unit();
   const originToBall = b.position.Clone().Sub(ray.position);
   const r2 = b.radius ** 2;
   const originToBallLength2 = originToBall.Mag() ** 2;
@@ -1543,11 +1546,13 @@ var DetectCollisionRayVsBall = (ray, b) => {
     t = a - f;
   }
   const point = ray.position.Clone().Add(rayVec.Clone().Mult(t));
-  if (Vector.Dot(point.Clone().Sub(ray.position), ray.point.Clone().Sub(ray.position)) < 0 || Vector.Dist(point, ray.position) > ray.range) {
+  if (Vector.Dot(point.Clone().Sub(ray.position), rayPoint.Clone().Sub(ray.position)) < 0 || Vector.Dist(point, ray.position) > ray.range) {
     return {
       collide: false
     };
   }
+  ray._collisions.all.add(b);
+  b._collisions.all.add(ray);
   return {
     collide: true,
     point
@@ -1561,6 +1566,8 @@ var DetectCollisionBallVsBall = (b1, b2) => {
     info.depth = b1.radius + b2.radius - v.Mag();
     info.point = b1.position.Clone().Add(info.normal.Clone().Mult(b1.radius));
     info.collide = true;
+    b1._collisions.all.add(b2);
+    b2._collisions.all.add(b1);
     return info;
   }
   return {
@@ -1601,6 +1608,8 @@ var DetectCollisionPolyVsPoly = (b1, b2) => {
   if (Vector.Dot(v, e1SupportPoints[index].n) > 0) {
     e1SupportPoints[index].n.Mult(-1);
   }
+  b1._collisions.all.add(b2);
+  b2._collisions.all.add(b1);
   return {
     collide: true,
     normal: e1SupportPoints[index].n,
@@ -1637,6 +1646,8 @@ var DetectCollisionBallVsPoly = (b1, b2) => {
   if (Vector.Dot(v, e1SupportPoints[index].n) < 0) {
     e1SupportPoints[index].n.Mult(-1);
   }
+  b1._collisions.all.add(b2);
+  b2._collisions.all.add(b1);
   return {
     collide: true,
     normal: e1SupportPoints[index].n,
