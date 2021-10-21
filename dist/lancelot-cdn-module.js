@@ -1853,6 +1853,7 @@ var Scene = class {
     this._ambientLight = new AmbientLight({
       color: params.light || "white"
     });
+    this._keys = new Set();
     this._drawable = [];
     this._interactiveEntities = [];
     this._eventHandlers = new Map();
@@ -1871,6 +1872,9 @@ var Scene = class {
   set background(col) {
     this._background = col;
     this._bgCache = null;
+  }
+  IsPressed(k) {
+    return this._keys.has(k);
   }
   CreateEntity(n) {
     const e = new Entity();
@@ -1930,6 +1934,10 @@ var Scene = class {
           }
         }
       }
+    } else if (type == "keydown") {
+      this._keys.add(event.key);
+    } else if (type == "keyup") {
+      this._keys.delete(event.key);
     }
   }
   GetEntityByName(n) {
@@ -2205,6 +2213,13 @@ var Game = class {
       cnv.addEventListener("mousemove", (e) => this._HandleMouseEvent(e));
       cnv.addEventListener("mouseup", (e) => this._HandleMouseEvent(e));
     }
+    addEventListener("keydown", (e) => this._HandleKeyEvent(e));
+    addEventListener("keyup", (e) => this._HandleKeyEvent(e));
+  }
+  _HandleKeyEvent(e) {
+    this._HandleSceneEvent(e.type, {
+      key: e.key
+    });
   }
   _HandleTouchEvent(e) {
     const touchToMouseType = {
@@ -2212,16 +2227,28 @@ var Game = class {
       "touchmove": "mousemove",
       "touchend": "mouseup"
     };
-    this._HandleSceneEvent(touchToMouseType[e.type], e.changedTouches[0].pageX, e.changedTouches[0].pageY);
+    this._HandleSceneEvent(touchToMouseType[e.type], {
+      x: e.changedTouches[0].pageX,
+      y: e.changedTouches[0].pageY
+    });
   }
   _HandleMouseEvent(e) {
-    this._HandleSceneEvent(e.type, e.pageX, e.pageY);
+    this._HandleSceneEvent(e.type, {
+      x: e.pageX,
+      y: e.pageY
+    });
   }
-  _HandleSceneEvent(type, x, y) {
+  _HandleSceneEvent(type, params) {
     const scene = this._sceneManager.currentScene;
     if (scene) {
-      const coords = this._renderer.DisplayToSceneCoords(scene, x, y);
-      scene._On(type, { x: coords.x, y: coords.y, id: 0, type });
+      if (type.startsWith("mouse")) {
+        const coords = this._renderer.DisplayToSceneCoords(scene, params.x, params.y);
+        params.x = coords.x;
+        params.y = coords.y;
+        scene._On(type, params);
+      } else if (type.startsWith("key")) {
+        scene._On(type, params);
+      }
     }
   }
   CreateSection(id) {
