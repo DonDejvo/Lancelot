@@ -20,12 +20,14 @@ export class Drawable extends Component {
         this.opacity = this._params.opacity !== undefined ? this._params.opacity : 1;
         this.filter = (this._params.filter || "");
         this._angle = (this._params.angle || this._rotationCount * Math.PI / 2 || 0);
-        this.fillStyle = (this._params.fillStyle || "black");
-        this.strokeStyle = (this._params.strokeStyle || "black");
+        this._fillStyle = (this._params.fillStyle || "black");
+        this._strokeStyle = (this._params.strokeStyle || "black");
         this.strokeWidth = (this._params.strokeWidth || 0);
         this.mode = (this._params.mode || "source-over");
         this._offset = new Vector();
         this._shaking = null;
+        this._fillStyleCache = null;
+        this._strokeStyleCache = null;
     }
     get zIndex() {
         return this._zIndex;
@@ -69,6 +71,20 @@ export class Drawable extends Component {
     }
     set scale(num) {
         this._scale = num;
+    }
+    get fillStyle() {
+        return this._fillStyle;
+    }
+    set fillStyle(col) {
+        this._fillStyle = col;
+        this._fillStyleCache = null;
+    }
+    get strokeStyle() {
+        return this._strokeStyle;
+    }
+    set strokeStyle(col) {
+        this._strokeStyle = col;
+        this._strokeStyleCache = null;
     }
     get boundingBox() {
         const verts = this._vertices;
@@ -143,8 +159,8 @@ export class Drawable extends Component {
         ctx.translate(this.position0.x, this.position0.y);
         ctx.scale(this.flip.x ? -this.scale: this.scale, this.flip.y ? -this.scale : this.scale);
         ctx.rotate(this.angle);
-        ctx.fillStyle = StyleParser.ParseStyle(ctx, this.fillStyle);
-        ctx.strokeStyle = StyleParser.ParseStyle(ctx, this.strokeStyle);
+        ctx.fillStyle = StyleParser.ParseStyle(ctx, this.fillStyle, this, "_fillStyleCache");
+        ctx.strokeStyle = StyleParser.ParseStyle(ctx, this.strokeStyle, this, "_strokeStyleCache");
         ctx.lineWidth = this.strokeWidth;
         
         this.Draw(ctx);

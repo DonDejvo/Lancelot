@@ -63,7 +63,7 @@ export class Camera {
     StopScaling() {
         this._scaling = null;
     }
-    MoveAndScaleTo(p, s, dur, timing = "linear") {
+    MoveAndScale(p, s, dur, timing = "linear") {
         this.MoveTo(p, dur, timing);
         this.ScaleTo(s, dur, timing);
     }

@@ -14,7 +14,8 @@ export class Scene {
         // this._cellDimensions = (params.cellDimensions || [100, 100]);
         // this._relaxationCount = (params.relaxationCount || 5);
 
-        this.background = params.background;
+        this._background = params.background;
+        this._bgCache = null;
 
         this._world = new World(params.physics);
 
@@ -43,6 +44,13 @@ export class Scene {
     }
     set light(color) {
         this._ambientLight.color = color;
+    }
+    get background() {
+        return this._background;
+    }
+    set background(col) {
+        this._background = col;
+        this._bgCache = null;
     }
     CreateEntity(n) {
         const e = new Entity();

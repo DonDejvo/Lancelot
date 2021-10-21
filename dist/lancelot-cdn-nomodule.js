@@ -147,13 +147,18 @@
   // src/core/utils/style-parser.js
   var StyleParser = function() {
     return {
-      ParseStyle(ctx, s) {
+      ParseStyle(ctx, s, obj, attr) {
+        if (obj[attr]) {
+          return obj[attr];
+        }
         if (s == void 0) {
-          return "black";
+          obj[attr] = "black";
+          return obj[attr];
         }
         const params = s.split(";");
         const len = params.length;
         if (len === 1) {
+          obj[attr] = s;
           return s;
         }
         let grd;
@@ -172,6 +177,7 @@
           const colorValuePair = params[i].split("=");
           grd.addColorStop(parseFloat(colorValuePair[1]), colorValuePair[0]);
         }
+        obj[attr] = grd;
         return grd;
       }
     };
@@ -362,7 +368,7 @@
       buffer.canvas.width = this._width;
       buffer.canvas.height = this._height;
       buffer.beginPath();
-      buffer.fillStyle = StyleParser.ParseStyle(buffer, scene.background);
+      buffer.fillStyle = StyleParser.ParseStyle(buffer, scene.background, scene, "_bgCache");
       buffer.fillRect(0, 0, this._width, this._height);
       buffer.save();
       buffer.translate(-cam.position.x * cam.scale + this._width / 2, -cam.position.y * cam.scale + this._height / 2);
@@ -603,7 +609,7 @@
     StopScaling() {
       this._scaling = null;
     }
-    MoveAndScaleTo(p, s, dur, timing = "linear") {
+    MoveAndScale(p, s, dur, timing = "linear") {
       this.MoveTo(p, dur, timing);
       this.ScaleTo(s, dur, timing);
     }
@@ -668,7 +674,7 @@
 
   // src/core/component.js
   var Component = class {
-    constructor() {
+    constructor(params) {
       this._type = "";
       this._parent = null;
       this._position = new Position();
@@ -1788,11 +1794,19 @@
   });
   var AmbientLight = class {
     constructor(params) {
-      this.color = ParamParser.ParseValue(params.color, "white");
+      this._color = ParamParser.ParseValue(params.color, "white");
+      this._colorCache = null;
+    }
+    get color() {
+      return this._color;
+    }
+    set color(col) {
+      this._color = col;
+      this._colorCache = null;
     }
     Draw(ctx) {
       ctx.beginPath();
-      ctx.fillStyle = StyleParser.ParseStyle(ctx, this.color);
+      ctx.fillStyle = StyleParser.ParseStyle(ctx, this.color, this, "_colorCache");
       ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     }
   };
@@ -1800,17 +1814,25 @@
     constructor(params) {
       super();
       this._type = "light";
-      this.color = ParamParser.ParseValue(params.color, "white");
+      this._color = ParamParser.ParseValue(params.color, "white");
       this.radius = ParamParser.ParseValue(params.radius, 100);
       this.angle = 0;
       this.angleRange = ParamParser.ParseValue(params.angleRange, Math.PI * 2);
+      this._colorCache = null;
+    }
+    get color() {
+      return this._color;
+    }
+    set color(col) {
+      this._color = col;
+      this._colorCache = null;
     }
     Draw(ctx) {
       ctx.beginPath();
       ctx.save();
       ctx.translate(this.position.x, this.position.y);
       ctx.rotate(this.angle);
-      ctx.fillStyle = StyleParser.ParseStyle(ctx, this.color);
+      ctx.fillStyle = StyleParser.ParseStyle(ctx, this.color, this, "_colorCache");
       ctx.arc(0, 0, this.radius, -this.angleRange / 2, this.angleRange / 2);
       ctx.lineTo(0, 0);
       ctx.closePath();
@@ -1822,7 +1844,8 @@
   // src/core/scene.js
   var Scene = class {
     constructor(params) {
-      this.background = params.background;
+      this._background = params.background;
+      this._bgCache = null;
       this._world = new World(params.physics);
       this.paused = true;
       this.speed = 1;
@@ -1842,6 +1865,13 @@
     }
     set light(color) {
       this._ambientLight.color = color;
+    }
+    get background() {
+      return this._background;
+    }
+    set background(col) {
+      this._background = col;
+      this._bgCache = null;
     }
     CreateEntity(n) {
       const e = new Entity();
@@ -2263,12 +2293,14 @@
       this.opacity = this._params.opacity !== void 0 ? this._params.opacity : 1;
       this.filter = this._params.filter || "";
       this._angle = this._params.angle || this._rotationCount * Math.PI / 2 || 0;
-      this.fillStyle = this._params.fillStyle || "black";
-      this.strokeStyle = this._params.strokeStyle || "black";
+      this._fillStyle = this._params.fillStyle || "black";
+      this._strokeStyle = this._params.strokeStyle || "black";
       this.strokeWidth = this._params.strokeWidth || 0;
       this.mode = this._params.mode || "source-over";
       this._offset = new Vector();
       this._shaking = null;
+      this._fillStyleCache = null;
+      this._strokeStyleCache = null;
     }
     get zIndex() {
       return this._zIndex;
@@ -2312,6 +2344,20 @@
     }
     set scale(num) {
       this._scale = num;
+    }
+    get fillStyle() {
+      return this._fillStyle;
+    }
+    set fillStyle(col) {
+      this._fillStyle = col;
+      this._fillStyleCache = null;
+    }
+    get strokeStyle() {
+      return this._strokeStyle;
+    }
+    set strokeStyle(col) {
+      this._strokeStyle = col;
+      this._strokeStyleCache = null;
     }
     get boundingBox() {
       const verts = this._vertices;
@@ -2383,8 +2429,8 @@
       ctx.translate(this.position0.x, this.position0.y);
       ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
       ctx.rotate(this.angle);
-      ctx.fillStyle = StyleParser.ParseStyle(ctx, this.fillStyle);
-      ctx.strokeStyle = StyleParser.ParseStyle(ctx, this.strokeStyle);
+      ctx.fillStyle = StyleParser.ParseStyle(ctx, this.fillStyle, this, "_fillStyleCache");
+      ctx.strokeStyle = StyleParser.ParseStyle(ctx, this.strokeStyle, this, "_strokeStyleCache");
       ctx.lineWidth = this.strokeWidth;
       this.Draw(ctx);
       ctx.restore();

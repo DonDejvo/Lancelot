@@ -1,12 +1,18 @@
 export const StyleParser = (function() {
     return {
-        ParseStyle(ctx, s) {
+        ParseStyle(ctx, s, obj, attr) {
+            if(obj[attr]) {
+                return obj[attr];
+            }
+            
             if(s == undefined) {
-                return "black";
+                obj[attr] = "black";
+                return obj[attr];
             }
             const params = s.split(";");
             const len = params.length;
             if(len === 1) {
+                obj[attr] = s;
                 return s;
             }
             let grd;
@@ -25,6 +31,7 @@ export const StyleParser = (function() {
                 const colorValuePair = params[i].split("=");
                 grd.addColorStop(parseFloat(colorValuePair[1]), colorValuePair[0]);
             }
+            obj[attr] = grd;
             return grd;
         }
     }

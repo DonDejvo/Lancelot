@@ -12,7 +12,7 @@ GetComponent(name: string)
 */
 
 export class Component {
-    constructor() {
+    constructor(params) {
         this._type = "";
         this._parent = null;
         this._position = new Position();

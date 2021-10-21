@@ -113,8 +113,8 @@
                 entity.groupList.add("e02");
                 entity.position.Set(x, y);
 
-                let box;
-                entity.AddComponent(box = new Lancelot.drawable.Circle({
+                let circle;
+                entity.AddComponent(circle = new Lancelot.drawable.Circle({
                     radius: 60,
                     fillStyle: "cyan"
                 }));
@@ -152,16 +152,57 @@
             }
 
             const ray = createEntity01();
-            ray.AddComponent(new Lancelot.light.RadialLight({
-                color: "radial;0,0,0,0,0,250;white=0;rgba(255,255,255,0)=1",
+            let light1, light2, light3;
+            let col1, col2, col3;
+            let isBlack1 = false,
+            isBlack2 = false,
+            isBlack3 = false;
+            col1 = "radial;0,0,0,0,0,200;rgb(255,0,255)=0;rgba(55,55,55,0)=1";
+            col2 = "radial;0,0,0,0,0,200;rgb(0,255,255)=0;rgba(55,55,55,0)=1";
+            col3 = "radial;0,0,0,0,0,200;rgb(255,255,255)=0;rgba(55,55,55,0)=1";
+            ray.AddComponent(light1 = new Lancelot.light.RadialLight({
+                color: col1,
                 radius: 250
-            }));
+            }), "Light1");
+            light1.offset.Set(95, 75);
+            ray.AddComponent(light2 = new Lancelot.light.RadialLight({
+                color: col2,
+                radius: 250
+            }), "Light2");
+            light2.offset.Set(0, -75);
+            ray.AddComponent(light3 = new Lancelot.light.RadialLight({
+                color: col3,
+                radius: 250
+            }), "Light3");
+            light3.offset.Set(-95, 75);
 
-            createEntity04(200, 0, 0.7, 5);
+            let e1 = createEntity04(200, 0, 0.7, 5);
             createEntity04(100, 200, 0.1, 3);
-            createEntity03(-100, 150);
-            createEntity02(-250, -100, 0.3);
-            createEntity02(0, -200, 1.4);
+            let e3 = createEntity03(-100, 150);
+            createEntity02(-200, -75, 0.3);
+            let e2 = createEntity02(0, -150, 1.4);
+
+            scene.SetInteractive(e1);
+            scene.SetInteractive(e2);
+            scene.SetInteractive(e3);
+
+            e1.interactive.AddEventHandler("mousedown", () => {
+                light1.color = isBlack1 ? col1 : "black";
+                isBlack1 = !isBlack1;
+            });
+            e2.interactive.AddEventHandler("mousedown", () => {
+                light2.color = isBlack2 ? col2 : "black";
+                isBlack2 = !isBlack2;
+            });
+            e3.interactive.AddEventHandler("mousedown", () => {
+                light3.color = isBlack3 ? col3 : "black";
+                isBlack3 = !isBlack3;
+            });
+
+            scene.AddEventHandler("keydown", (e) => {
+                console.log(e.key);
+            });
+
         }
         
     </script>

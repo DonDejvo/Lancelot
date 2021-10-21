@@ -111,7 +111,7 @@ export class Renderer {
         buffer.canvas.height = this._height;
 
         buffer.beginPath();
-        buffer.fillStyle = StyleParser.ParseStyle(buffer, scene.background);
+        buffer.fillStyle = StyleParser.ParseStyle(buffer, scene.background, scene, "_bgCache");
         buffer.fillRect(0, 0, this._width, this._height);
 
         buffer.save();
