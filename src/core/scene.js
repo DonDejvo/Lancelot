@@ -28,6 +28,8 @@ export class Scene {
             color: (params.light || "white")
         });
 
+        this._keys = new Set();
+
         // this._bodies = [];
         this._drawable = [];
         this._interactiveEntities = [];
@@ -51,6 +53,9 @@ export class Scene {
     set background(col) {
         this._background = col;
         this._bgCache = null;
+    }
+    IsPressed(k) {
+        return this._keys.has(k);
     }
     CreateEntity(n) {
         const e = new Entity();
@@ -107,6 +112,10 @@ export class Scene {
                     }
                 }
             }
+        } else if(type == "keydown") {
+            this._keys.add(event.key);
+        } else if(type == "keyup") {
+            this._keys.delete(event.key);
         }
     }
     GetEntityByName(n) {

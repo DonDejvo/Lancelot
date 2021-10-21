@@ -21,7 +21,6 @@
                 if(this.parent.body.collisions.all.size == 0) {
                     line.range = 500;
                 }
-                
             }
         }
 
@@ -197,10 +196,6 @@
             e3.interactive.AddEventHandler("mousedown", () => {
                 light3.color = isBlack3 ? col3 : "black";
                 isBlack3 = !isBlack3;
-            });
-
-            scene.AddEventHandler("keydown", (e) => {
-                console.log(e.key);
             });
 
         }
