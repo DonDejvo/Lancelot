@@ -3,7 +3,15 @@ export class TimeoutHandler {
         this._timeouts = [];
     }
     Set(f, dur) {
-        this._timeouts.push({ action: f, dur: dur, counter: 0 });
+        const t = { action: f, dur: dur, counter: 0 };
+        this._timeouts.push(t);
+        return t;
+    }
+    Clear(t) {
+        let idx = this._timeouts.indexOf(t);
+        if(idx != -1) {
+            this._timeouts.splice(idx, 1);
+        }
     }
     Update(elapsedTime) {
         for(let i = 0; i < this._timeouts.length; ++i) {

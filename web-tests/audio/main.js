@@ -1,4 +1,4 @@
-import defaultExport from "https://cdn.jsdelivr.net/gh/DonDejvo/Lancelot/dist/lancelot-cdn-module.js";
+import defaultExport from "../src/Lancelot.js";
 
         const game = new Lancelot.Game({
             width: 640,
@@ -29,18 +29,18 @@ import defaultExport from "https://cdn.jsdelivr.net/gh/DonDejvo/Lancelot/dist/la
             </div>
             `;
             this.ShowSection("controls");
-            this.audio.AddMusic("test-audio");
-            this.audio.AddEffect("test-effect");
             document.getElementById("music-volume").addEventListener("input", function() {
-                game.audio.music.volume = parseFloat(this.value);
+                game.audio.SetVolume("music", parseFloat(this.value));
             });
             document.getElementById("music-volume").addEventListener("change", function() {
-                game.audio.music.Play("test-audio");
+                game.audio.Play("music", "test-audio");
             });
             document.getElementById("effects-volume").addEventListener("input", function() {
-                game.audio.effects.volume = parseFloat(this.value);
+                game.audio.SetVolume("effects", parseFloat(this.value));
             });
             document.getElementById("effects-volume").addEventListener("change", function() {
-                game.audio.effects.PlayClone("test-effect");
+                game.audio.Play("effects" ,"test-effect", {
+                    primary: false
+                });
             });
         }

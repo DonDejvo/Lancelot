@@ -47,6 +47,7 @@ var AudioSection = class {
     this._playing = false;
     this._audioMap = new Map();
     this._current = null;
+    this._secondary = [];
   }
   get volume() {
     return this._volume;
@@ -57,32 +58,46 @@ var AudioSection = class {
     this._audioMap.forEach((audio) => {
       audio.volume = this._volume;
     });
+    for (let audio of this._secondary) {
+      audio.volume = this._volume;
+    }
   }
   get playing() {
     return this._current ? !this._current.paused : false;
   }
-  AddAudio(n, audio, loop = false) {
-    audio.loop = loop;
+  AddAudio(n, audio) {
     audio.volume = this._volume;
     this._audioMap.set(n, audio);
   }
-  Play(n, fromStart = false) {
+  Play(n, params) {
     if (this._current) {
       this._current.pause();
     }
     const audio = this._audioMap.get(n);
     if (audio) {
-      this._current = audio;
-      if (fromStart) {
-        this._current.currentTime = 0;
+      if (params.primary === void 0 || params.primary == true) {
+        this._current = audio;
+        if (params.time !== void 0) {
+          this._current.currentTime = math.sat(params.time) * this._current.duration;
+        }
+        this._current.loop = params.loop || false;
+        this._current.play();
+      } else {
+        this.PlaySecondary(n);
       }
-      this._current.play();
     }
   }
-  PlayClone(n) {
+  PlaySecondary(n) {
     const audio = this._audioMap.get(n);
     if (audio) {
       const audioClone = audio.cloneNode(true);
+      this._secondary.push(audioClone);
+      audioClone.addEventListener("ended", () => {
+        let idx = this._secondary.indexOf(audioClone);
+        if (idx != -1) {
+          this._secondary.splice(idx, 1);
+        }
+      });
       audioClone.volume = this._volume;
       audioClone.play();
     }
@@ -100,14 +115,22 @@ var TimeoutHandler = class {
     this._timeouts = [];
   }
   Set(f, dur) {
-    this._timeouts.push({ action: f, dur, counter: 0 });
+    const t = { action: f, dur, counter: 0 };
+    this._timeouts.push(t);
+    return t;
+  }
+  Clear(t) {
+    let idx = this._timeouts.indexOf(t);
+    if (idx != -1) {
+      this._timeouts.splice(idx, 1);
+    }
   }
   Update(elapsedTime) {
-    for (let i = 0; i < this._timeouts.length; ++i) {
-      const timeout = this._timeouts[i];
+    for (let i2 = 0; i2 < this._timeouts.length; ++i2) {
+      const timeout = this._timeouts[i2];
       if ((timeout.counter += elapsedTime) >= timeout.dur) {
         timeout.action();
-        this._timeouts.splice(i--, 1);
+        this._timeouts.splice(i2--, 1);
       }
     }
   }
@@ -146,37 +169,31 @@ var Engine = class {
 // src/core/utils/style-parser.js
 var StyleParser = function() {
   return {
-    ParseStyle(ctx, s, obj, attr) {
-      if (obj[attr]) {
-        return obj[attr];
-      }
+    ParseColor(ctx, s) {
       if (s == void 0) {
-        obj[attr] = "black";
-        return obj[attr];
+        return "black";
       }
       const params = s.split(";");
       const len = params.length;
       if (len === 1) {
-        obj[attr] = s;
         return s;
       }
       let grd;
       const values = params[1].split(",").map((s2) => parseFloat(s2));
       switch (params[0]) {
-        case "linear":
+        case "linear-gradient":
           grd = ctx.createLinearGradient(...values);
           break;
-        case "radial":
+        case "radial-gradient":
           grd = ctx.createRadialGradient(...values);
           break;
         default:
           return "black";
       }
-      for (let i = 2; i < len; ++i) {
-        const colorValuePair = params[i].split("=");
+      for (let i2 = 2; i2 < len; ++i2) {
+        const colorValuePair = params[i2].split("=");
         grd.addColorStop(parseFloat(colorValuePair[1]), colorValuePair[0]);
       }
-      obj[attr] = grd;
       return grd;
     }
   };
@@ -351,40 +368,7 @@ var Renderer = class {
     const ctx = this._context;
     if (!scene)
       return;
-    ctx.globalCompositeOperation = "source-over";
-    scene._ambientLight.Draw(ctx);
-    const cam = scene.camera;
-    ctx.globalCompositeOperation = "lighter";
-    ctx.save();
-    ctx.translate(-cam.position.x * cam.scale + this._width / 2, -cam.position.y * cam.scale + this._height / 2);
-    ctx.scale(cam.scale, cam.scale);
-    for (let light of scene._lights) {
-      light.Draw(ctx);
-    }
-    ctx.restore();
-    ctx.globalCompositeOperation = "multiply";
-    const buffer = document.createElement("canvas").getContext("2d");
-    buffer.canvas.width = this._width;
-    buffer.canvas.height = this._height;
-    buffer.beginPath();
-    buffer.fillStyle = StyleParser.ParseStyle(buffer, scene.background, scene, "_bgCache");
-    buffer.fillRect(0, 0, this._width, this._height);
-    buffer.save();
-    buffer.translate(-cam.position.x * cam.scale + this._width / 2, -cam.position.y * cam.scale + this._height / 2);
-    buffer.scale(cam.scale, cam.scale);
-    for (let elem of scene._drawable) {
-      const boundingBox = elem.boundingBox;
-      const pos = new Vector(boundingBox.x, boundingBox.y);
-      pos.Sub(cam.position);
-      pos.Mult(cam.scale);
-      const [width, height] = [boundingBox.width, boundingBox.height].map((_) => _ * cam.scale);
-      if (pos.x + width / 2 < -this._width / 2 || pos.x - width / 2 > this._width / 2 || pos.y + height / 2 < -this._height / 2 || pos.y - height / 2 > this._height / 2) {
-        continue;
-      }
-      elem.Draw0(buffer);
-    }
-    buffer.restore();
-    ctx.drawImage(buffer.canvas, 0, 0);
+    scene._Draw(ctx, this._width, this._height);
   }
   DisplayToSceneCoords(scene, x, y) {
     const boundingRect = this.dimension;
@@ -401,24 +385,35 @@ var Renderer = class {
 // src/core/scene-manager.js
 var SceneManager = class {
   constructor() {
-    this._currentScene = null;
-    this._scenes = new Map();
+    this._scenes = [];
+    this._scenesMap = new Map();
   }
-  get currentScene() {
-    return this._currentScene;
+  Add(s, n, p = 0) {
+    s._priority = p;
+    this._scenesMap.set(n, s);
+    let idx = this._scenes.indexOf(s);
+    if (idx != -1) {
+      this._scenes.splice(idx, i);
+    }
+    this._scenes.push(s);
+    for (let i2 = this._scenes.length - 1; i2 > 0; --i2) {
+      if (this._scenes[i2]._priority > this._scenes[i2 - 1]._priority) {
+        break;
+      }
+      [this._scenes[i2], this._scenes[i2 - 1]] = [this._scenes[i2 - 1], this._scenes[i2]];
+    }
+    return s;
   }
-  set currentScene(n) {
-    this._currentScene = this._scenes.get(n) || null;
-  }
-  Add(s, n) {
-    this._scenes.set(n, s);
+  Get(n) {
+    return this._scenesMap.get(n) || null;
   }
   Play(n) {
-    this.currentScene = n;
-    if (this._currentScene) {
-      this._currentScene.Play();
+    const s = this._scenesMap.get(n);
+    if (!s) {
+      return null;
     }
-    return this._currentScene;
+    s.paused = false;
+    return s;
   }
 };
 
@@ -446,11 +441,11 @@ var EntityManager = class {
     return this._entitiesMap.get(n);
   }
   Remove(e) {
-    const i = this._entities.indexOf(e);
-    if (i < 0) {
+    const i2 = this._entities.indexOf(e);
+    if (i2 < 0) {
       return;
     }
-    this._entities.splice(i, 1);
+    this._entities.splice(i2, 1);
   }
   Filter(cb) {
     return this._entities.filter(cb);
@@ -480,9 +475,9 @@ var Position = class {
     p._offset.Copy(p.position.Clone().Sub(this.position));
   }
   Unclip(e) {
-    const i = this._attached.indexOf(e);
-    if (i != -1) {
-      this._attached.splice(i, 1);
+    const i2 = this._attached.indexOf(e);
+    if (i2 != -1) {
+      this._attached.splice(i2, 1);
       e._parent = null;
     }
   }
@@ -718,14 +713,14 @@ var Interactive = class extends Component {
     this._capture = params.capture === void 0 ? false : params.capture;
     this._eventHandlers = new Map();
   }
-  AddEventHandler(type, handler) {
+  On(type, handler) {
     if (!this._eventHandlers.has(type)) {
       this._eventHandlers.set(type, []);
     }
     const handlers = this._eventHandlers.get(type);
     handlers.push(handler);
   }
-  RemoveEventHandler(type, handler) {
+  Off(type, handler) {
     if (!this._eventHandlers.has(type)) {
       return;
     }
@@ -975,11 +970,11 @@ var QuadTree = class {
     this.topRight = new QuadTree([[bounds[0][0] + w / 2, bounds[0][1]], [bounds[0][0] + w, bounds[0][1] + h / 2]], this.limit);
     this.bottomLeft = new QuadTree([[bounds[0][0], bounds[0][1] + h / 2], [bounds[0][0] + w / 2, bounds[0][1] + h]], this.limit);
     this.bottomRight = new QuadTree([[bounds[0][0] + w / 2, bounds[0][1] + h / 2], [bounds[0][0] + w, bounds[0][1] + h]], this.limit);
-    for (let i = 0; i < this.data.length; i++) {
-      this.topLeft._Insert(this.data[i]);
-      this.topRight._Insert(this.data[i]);
-      this.bottomLeft._Insert(this.data[i]);
-      this.bottomRight._Insert(this.data[i]);
+    for (let i2 = 0; i2 < this.data.length; i2++) {
+      this.topLeft._Insert(this.data[i2]);
+      this.topRight._Insert(this.data[i2]);
+      this.bottomLeft._Insert(this.data[i2]);
+      this.bottomRight._Insert(this.data[i2]);
     }
     this.divided = true;
   }
@@ -1005,9 +1000,9 @@ var QuadTree = class {
     if (!aabb._vsAabb(this.aabb))
       return;
     if (!this.divided) {
-      for (let i = 0; i < this.data.length; i++) {
-        if (aabb._vsAabb(this.data[i])) {
-          _res.add(this.data[i]);
+      for (let i2 = 0; i2 < this.data.length; i2++) {
+        if (aabb._vsAabb(this.data[i2])) {
+          _res.add(this.data[i2]);
         }
       }
     } else {
@@ -1092,7 +1087,7 @@ var QuadtreeController = class extends Component {
 // src/core/physics/physics.js
 var World = class {
   constructor(params = {}) {
-    this._relaxationCount = ParamParser.ParseValue(params.relaxationCount, 5);
+    this._relaxationCount = ParamParser.ParseValue(params.iterations, 5);
     this._bounds = ParamParser.ParseValue(params.bounds, [[-1e3, -1e3], [1e3, 1e3]]);
     this._cellDimensions = ParamParser.ParseObject(params.cellDimensions, { width: 100, height: 100 });
     this._limit = ParamParser.ParseValue(params.limit, 10);
@@ -1118,9 +1113,9 @@ var World = class {
     this._bodies.push(b);
   }
   _RemoveBody(e, b) {
-    const i = this._bodies.indexOf(b);
-    if (i != -1) {
-      this._bodies.splice(i, 1);
+    const i2 = this._bodies.indexOf(b);
+    if (i2 != -1) {
+      this._bodies.splice(i2, 1);
     }
   }
   Update(elapsedTimeS) {
@@ -1137,7 +1132,7 @@ var World = class {
     for (let joint of this._joints) {
       joint.Update(elapsedTimeS);
     }
-    for (let i = 0; i < this._relaxationCount; ++i) {
+    for (let i2 = 0; i2 < this._relaxationCount; ++i2) {
       for (let body of this._bodies) {
         body.HandleBehavior();
       }
@@ -1294,8 +1289,8 @@ var Poly = class extends Body {
   }
   GetComputedVertices() {
     const verts = this.GetVertices();
-    for (let i = 0; i < verts.length; ++i) {
-      const v = verts[i];
+    for (let i2 = 0; i2 < verts.length; ++i2) {
+      const v = verts[i2];
       v.Rotate(this.angle);
       v.Add(this.position);
     }
@@ -1305,12 +1300,12 @@ var Poly = class extends Body {
     const verts = this.GetVertices();
     let maxDist = 0;
     let idx = 0;
-    for (let i = 0; i < verts.length; ++i) {
-      const v = verts[i];
+    for (let i2 = 0; i2 < verts.length; ++i2) {
+      const v = verts[i2];
       const dist = v.Mag();
       if (dist > maxDist) {
         maxDist = dist;
-        idx = i;
+        idx = i2;
       }
     }
     const d = maxDist * 2;
@@ -1321,22 +1316,22 @@ var Poly = class extends Body {
   }
   static GetFaceNormals(vertices) {
     let normals = [];
-    for (let i = 0; i < vertices.length; i++) {
-      let v1 = vertices[i].Clone();
-      let v2 = vertices[(i + 1) % vertices.length].Clone();
-      normals[i] = v2.Clone().Sub(v1).Norm().Unit();
+    for (let i2 = 0; i2 < vertices.length; i2++) {
+      let v1 = vertices[i2].Clone();
+      let v2 = vertices[(i2 + 1) % vertices.length].Clone();
+      normals[i2] = v2.Clone().Sub(v1).Norm().Unit();
     }
     return normals;
   }
   static FindSupportPoint(vertices, n, ptOnEdge) {
     let max = -Infinity;
     let index = -1;
-    for (let i = 0; i < vertices.length; i++) {
-      let v = vertices[i].Clone().Sub(ptOnEdge);
+    for (let i2 = 0; i2 < vertices.length; i2++) {
+      let v = vertices[i2].Clone().Sub(ptOnEdge);
       let proj = Vector.Dot(v, n);
       if (proj > 0 && proj > max) {
         max = proj;
-        index = i;
+        index = i2;
       }
     }
     return { sp: vertices[index], depth: max };
@@ -1345,9 +1340,9 @@ var Poly = class extends Body {
     const verts = this.GetComputedVertices();
     const vertsLen = verts.length;
     let count = 0;
-    for (let i = 0; i < vertsLen; ++i) {
-      const v1 = verts[i];
-      const v2 = verts[(i + 1) % vertsLen];
+    for (let i2 = 0; i2 < vertsLen; ++i2) {
+      const v1 = verts[i2];
+      const v2 = verts[(i2 + 1) % vertsLen];
       if ((p.y - v1.y) * (p.y - v2.y) <= 0 && (p.x <= v1.x || p.x <= v2.x) && (v1.x >= p.x && v2.x >= p.x || (v2.x - v1.x) * (p.y - v1.y) / (v2.y - v1.y) >= p.x - v1.x)) {
         ++count;
       }
@@ -1397,12 +1392,12 @@ var Ball = class extends Body {
     circVerts[1] = this.position.Clone().Add(n.Clone().Mult(-this.radius));
     let max = -Infinity;
     let index = -1;
-    for (let i = 0; i < circVerts.length; i++) {
-      let v = circVerts[i].Clone().Sub(ptOnEdge);
+    for (let i2 = 0; i2 < circVerts.length; i2++) {
+      let v = circVerts[i2].Clone().Sub(ptOnEdge);
       let proj = Vector.Dot(v, n);
       if (proj > 0 && proj > max) {
         max = proj;
-        index = i;
+        index = i2;
       }
     }
     return { sp: circVerts[index], depth: max, n };
@@ -1410,11 +1405,11 @@ var Ball = class extends Body {
   FindNearestVertex(vertices) {
     let dist = Infinity;
     let index = 0;
-    for (let i = 0; i < vertices.length; i++) {
-      let l = Vector.Dist(vertices[i], this.position);
+    for (let i2 = 0; i2 < vertices.length; i2++) {
+      let l = Vector.Dist(vertices[i2], this.position);
       if (l < dist) {
         dist = l;
-        index = i;
+        index = i2;
       }
     }
     return vertices[index];
@@ -1429,8 +1424,8 @@ var RegularPolygon = class extends Poly {
     this._radius = params.radius;
     this._sides = params.sides;
     const points = [];
-    for (let i = 0; i < this._sides; ++i) {
-      const angle = Math.PI * 2 / this._sides * i;
+    for (let i2 = 0; i2 < this._sides; ++i2) {
+      const angle = Math.PI * 2 / this._sides * i2;
       points.push([Math.cos(angle) * this._radius, Math.sin(angle) * this._radius]);
     }
     this._points = points;
@@ -1507,9 +1502,9 @@ var DetectCollisionRayVsPoly = (ray, b) => {
   let minDist = Infinity;
   let point = null;
   const vertices = b.GetComputedVertices();
-  for (let i = 0; i < vertices.length; ++i) {
-    const v1 = vertices[i];
-    const v2 = vertices[(i + 1) % vertices.length];
+  for (let i2 = 0; i2 < vertices.length; ++i2) {
+    const v1 = vertices[i2];
+    const v2 = vertices[(i2 + 1) % vertices.length];
     const info = DetectCollisionLineVsLine(ray.position, rayPoint, v1, v2);
     if (info.collide) {
       const dist = Vector.Dist(ray.position, info.point);
@@ -1586,28 +1581,28 @@ var DetectCollisionPolyVsPoly = (b1, b2) => {
   const normals1 = Poly.GetFaceNormals(verts1);
   const normals2 = Poly.GetFaceNormals(verts2);
   let e1SupportPoints = [];
-  for (let i = 0; i < normals1.length; i++) {
-    let spInfo = Poly.FindSupportPoint(verts2, normals1[i].Clone().Mult(-1), verts1[i]);
-    spInfo.n = normals1[i].Clone();
-    e1SupportPoints[i] = spInfo;
+  for (let i2 = 0; i2 < normals1.length; i2++) {
+    let spInfo = Poly.FindSupportPoint(verts2, normals1[i2].Clone().Mult(-1), verts1[i2]);
+    spInfo.n = normals1[i2].Clone();
+    e1SupportPoints[i2] = spInfo;
     if (spInfo.sp == void 0)
       return { collide: false };
   }
   let e2SupportPoints = [];
-  for (let i = 0; i < normals2.length; i++) {
-    let spInfo = Poly.FindSupportPoint(verts1, normals2[i].Clone().Mult(-1), verts2[i]);
-    spInfo.n = normals2[i].Clone();
-    e2SupportPoints[i] = spInfo;
+  for (let i2 = 0; i2 < normals2.length; i2++) {
+    let spInfo = Poly.FindSupportPoint(verts1, normals2[i2].Clone().Mult(-1), verts2[i2]);
+    spInfo.n = normals2[i2].Clone();
+    e2SupportPoints[i2] = spInfo;
     if (spInfo.sp == void 0)
       return { collide: false };
   }
   e1SupportPoints = e1SupportPoints.concat(e2SupportPoints);
   let max = Infinity;
   let index = 0;
-  for (let i = 0; i < e1SupportPoints.length; i++) {
-    if (e1SupportPoints[i].depth < max) {
-      max = e1SupportPoints[i].depth;
-      index = i;
+  for (let i2 = 0; i2 < e1SupportPoints.length; i2++) {
+    if (e1SupportPoints[i2].depth < max) {
+      max = e1SupportPoints[i2].depth;
+      index = i2;
     }
   }
   let v = b2.position.Clone().Sub(b1.position);
@@ -1627,11 +1622,11 @@ var DetectCollisionBallVsPoly = (b1, b2) => {
   const verts = b2.GetComputedVertices();
   const normals = Poly.GetFaceNormals(verts);
   let e1SupportPoints = [];
-  for (let i = 0; i < normals.length; i++) {
-    let info2 = b1.FindSupportPoint(normals[i].Clone().Mult(-1), verts[i].Clone());
+  for (let i2 = 0; i2 < normals.length; i2++) {
+    let info2 = b1.FindSupportPoint(normals[i2].Clone().Mult(-1), verts[i2].Clone());
     if (info2.sp == void 0)
       return { collide: false };
-    e1SupportPoints[i] = info2;
+    e1SupportPoints[i2] = info2;
   }
   let nearestVertex = b1.FindNearestVertex(verts);
   let normal = nearestVertex.Clone().Sub(b1.position).Unit();
@@ -1642,10 +1637,10 @@ var DetectCollisionBallVsPoly = (b1, b2) => {
   e1SupportPoints.push(info);
   let max = Infinity;
   let index = null;
-  for (let i = 0; i < e1SupportPoints.length; i++) {
-    if (e1SupportPoints[i].depth < max) {
-      max = e1SupportPoints[i].depth;
-      index = i;
+  for (let i2 = 0; i2 < e1SupportPoints.length; i2++) {
+    if (e1SupportPoints[i2].depth < max) {
+      max = e1SupportPoints[i2].depth;
+      index = i2;
     }
   }
   let v = b2.position.Clone().Sub(b1.position);
@@ -1794,18 +1789,16 @@ __export(light_exports, {
 var AmbientLight = class {
   constructor(params) {
     this._color = ParamParser.ParseValue(params.color, "white");
-    this._colorCache = null;
   }
   get color() {
     return this._color;
   }
   set color(col) {
     this._color = col;
-    this._colorCache = null;
   }
   Draw(ctx) {
     ctx.beginPath();
-    ctx.fillStyle = StyleParser.ParseStyle(ctx, this.color, this, "_colorCache");
+    ctx.fillStyle = StyleParser.ParseColor(ctx, this.color);
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   }
 };
@@ -1817,21 +1810,19 @@ var RadialLight = class extends Component {
     this.radius = ParamParser.ParseValue(params.radius, 100);
     this.angle = 0;
     this.angleRange = ParamParser.ParseValue(params.angleRange, Math.PI * 2);
-    this._colorCache = null;
   }
   get color() {
     return this._color;
   }
   set color(col) {
     this._color = col;
-    this._colorCache = null;
   }
   Draw(ctx) {
     ctx.beginPath();
     ctx.save();
     ctx.translate(this.position.x, this.position.y);
     ctx.rotate(this.angle);
-    ctx.fillStyle = StyleParser.ParseStyle(ctx, this.color, this, "_colorCache");
+    ctx.fillStyle = StyleParser.ParseColor(ctx, this.color);
     ctx.arc(0, 0, this.radius, -this.angleRange / 2, this.angleRange / 2);
     ctx.lineTo(0, 0);
     ctx.closePath();
@@ -1844,7 +1835,6 @@ var RadialLight = class extends Component {
 var Scene = class {
   constructor(params) {
     this._background = params.background;
-    this._bgCache = null;
     this._world = new World(params.physics);
     this.paused = true;
     this.speed = 1;
@@ -1871,7 +1861,6 @@ var Scene = class {
   }
   set background(col) {
     this._background = col;
-    this._bgCache = null;
   }
   IsPressed(k) {
     return this._keys.has(k);
@@ -1881,14 +1870,14 @@ var Scene = class {
     this.AddEntity(e, n);
     return e;
   }
-  AddEventHandler(type, handler) {
+  On(type, handler) {
     if (!this._eventHandlers.has(type)) {
       this._eventHandlers.set(type, []);
     }
     const handlers = this._eventHandlers.get(type);
     handlers.push(handler);
   }
-  RemoveEventHandler(type, handler) {
+  Off(type, handler) {
     if (!this._eventHandlers.has(type)) {
       return;
     }
@@ -1905,6 +1894,10 @@ var Scene = class {
     entity.interactive = interactive;
   }
   _On(type, event) {
+    if (this.paused) {
+      return false;
+    }
+    let result = false;
     if (this._eventHandlers.has(type)) {
       const handlers = this._eventHandlers.get(type);
       for (let handler of handlers) {
@@ -1921,13 +1914,16 @@ var Scene = class {
           e.interactive._On(type, event);
           e.interactive._id = event.id;
           if (e.interactive._capture) {
-            break;
+            result = true;
           }
         }
       }
     } else if (type == "mousemove" || type == "mouseup") {
       for (let e of this._interactiveEntities) {
         if (e.interactive._id == event.id) {
+          if (e.interactive._capture) {
+            result = true;
+          }
           e.interactive._On(type, event);
           if (type == "mouseup") {
             e.interactive._id = -1;
@@ -1939,6 +1935,7 @@ var Scene = class {
     } else if (type == "keyup") {
       this._keys.delete(event.key);
     }
+    return result;
   }
   GetEntityByName(n) {
     return this._entityManager.Get(n);
@@ -1965,17 +1962,17 @@ var Scene = class {
   }
   _AddDrawable(c) {
     this._drawable.push(c);
-    for (let i = this._drawable.length - 1; i > 0; --i) {
-      if (c._zIndex >= this._drawable[i - 1]._zIndex) {
+    for (let i2 = this._drawable.length - 1; i2 > 0; --i2) {
+      if (c._zIndex >= this._drawable[i2 - 1]._zIndex) {
         break;
       }
-      [this._drawable[i], this._drawable[i - 1]] = [this._drawable[i - 1], this._drawable[i]];
+      [this._drawable[i2], this._drawable[i2 - 1]] = [this._drawable[i2 - 1], this._drawable[i2]];
     }
   }
   _RemoveDrawable(c) {
-    const i = this._drawable.indexOf(c);
-    if (i != -1) {
-      this._drawable.splice(i, 1);
+    const i2 = this._drawable.indexOf(c);
+    if (i2 != -1) {
+      this._drawable.splice(i2, 1);
     }
   }
   _AddBody(e, b) {
@@ -1994,7 +1991,7 @@ var Scene = class {
     for (let body of this._bodies) {
       body.UpdatePosition(elapsedTimeS);
     }
-    for (let i = 0; i < this._relaxationCount; ++i) {
+    for (let i2 = 0; i2 < this._relaxationCount; ++i2) {
       for (let body of this._bodies) {
         body.HandleBehavior();
       }
@@ -2005,7 +2002,6 @@ var Scene = class {
       return;
     }
     this.timeout.Update(elapsedTimeS * 1e3);
-    elapsedTimeS *= this.speed;
     this._entityManager.Update(elapsedTimeS);
     this._world.Update(elapsedTimeS);
     this._camera.Update(elapsedTimeS);
@@ -2015,6 +2011,49 @@ var Scene = class {
   }
   Pause() {
     this.paused = true;
+  }
+  _Draw(ctx0, renderWidth, renderHeight) {
+    if (this.paused) {
+      return;
+    }
+    const ctx = document.createElement("canvas").getContext("2d");
+    ctx.canvas.width = renderWidth;
+    ctx.canvas.height = renderHeight;
+    ctx.globalCompositeOperation = "source-over";
+    this._ambientLight.Draw(ctx);
+    const cam = this.camera;
+    ctx.globalCompositeOperation = "lighter";
+    ctx.save();
+    ctx.translate(-cam.position.x * cam.scale + renderWidth / 2, -cam.position.y * cam.scale + renderHeight / 2);
+    ctx.scale(cam.scale, cam.scale);
+    for (let light of this._lights) {
+      light.Draw(ctx);
+    }
+    ctx.restore();
+    ctx.globalCompositeOperation = "multiply";
+    const buffer = document.createElement("canvas").getContext("2d");
+    buffer.canvas.width = renderWidth;
+    buffer.canvas.height = renderHeight;
+    buffer.beginPath();
+    buffer.fillStyle = StyleParser.ParseColor(buffer, this.background);
+    buffer.fillRect(0, 0, renderWidth, renderHeight);
+    buffer.save();
+    buffer.translate(-cam.position.x * cam.scale + renderWidth / 2, -cam.position.y * cam.scale + renderHeight / 2);
+    buffer.scale(cam.scale, cam.scale);
+    for (let elem of this._drawable) {
+      const boundingBox = elem.boundingBox;
+      const pos = new Vector(boundingBox.x, boundingBox.y);
+      pos.Sub(cam.position);
+      pos.Mult(cam.scale);
+      const [width, height] = [boundingBox.width, boundingBox.height].map((_) => _ * cam.scale);
+      if (pos.x + width / 2 < -this._width / 2 || pos.x - width / 2 > this._width / 2 || pos.y + height / 2 < -this._height / 2 || pos.y - height / 2 > this._height / 2) {
+        continue;
+      }
+      elem.Draw0(buffer);
+    }
+    buffer.restore();
+    ctx.drawImage(buffer.canvas, 0, 0);
+    ctx0.drawImage(ctx.canvas, 0, 0);
   }
 };
 
@@ -2027,9 +2066,17 @@ var Loader = class {
     this._path = "";
   }
   _Add(n, p, type) {
+    let path;
+    if (this._path == "") {
+      path = p;
+    } else if (p.startsWith("/")) {
+      path = this._path + p.slice(1);
+    } else {
+      path = this._path + p;
+    }
     this._toLoad.push({
       name: n,
-      path: this._path + p,
+      path,
       type
     });
     ++this._size;
@@ -2068,6 +2115,9 @@ var Loader = class {
   }
   SetPath(p) {
     this._path = p;
+    if (!this._path) {
+      this._path += "/";
+    }
     return this;
   }
   _HandleOnProgress(obj) {
@@ -2148,38 +2198,54 @@ var Game = class {
     this.timeout = this._engine.timeout;
     this.audio = (() => {
       const sections = new Map();
-      const AddSection = (n) => {
+      const CreateSection = (n) => {
         sections.set(n, new AudioSection());
       };
-      AddSection("music");
-      AddSection("effects");
-      const AddAudio = (sectionName, audioName, loop = false) => {
+      const Play = (sectionName, audioName, params2 = {}) => {
+        if (!sections.has(sectionName)) {
+          CreateSection(sectionName);
+        }
         const section = sections.get(sectionName);
-        section.AddAudio(audioName, this._resources.get(audioName), loop);
+        if (!section._audioMap.has(audioName)) {
+          section.AddAudio(audioName, this._resources.get(audioName));
+        }
+        if (params2.primary === false) {
+          section.PlaySecondary(audioName);
+        } else {
+          section.Play(audioName, params2);
+        }
       };
-      const AddMusic = (audioName, loop = false) => {
-        AddAudio("music", audioName, loop);
+      const Pause = (sectionName) => {
+        sections.get(sectionName).Pause();
       };
-      const AddEffect = (audioName, loop = false) => {
-        AddAudio("effects", audioName, loop);
+      const SetVolume = (sectionName, volume) => {
+        if (!sections.has(sectionName)) {
+          CreateSection(sectionName);
+        }
+        sections.get(sectionName).volume = volume;
+      };
+      const IsPlaying = (sectionName) => {
+        return sections.get(sectionName).playing;
+      };
+      const GetVolume = (sectionName) => {
+        if (!sections.has(sectionName)) {
+          CreateSection(sectionName);
+        }
+        return sections.get(sectionName).volume;
       };
       return {
-        get music() {
-          return sections.get("music");
-        },
-        get effects() {
-          return sections.get("effects");
-        },
-        AddMusic,
-        AddEffect
+        Play,
+        Pause,
+        SetVolume,
+        IsPlaying,
+        GetVolume
       };
     })();
     const step = (elapsedTime) => {
-      const scene = this._sceneManager.currentScene;
-      if (scene) {
+      for (let scene of this._sceneManager._scenes) {
         scene.Update(elapsedTime * 1e-3);
+        this._renderer.Render(scene);
       }
-      this._renderer.Render(scene);
     };
     this._engine._step = step;
     this._InitSceneEvents();
@@ -2238,16 +2304,17 @@ var Game = class {
       y: e.pageY
     });
   }
-  _HandleSceneEvent(type, params) {
-    const scene = this._sceneManager.currentScene;
-    if (scene) {
+  _HandleSceneEvent(type, params0) {
+    for (let i2 = this._sceneManager._scenes.length - 1; i2 >= 0; --i2) {
+      const params = Object.assign({}, params0);
+      const scene = this._sceneManager._scenes[i2];
       if (type.startsWith("mouse")) {
         const coords = this._renderer.DisplayToSceneCoords(scene, params.x, params.y);
         params.x = coords.x;
         params.y = coords.y;
-        scene._On(type, params);
-      } else if (type.startsWith("key")) {
-        scene._On(type, params);
+      }
+      if (scene._On(type, params)) {
+        break;
       }
     }
   }
@@ -2274,17 +2341,12 @@ var Game = class {
   }
   CreateScene(n, params = {}) {
     const scene = new Scene(params);
-    this._sceneManager.Add(scene, n);
+    scene.resources = this._resources;
+    this._sceneManager.Add(scene, n, params.priority || 0);
     return scene;
   }
   PlayScene(n) {
     return this._sceneManager.Play(n);
-  }
-  PauseScene() {
-    const scene = this._sceneManager.currentScene;
-    if (scene) {
-      scene.paused ? scene.Play() : scene.Pause();
-    }
   }
 };
 
@@ -2293,8 +2355,8 @@ var drawable_exports = {};
 __export(drawable_exports, {
   Circle: () => Circle,
   Drawable: () => Drawable,
+  Image: () => Image2,
   Line: () => Line,
-  Picture: () => Picture,
   Polygon: () => Polygon,
   Rect: () => Rect,
   RegularPolygon: () => RegularPolygon2,
@@ -2325,8 +2387,6 @@ var Drawable = class extends Component {
     this.mode = this._params.mode || "source-over";
     this._offset = new Vector();
     this._shaking = null;
-    this._fillStyleCache = null;
-    this._strokeStyleCache = null;
   }
   get zIndex() {
     return this._zIndex;
@@ -2376,25 +2436,23 @@ var Drawable = class extends Component {
   }
   set fillStyle(col) {
     this._fillStyle = col;
-    this._fillStyleCache = null;
   }
   get strokeStyle() {
     return this._strokeStyle;
   }
   set strokeStyle(col) {
     this._strokeStyle = col;
-    this._strokeStyleCache = null;
   }
   get boundingBox() {
     const verts = this._vertices;
     let maxDist = 0;
     let idx = 0;
-    for (let i = 0; i < verts.length; ++i) {
-      const v = verts[i];
+    for (let i2 = 0; i2 < verts.length; ++i2) {
+      const v = verts[i2];
       const dist = v.Mag();
       if (dist > maxDist) {
         maxDist = dist;
-        idx = i;
+        idx = i2;
       }
     }
     const d = maxDist * 2;
@@ -2434,8 +2492,8 @@ var Drawable = class extends Component {
   }
   _ComputeVertices() {
     this._vertices = this.GetVertices();
-    for (let i = 0; i < this._vertices.length; ++i) {
-      const v = this._vertices[i];
+    for (let i2 = 0; i2 < this._vertices.length; ++i2) {
+      const v = this._vertices[i2];
       v.x *= this.flip.x ? -this.scale : this.scale;
       v.y *= this.flip.y ? -this.scale : this.scale;
       v.Rotate(this.angle);
@@ -2455,8 +2513,8 @@ var Drawable = class extends Component {
     ctx.translate(this.position0.x, this.position0.y);
     ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
     ctx.rotate(this.angle);
-    ctx.fillStyle = StyleParser.ParseStyle(ctx, this.fillStyle, this, "_fillStyleCache");
-    ctx.strokeStyle = StyleParser.ParseStyle(ctx, this.strokeStyle, this, "_strokeStyleCache");
+    ctx.fillStyle = StyleParser.ParseColor(ctx, this.fillStyle);
+    ctx.strokeStyle = StyleParser.ParseColor(ctx, this.strokeStyle);
     ctx.lineWidth = this.strokeWidth;
     this.Draw(ctx);
     ctx.restore();
@@ -2550,12 +2608,12 @@ var Text = class extends Drawable {
     ctx.textAlign = this._align;
     ctx.textBaseline = "middle";
     ctx.beginPath();
-    for (let i = 0; i < this.linesCount; ++i) {
-      ctx.fillText(this._lines[i], offsetX + this._padding, this.lineHeight * i - (this.linesCount - 1) / 2 * this.lineHeight);
+    for (let i2 = 0; i2 < this.linesCount; ++i2) {
+      ctx.fillText(this._lines[i2], offsetX + this._padding, this.lineHeight * i2 - (this.linesCount - 1) / 2 * this.lineHeight);
     }
   }
 };
-var Picture = class extends Drawable {
+var Image2 = class extends Drawable {
   constructor(params) {
     super(params);
     this._image = this._params.image;
@@ -2623,9 +2681,9 @@ var Polygon = class extends Drawable {
   }
   Draw(ctx) {
     ctx.beginPath();
-    for (let i = 0; i < this._vertices.length; ++i) {
-      const v = this._vertices[i];
-      if (i == 0)
+    for (let i2 = 0; i2 < this._vertices.length; ++i2) {
+      const v = this._vertices[i2];
+      if (i2 == 0)
         ctx.moveTo(v.x, v.y);
       else
         ctx.lineTo(v.x, v.y);
@@ -2642,8 +2700,8 @@ var RegularPolygon2 = class extends Polygon {
     this.radius = params.radius;
     this.sides = params.sides;
     const points = [];
-    for (let i = 0; i < this.sides; ++i) {
-      const angle = Math.PI * 2 / this.sides * i;
+    for (let i2 = 0; i2 < this.sides; ++i2) {
+      const angle = Math.PI * 2 / this.sides * i2;
       points.push([Math.cos(angle) * this.radius, Math.sin(angle) * this.radius]);
     }
     this._points = points;
@@ -2782,7 +2840,7 @@ var Emitter = class extends Component {
         delay
       };
     } else {
-      for (let i = 0; i < count; ++i) {
+      for (let i2 = 0; i2 < count; ++i2) {
         this._CreateParticle();
       }
     }

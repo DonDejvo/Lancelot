@@ -26,39 +26,56 @@ export class Game {
         this.timeout = this._engine.timeout;
         this.audio = (() => {
             const sections = new Map();
-            const AddSection = (n) => {
+            const CreateSection = (n) => {
                 sections.set(n, new AudioSection());
             }
-            AddSection("music");
-            AddSection("effects");
-            const AddAudio = (sectionName, audioName, loop = false) => {
+            const Play = (sectionName, audioName, params = {}) => {
+                if(!sections.has(sectionName)) {
+                    CreateSection(sectionName);
+                }
                 const section = sections.get(sectionName);
-                section.AddAudio(audioName, this._resources.get(audioName), loop);
+                if(!section._audioMap.has(audioName)) {
+                    section.AddAudio(audioName, this._resources.get(audioName));
+                }
+                if(params.primary === false) {
+                    section.PlaySecondary(audioName);
+                } else {
+                    section.Play(audioName, params);
+                }
             }
-            const AddMusic = (audioName, loop = false) => {
-                AddAudio("music", audioName, loop);
+            const Pause = (sectionName) => {
+                sections.get(sectionName).Pause();
             }
-            const AddEffect = (audioName, loop = false) => {
-                AddAudio("effects", audioName, loop);
+            const SetVolume = (sectionName, volume) => {
+                if(!sections.has(sectionName)) {
+                    CreateSection(sectionName);
+                }
+                sections.get(sectionName).volume = volume;
+            }
+            const IsPlaying = (sectionName) => {
+                return sections.get(sectionName).playing;
+            }
+            const GetVolume = (sectionName) => {
+                if(!sections.has(sectionName)) {
+                    CreateSection(sectionName);
+                }
+                return sections.get(sectionName).volume;
             }
             return {
-                get music() {
-                    return sections.get("music");
-                },
-                get effects() {
-                    return sections.get("effects");
-                },
-                AddMusic,
-                AddEffect
+                Play,
+                Pause,
+                SetVolume,
+                IsPlaying,
+                GetVolume
             };
         })();
 
         const step = (elapsedTime) => {
-            const scene = this._sceneManager.currentScene;
-            if(scene) {
+            for(let scene of this._sceneManager._scenes) {
                 scene.Update(elapsedTime * 0.001);
+                this._renderer.Render(scene);
             }
-            this._renderer.Render(scene);
+            
         }
 
         this._engine._step = step;
@@ -130,18 +147,23 @@ export class Game {
             x: e.pageX, y: e.pageY
         });
     }
-    _HandleSceneEvent(type, params) {
-        const scene = this._sceneManager.currentScene;
-        if(scene) {
+    _HandleSceneEvent(type, params0) {
+        for(let i = this._sceneManager._scenes.length - 1; i >= 0; --i) {
+
+            const params = Object.assign({}, params0);
+            
+            const scene = this._sceneManager._scenes[i];
+            
             if(type.startsWith("mouse")) {
                 const coords = this._renderer.DisplayToSceneCoords(scene, params.x, params.y);
                 params.x = coords.x;
                 params.y = coords.y;
-                scene._On(type, params);
-            } else if(type.startsWith("key")) {
-                scene._On(type, params);
+                
             }
             
+            if(scene._On(type, params)) {
+               break;
+            }
         }
     }
     CreateSection(id) {
@@ -167,16 +189,11 @@ export class Game {
     }
     CreateScene(n, params = {}) {
         const scene = new Scene(params);
-        this._sceneManager.Add(scene, n);
+        scene.resources = this._resources;
+        this._sceneManager.Add(scene, n, (params.priority || 0));
         return scene;
     }
     PlayScene(n) {
         return this._sceneManager.Play(n);
-    }
-    PauseScene() {
-        const scene = this._sceneManager.currentScene;
-        if(scene) {
-            scene.paused ? scene.Play() : scene.Pause();
-        }
     }
 }

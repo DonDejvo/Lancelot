@@ -84,60 +84,7 @@ export class Renderer {
         if(!scene) return;
 
 
-        // ambient
-        
-        ctx.globalCompositeOperation = "source-over";
-        scene._ambientLight.Draw(ctx);
-        
-        const cam = scene.camera;
-
-        // radial
-
-        ctx.globalCompositeOperation = "lighter";
-        ctx.save();
-        ctx.translate(-cam.position.x * cam.scale + this._width / 2, -cam.position.y * cam.scale + this._height / 2);
-        ctx.scale(cam.scale, cam.scale);
-        
-        for(let light of scene._lights) {
-            light.Draw(ctx);
-        }
-        
-        ctx.restore();
-
-        ctx.globalCompositeOperation = "multiply";
-
-        const buffer = document.createElement("canvas").getContext("2d");
-        buffer.canvas.width = this._width;
-        buffer.canvas.height = this._height;
-
-        buffer.beginPath();
-        buffer.fillStyle = StyleParser.ParseStyle(buffer, scene.background, scene, "_bgCache");
-        buffer.fillRect(0, 0, this._width, this._height);
-
-        buffer.save();
-        buffer.translate(-cam.position.x * cam.scale + this._width / 2, -cam.position.y * cam.scale + this._height / 2);
-        buffer.scale(cam.scale, cam.scale);
-
-        for(let elem of scene._drawable) {
-            const boundingBox = elem.boundingBox;
-            const pos = new Vector(boundingBox.x, boundingBox.y);
-            pos.Sub(cam.position);
-            pos.Mult(cam.scale);
-            const [width, height] = [boundingBox.width, boundingBox.height].map((_) => _ * cam.scale);
-            if(
-                pos.x + width / 2 < -this._width / 2 ||
-                pos.x - width / 2 > this._width / 2 ||
-                pos.y + height / 2 < -this._height / 2 ||
-                pos.y - height / 2 > this._height / 2
-            ) {
-                continue;
-            }
-            elem.Draw0(buffer);
-        }
-
-        buffer.restore();
-
-        ctx.drawImage(buffer.canvas, 0, 0);
+        scene._Draw(ctx, this._width, this._height);
 
 
     }

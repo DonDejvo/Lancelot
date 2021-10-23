@@ -11,192 +11,68 @@
     <script type="module">
         import defaultExport from "../src/Lancelot.js";
 
-        class Controller01 extends Lancelot.Component {
-            constructor() {
+        class TransitionController extends Lancelot.Component {
+            constructor(params) {
                 super();
+                this.dur = params.dur;
+                this.counter = 0;
             }
             Update(elapsedTimeS) {
-                const line = this.GetComponent("Line");
-                line.angle = this.parent.body.angle;
-                if(this.parent.body.collisions.all.size == 0) {
-                    line.range = 500;
+                const light = this.GetComponent("RadialLight");
+                this.counter += elapsedTimeS * 1000;
+                const progress = Lancelot.math.sat(this.counter / this.dur);
+                const dist = Lancelot.math.lerp(progress, 300, 0);
+                const angle = Lancelot.math.lerp(progress, -0.8, 4 * Math.PI);
+
+                light.position.Set(dist * Math.cos(angle), dist * Math.sin(angle));
+                light.radius = progress * 600;
+
+                const count = 2;
+                if(this.counter > this.dur) {
+                    const progress1 = (this.counter * count % this.dur) / this.dur;
+                    let [from, to] = Math.floor(this.counter * count / this.dur) % 2 == 0 ? [50, 250] : [250, 50];
+                    light.color = `rgb(${Lancelot.math.lerp(progress1, from, to)}, 0, 0)`;
                 }
-            }
-        }
-
-        class Controller02 extends Lancelot.Component {
-            constructor() {
-                super();
-            }
-            Update(elapsedTimeS) {
-                const rect = this.GetComponent("Rect");
-                rect.angle = this.parent.body.angle;
-            }
-        }
-
-        class Controller04 extends Lancelot.Component {
-            constructor() {
-                super();
-            }
-            Update(elapsedTimeS) {
-                const poly = this.GetComponent("Shape");
-                poly.angle = this.parent.body.angle;
             }
         }
 
         const game = new Lancelot.Game({
             width: 800,
             height: 540,
+            preload: preload,
             init: init
         });
 
+        function preload() {
+            this.loader.OnProgress((_, obj) => {
+                console.log(obj);
+            });
+            this.loader.AddImage("vikings", "jpg.jpg");
+        }
+
         function init() {
 
-            const scene = this.CreateScene("scene01", {
-                background: "#4A4A4A",
-                light: "#111"
+            const scene = this.CreateScene("x", {
+                background: "black",
+                light: "black"
             });
-            this.PlayScene("scene01");
+            scene.Play();
 
-            const createEntity01 = () => {
+            let light = scene.CreateEntity();
+            light.AddComponent(new Lancelot.light.RadialLight({
+                color: "white",
+                radius: 5
+            }));
+            light.AddComponent(new TransitionController({
+                dur: 2000
+            }));
 
-                const entity = scene.CreateEntity();
-                let line;
-                entity.AddComponent(line = new Lancelot.drawable.Line({
-                    range: 500,
-                    strokeStyle: "linear;0,-4,0,4;red=0;pink=0.5;red=1",
-                    strokeWidth: 10,
-                    zIndex: 99
-                }));
-                let body;
-                entity.AddComponent(body = new Lancelot.physics.Ray({
-                    range: 500
-                }));
-                entity.AddComponent(new Controller01());
-                
-                body.angularVelocity = 0.3;
-                body.angle = 0.1
-                body.AddBehavior("e02", "detect", (other, point) => {
-                    line.range = Lancelot.Vector.Dist(body.position, point);
-                });
-
-                return entity;
-            }
-
-            const createEntity02 = (x, y, a) => {
-                const entity = scene.CreateEntity();
-                entity.groupList.add("e02");
-                entity.position.Set(x, y);
-
-                let box;
-                entity.AddComponent(box = new Lancelot.drawable.Rect({
-                    width: 120,
-                    height: 80,
-                    fillStyle: "lime"
-                }));
-                box.angle = a;
-                let body;
-                entity.AddComponent(body = new Lancelot.physics.Box({
-                    width: 120,
-                    height: 80
-                }));
-                entity.AddComponent(new Controller02());
-                body.angle = a;
-                body.angularVelocity = 0.5;
-
-                return entity;
-            }
-
-            const createEntity03 = (x, y) => {
-                const entity = scene.CreateEntity();
-                entity.groupList.add("e02");
-                entity.position.Set(x, y);
-
-                let circle;
-                entity.AddComponent(circle = new Lancelot.drawable.Circle({
-                    radius: 60,
-                    fillStyle: "cyan"
-                }));
-                
-                let body;
-                entity.AddComponent(body = new Lancelot.physics.Ball({
-                    radius: 60
-                }));
-
-                return entity;
-            }
-
-            const createEntity04 = (x, y, a, sides) => {
-                const entity = scene.CreateEntity();
-                entity.groupList.add("e02");
-                entity.position.Set(x, y);
-
-                let box;
-                entity.AddComponent(box = new Lancelot.drawable.RegularPolygon({
-                    radius: 60,
-                    sides: sides,
-                    fillStyle: "pink"
-                }), "Shape");
-                
-                let body;
-                entity.AddComponent(body = new Lancelot.physics.RegularPolygon({
-                    radius: 60,
-                    sides: sides
-                }));
-                entity.AddComponent(new Controller04());
-                body.angle = a;
-                body.angularVelocity = 0.5;
-
-                return entity;
-            }
-
-            const ray = createEntity01();
-            let light1, light2, light3;
-            let col1, col2, col3;
-            let isBlack1 = false,
-            isBlack2 = false,
-            isBlack3 = false;
-            col1 = "radial;0,0,0,0,0,200;rgb(255,0,255)=0;rgba(55,55,55,0)=1";
-            col2 = "radial;0,0,0,0,0,200;rgb(0,255,255)=0;rgba(55,55,55,0)=1";
-            col3 = "radial;0,0,0,0,0,200;rgb(255,255,255)=0;rgba(55,55,55,0)=1";
-            ray.AddComponent(light1 = new Lancelot.light.RadialLight({
-                color: col1,
-                radius: 250
-            }), "Light1");
-            light1.offset.Set(95, 75);
-            ray.AddComponent(light2 = new Lancelot.light.RadialLight({
-                color: col2,
-                radius: 250
-            }), "Light2");
-            light2.offset.Set(0, -75);
-            ray.AddComponent(light3 = new Lancelot.light.RadialLight({
-                color: col3,
-                radius: 250
-            }), "Light3");
-            light3.offset.Set(-95, 75);
-
-            let e1 = createEntity04(200, 0, 0.7, 5);
-            createEntity04(100, 200, 0.1, 3);
-            let e3 = createEntity03(-100, 150);
-            createEntity02(-200, -75, 0.3);
-            let e2 = createEntity02(0, -150, 1.4);
-
-            scene.SetInteractive(e1);
-            scene.SetInteractive(e2);
-            scene.SetInteractive(e3);
-
-            e1.interactive.AddEventHandler("mousedown", () => {
-                light1.color = isBlack1 ? col1 : "black";
-                isBlack1 = !isBlack1;
-            });
-            e2.interactive.AddEventHandler("mousedown", () => {
-                light2.color = isBlack2 ? col2 : "black";
-                isBlack2 = !isBlack2;
-            });
-            e3.interactive.AddEventHandler("mousedown", () => {
-                light3.color = isBlack3 ? col3 : "black";
-                isBlack3 = !isBlack3;
-            });
+            let bg = scene.CreateEntity();
+            bg.AddComponent(new Lancelot.drawable.Image({
+                image: scene.resources.get("vikings"),
+                width: 800,
+                height: 540
+            }));
 
         }
         

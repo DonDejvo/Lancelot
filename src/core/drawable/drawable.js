@@ -26,8 +26,6 @@ export class Drawable extends Component {
         this.mode = (this._params.mode || "source-over");
         this._offset = new Vector();
         this._shaking = null;
-        this._fillStyleCache = null;
-        this._strokeStyleCache = null;
     }
     get zIndex() {
         return this._zIndex;
@@ -77,14 +75,12 @@ export class Drawable extends Component {
     }
     set fillStyle(col) {
         this._fillStyle = col;
-        this._fillStyleCache = null;
     }
     get strokeStyle() {
         return this._strokeStyle;
     }
     set strokeStyle(col) {
         this._strokeStyle = col;
-        this._strokeStyleCache = null;
     }
     get boundingBox() {
         const verts = this._vertices;
@@ -159,8 +155,8 @@ export class Drawable extends Component {
         ctx.translate(this.position0.x, this.position0.y);
         ctx.scale(this.flip.x ? -this.scale: this.scale, this.flip.y ? -this.scale : this.scale);
         ctx.rotate(this.angle);
-        ctx.fillStyle = StyleParser.ParseStyle(ctx, this.fillStyle, this, "_fillStyleCache");
-        ctx.strokeStyle = StyleParser.ParseStyle(ctx, this.strokeStyle, this, "_strokeStyleCache");
+        ctx.fillStyle = StyleParser.ParseColor(ctx, this.fillStyle);
+        ctx.strokeStyle = StyleParser.ParseColor(ctx, this.strokeStyle);
         ctx.lineWidth = this.strokeWidth;
         
         this.Draw(ctx);
@@ -279,7 +275,7 @@ export class Text extends Drawable {
     }
 }
 
-export class Picture extends Drawable {
+export class Image extends Drawable {
     constructor(params) {
         super(params);
         this._image = this._params.image;

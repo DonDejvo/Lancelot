@@ -6,6 +6,7 @@ import { Entity } from "./entity.js";
 import { World } from "./physics/physics.js";
 import { AmbientLight } from "./light/light.js";
 import { Vector } from "./utils/vector.js";
+import { StyleParser } from "./utils/style-parser.js";
 
 export class Scene {
     constructor(params) {
@@ -15,7 +16,6 @@ export class Scene {
         // this._relaxationCount = (params.relaxationCount || 5);
 
         this._background = params.background;
-        this._bgCache = null;
 
         this._world = new World(params.physics);
 
@@ -52,7 +52,6 @@ export class Scene {
     }
     set background(col) {
         this._background = col;
-        this._bgCache = null;
     }
     IsPressed(k) {
         return this._keys.has(k);
@@ -62,14 +61,14 @@ export class Scene {
         this.AddEntity(e, n);
         return e;
     }
-    AddEventHandler(type, handler) {
+    On(type, handler) {
         if(!this._eventHandlers.has(type)) {
             this._eventHandlers.set(type, []);
         }
         const handlers = this._eventHandlers.get(type);
         handlers.push(handler);
     }
-    RemoveEventHandler(type, handler) {
+    Off(type, handler) {
         if(!this._eventHandlers.has(type)) { return; }
         const handlers = this._eventHandlers.get(type);
         const idx = handlers.indexOf(handler);
@@ -85,11 +84,16 @@ export class Scene {
         entity.interactive = interactive;
     }
     _On(type, event) {
+        if(this.paused) {
+            return false;
+        }
+        let result = false;
         if(this._eventHandlers.has(type)) {
             const handlers = this._eventHandlers.get(type);
             for(let handler of handlers) {
                 handler(event);
             }
+            //result = true;
         }
         if(type == "mousedown") {
             // const entities = this._world._spatialGrid.FindNear([event.x, event.y], [0, 0]).map(c => c.entity);
@@ -98,14 +102,16 @@ export class Scene {
                 if(!e.interactive) { continue; }
                 
                 if(e.body.Contains(new Vector(event.x, event.y))) {
+                   
                     e.interactive._On(type, event);
                     e.interactive._id = event.id;
-                    if(e.interactive._capture) { break; }
+                    if(e.interactive._capture) {  result = true; }
                 }
             }
         } else if(type == "mousemove" || type == "mouseup") {
             for(let e of this._interactiveEntities) {
                 if(e.interactive._id == event.id) {
+                    if(e.interactive._capture) {  result = true; }
                     e.interactive._On(type, event);
                     if(type == "mouseup") {
                         e.interactive._id = -1;
@@ -117,6 +123,7 @@ export class Scene {
         } else if(type == "keyup") {
             this._keys.delete(event.key);
         }
+        return result;
     }
     GetEntityByName(n) {
         return this._entityManager.Get(n);
@@ -204,7 +211,6 @@ export class Scene {
     Update(elapsedTimeS) {
         if (this.paused) { return; }
         this.timeout.Update(elapsedTimeS * 1000);
-        elapsedTimeS *= this.speed;
         this._entityManager.Update(elapsedTimeS);
         this._world.Update(elapsedTimeS);
         // this._PhysicsUpdate(elapsedTimeS);
@@ -215,5 +221,70 @@ export class Scene {
     }
     Pause() {
         this.paused = true;
+    }
+    _Draw(ctx0, renderWidth, renderHeight) {
+        if(this.paused) {
+            return;
+        }
+
+        const ctx = document.createElement("canvas").getContext("2d");
+        ctx.canvas.width = renderWidth;
+        ctx.canvas.height = renderHeight;
+        // ambient
+        
+        ctx.globalCompositeOperation = "source-over";
+        this._ambientLight.Draw(ctx);
+        
+        const cam = this.camera;
+
+        // radial
+
+        ctx.globalCompositeOperation = "lighter";
+        ctx.save();
+        ctx.translate(-cam.position.x * cam.scale + renderWidth / 2, -cam.position.y * cam.scale + renderHeight / 2);
+        ctx.scale(cam.scale, cam.scale);
+        
+        for(let light of this._lights) {
+            light.Draw(ctx);
+        }
+        
+        ctx.restore();
+
+        ctx.globalCompositeOperation = "multiply";
+
+        const buffer = document.createElement("canvas").getContext("2d");
+        buffer.canvas.width = renderWidth;
+        buffer.canvas.height = renderHeight;
+
+        buffer.beginPath();
+        buffer.fillStyle = StyleParser.ParseColor(buffer, this.background);
+        buffer.fillRect(0, 0, renderWidth, renderHeight);
+
+        buffer.save();
+        buffer.translate(-cam.position.x * cam.scale + renderWidth / 2, -cam.position.y * cam.scale + renderHeight / 2);
+        buffer.scale(cam.scale, cam.scale);
+
+        for(let elem of this._drawable) {
+            const boundingBox = elem.boundingBox;
+            const pos = new Vector(boundingBox.x, boundingBox.y);
+            pos.Sub(cam.position);
+            pos.Mult(cam.scale);
+            const [width, height] = [boundingBox.width, boundingBox.height].map((_) => _ * cam.scale);
+            if(
+                pos.x + width / 2 < -this._width / 2 ||
+                pos.x - width / 2 > this._width / 2 ||
+                pos.y + height / 2 < -this._height / 2 ||
+                pos.y - height / 2 > this._height / 2
+            ) {
+                continue;
+            }
+            elem.Draw0(buffer);
+        }
+
+        buffer.restore();
+
+        ctx.drawImage(buffer.canvas, 0, 0);
+
+        ctx0.drawImage(ctx.canvas, 0, 0);
     }
 }

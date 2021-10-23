@@ -6,9 +6,17 @@ export class Loader {
         this._path = "";
     }
     _Add(n, p, type) {
+        let path;
+        if(this._path == "") {
+            path = p;
+        } else if(p.startsWith("/")) {
+            path = this._path + p.slice(1);
+        } else {
+            path = this._path + p;
+        }
         this._toLoad.push({
             name: n,
-            path: this._path + p,
+            path: path,
             type: type
         });
         ++this._size;
@@ -46,6 +54,9 @@ export class Loader {
     }
     SetPath(p) {
         this._path = p;
+        if(!this._path) {
+            this._path += "/";
+        }
         return this;
     }
     _HandleOnProgress(obj) {

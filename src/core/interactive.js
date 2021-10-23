@@ -6,14 +6,14 @@ export class Interactive extends Component {
         this._capture = params.capture === undefined ? false : params.capture;
         this._eventHandlers = new Map();
     }
-    AddEventHandler(type, handler) {
+    On(type, handler) {
         if(!this._eventHandlers.has(type)) {
             this._eventHandlers.set(type, []);
         }
         const handlers = this._eventHandlers.get(type);
         handlers.push(handler);
     }
-    RemoveEventHandler(type, handler) {
+    Off(type, handler) {
         if(!this._eventHandlers.has(type)) { return; }
         const handlers = this._eventHandlers.get(type);
         const idx = handlers.indexOf(handler);

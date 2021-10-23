@@ -1,27 +1,21 @@
 export const StyleParser = (function() {
     return {
-        ParseStyle(ctx, s, obj, attr) {
-            if(obj[attr]) {
-                return obj[attr];
-            }
-            
+        ParseColor(ctx, s) {
             if(s == undefined) {
-                obj[attr] = "black";
-                return obj[attr];
+                return "black";
             }
             const params = s.split(";");
             const len = params.length;
             if(len === 1) {
-                obj[attr] = s;
                 return s;
             }
             let grd;
             const values = params[1].split(",").map((s) => parseFloat(s));
             switch(params[0]) {
-                case "linear":
+                case "linear-gradient":
                     grd = ctx.createLinearGradient(...values);
                     break;
-                case "radial":
+                case "radial-gradient":
                     grd = ctx.createRadialGradient(...values);
                     break;
                 default:
@@ -31,7 +25,6 @@ export const StyleParser = (function() {
                 const colorValuePair = params[i].split("=");
                 grd.addColorStop(parseFloat(colorValuePair[1]), colorValuePair[0]);
             }
-            obj[attr] = grd;
             return grd;
         }
     }
