@@ -1,29 +1,24 @@
 import { Component } from "../component.js";
 import { Vector } from "../utils/vector.js";
+import { ParamParser } from "../utils/param-parser.js";
 import { StyleParser } from "../utils/style-parser.js";
 
 export class Drawable extends Component {
     constructor(params = {}) {
         super();
         this._type = "drawable";
-        this._params = params;
-        this._width = (this._params.width || 0);
-        this._height = (this._params.height || 0);
+        this._width = ParamParser.ParseValue(params.width, 0);
+        this._height = ParamParser.ParseValue(params.height, 0);
         this._vertices = [];
-        this._zIndex = (this._params.zIndex || 0);
-        this.flip = {
-            x: (this._params.flipX || false),
-            y: (this._params.flipY || false)
-        };
-        this._scale = (params.scale || 1.0);
-        this._rotationCount = (this._params.rotationCount || 0);
-        this.opacity = this._params.opacity !== undefined ? this._params.opacity : 1;
-        this.filter = (this._params.filter || "");
-        this._angle = (this._params.angle || this._rotationCount * Math.PI / 2 || 0);
-        this._fillStyle = (this._params.fillStyle || "black");
-        this._strokeStyle = (this._params.strokeStyle || "black");
-        this.strokeWidth = (this._params.strokeWidth || 0);
-        this.mode = (this._params.mode || "source-over");
+        this._zIndex = ParamParser.ParseValue(params.zIndex, 0);
+        this.flip = ParamParser.ParseObject(params.flip, { x: false, y: false });
+        this._scale = ParamParser.ParseObject(params.scale, { x: 1, y: 1 });
+        this.opacity = ParamParser.ParseValue(params.opacity, 1);
+        this._angle = 0;
+        this._fillStyle = ParamParser.ParseValue(params.fillStyle, "black");
+        this._strokeStyle = ParamParser.ParseValue(params.strokeStyle, "black");
+        this.strokeWidth = ParamParser.ParseValue(params.strokeWidth, 0);
+        this.mode = ParamParser.ParseValue(params.mode, "source-over");
         this._offset = new Vector();
         this._shaking = null;
     }
@@ -56,13 +51,6 @@ export class Drawable extends Component {
     }
     get angle() {
         return this._angle;
-    }
-    get rotationCount() {
-        return this._rotationCount;
-    }
-    set rotationCount(num) {
-        this._rotationCount = num;
-        this.angle = this._rotationCount * Math.PI / 2;
     }
     get scale() {
         return this._scale;
@@ -106,10 +94,10 @@ export class Drawable extends Component {
     get position0() {
         return this.position;
     }
-    Shake(range, dur, count, angle) {
+    Shake(range, dur, freq, angle) {
         this._shaking = {
             counter: 0,
-            count: count,
+            freq: freq,
             angle: angle,
             dur: dur,
             range: range
@@ -123,21 +111,17 @@ export class Drawable extends Component {
         this._ComputeVertices();
     }
     GetVertices() {
-        return [
+        const arr = [
             new Vector(-this._width / 2, -this._height / 2),
             new Vector(this._width / 2, -this._height / 2),
             new Vector(-this._width / 2, this._height / 2),
             new Vector(this._width / 2, this._height / 2)
         ];
+        
+        return arr;
     }
     _ComputeVertices() {
         this._vertices = this.GetVertices();
-        for(let i = 0; i < this._vertices.length; ++i) {
-            const v = this._vertices[i];
-            v.x *= this.flip.x ? -this.scale : this.scale;
-            v.y *= this.flip.y ? -this.scale : this.scale;
-            v.Rotate(this.angle);
-        }
     }
     SetSize(w, h) {
         this._width = w;
@@ -164,19 +148,20 @@ export class Drawable extends Component {
         ctx.restore();
 
         ctx.restore();
-
+        /*
         const bb = this.boundingBox;
         ctx.beginPath();
         ctx.strokeStyle = "orange";
         ctx.strokeRect(bb.x - bb.width/2, bb.y - bb.height/2, bb.width, bb.height);
-        
+        */
     }
     Update(elapsedTimeS) {
         if(this._shaking) {
             const anim = this._shaking;
+            const count = Math.floor(anim.freq / 1000 * anim.dur);
             anim.counter += elapsedTimeS * 1000;
             const progress = Math.min(anim.counter / anim.dur, 1);
-            this._offset.Copy(new Vector(Math.sin(progress * Math.PI * 2 * anim.count) * anim.range, 0).Rotate(anim.angle));
+            this._offset.Copy(new Vector(Math.sin(progress * Math.PI * 2 * count) * anim.range, 0).Rotate(anim.angle));
             if (progress == 1) {
                 this.StopShaking();
             }
@@ -187,13 +172,13 @@ export class Drawable extends Component {
 export class Text extends Drawable {
     constructor(params) {
         super(params);
-        this._text = this._params.text;
+        this._text = params.text;
         this._lines = this._text.split(/\n/);
-        this._padding = (this._params.padding || 0);
-        this._align = (params.align || "center");
-        this._fontSize = (this._params.fontSize || 16);
-        this._fontFamily = (this._params.fontFamily || "Arial");
-        this._fontStyle = (this._params.fontStyle || "normal");
+        this._padding = ParamParser.ParseValue(params.padding, 0);
+        this._align = ParamParser.ParseValue(params.align, "center");
+        this._fontSize = ParamParser.ParseValue(this._params.fontSize, 16);
+        this._fontFamily = ParamParser.ParseValue(this._params.fontFamily, "Arial");
+        this._fontStyle = ParamParser.ParseValue(this._params.fontStyle, "normal");
 
         this._ComputeDimensions();
     }
@@ -278,13 +263,10 @@ export class Text extends Drawable {
 export class Image extends Drawable {
     constructor(params) {
         super(params);
-        this._image = this._params.image;
-        this._frameWidth = (this._params.frameWidth || this._image.width);
-        this._frameHeight = (this._params.frameHeight || this._image.height);
-        this._framePos = {
-            x: (this._params.posX || 0),
-            y: (this._params.posY || 0)
-        };
+        this._image = params.image;
+        this._frameWidth = ParamParser.ParseValue(params.frameWidth, this._image.width);
+        this._frameHeight = ParamParser.ParseValue(params.frameHeight, this._image.height);
+        this._framePos = ParamParser.ParseObject(params.framePosition, { x: 0, y: 0 });
     }
     Draw(ctx) {
         /*
@@ -332,7 +314,7 @@ export class Rect extends Drawable {
 export class Circle extends Drawable {
     constructor(params) {
         super(params);
-        this._radius = this._params.radius;
+        this._radius = params.radius;
     }
     get radius() {
         return this._radius;
@@ -365,20 +347,22 @@ export class Circle extends Drawable {
         ctx.arc(0, 0, this._radius, 0, 2 * Math.PI);
         ctx.fill();
         if(this.strokeWidth > 0) ctx.stroke();
+        
         ctx.beginPath();
         ctx.moveTo(0, 0);
         ctx.lineTo(this.radius, 0);
         ctx.stroke();
+        
         /*
         ctx.restore();
         */
     }
 }
 
-export class Polygon extends Drawable {
+export class Poly extends Drawable {
     constructor(params) {
         super(params);
-        this._points = this._params.points;
+        this._points = ParamParser.ParseValue(params.points, []);
     }
     GetVertices() {
         return this._points.map((v) => new Vector(v[0], v[1]));
@@ -410,12 +394,15 @@ export class Polygon extends Drawable {
     }
 }
 
-export class RegularPolygon extends Polygon {
+export class Polygon extends Poly {
     constructor(params) {
         super(params);
-        this.radius = params.radius;
+        this._radius = params.radius;
         this.sides = params.sides;
 
+        this._InitPoints();
+    }
+    _InitPoints() {
         const points = [];
         for(let i = 0; i < this.sides; ++i) {
             const angle = Math.PI * 2 / this.sides * i;
@@ -423,11 +410,20 @@ export class RegularPolygon extends Polygon {
         }
         this._points = points;
     }
+    get radius() {
+        return this._radius;
+    }
+    set radius(num) {
+        this._radius = num;
+    }
 }
 
 export class Sprite extends Drawable {
     constructor(params) {
         super(params);
+        this._image = params.image;
+        this._frameWidth = ParamParser.ParseValue(params.frameWidth, this._image.width);
+        this._frameHeight = ParamParser.ParseValue(params.frameHeight, this._image.height);
         this._anims = new Map();
         this._currentAnim = null;
         this._paused = true;
@@ -504,8 +500,8 @@ export class Sprite extends Drawable {
         ctx.rotate(this.angle);
         */
         ctx.drawImage(
-            this._params.image,
-            this._framePos.x * this._params.frameWidth, this._framePos.y * this._params.frameHeight, this._params.frameWidth, this._params.frameHeight,  
+            this._image,
+            this._framePos.x * this._frameWidth, this._framePos.y * this._frameHeight, this._frameWidth, this._frameHeight,  
             -this._width / 2, -this._height / 2, this._width, this._height
         );
         /*
@@ -517,12 +513,12 @@ export class Sprite extends Drawable {
 export class Line extends Drawable {
     constructor(params) {
         super(params);
-        this.range = params.range;
+        this.length = params.length;
     }
     get boundingBox() {
         return { 
-            width: this.range * 2,
-            height: this.range * 2,
+            width: this.length * 2,
+            height: this.length * 2,
             x: this.position.x,
             y: this.position.y
         };
@@ -530,7 +526,7 @@ export class Line extends Drawable {
     Draw(ctx) {
         ctx.beginPath();
         ctx.moveTo(0, 0);
-        ctx.lineTo(this.range, 0);
+        ctx.lineTo(this.length, 0);
         ctx.stroke();
     }
 }

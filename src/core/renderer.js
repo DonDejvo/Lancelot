@@ -26,27 +26,16 @@ export class Renderer {
     }
     _InitContainer() {
 
-        const body = document.body;
-
-        body.style.userSelect = "none";
-        body.style.touchAction = "none";
-        body.style.position = "fixed";
-        body.style.width = "100%";
-        body.style.height = "100%";
-        body.style.overflow = "hidden";
-        body.style.margin = "0";
-        body.style.padding = "0";
-
         const con = this._container = document.createElement("div");
 
         con.style.width = this._width + "px";
         con.style.height = this._height + "px";
         con.style.position = "absolute";
         con.style.left = "50%";
-        con.style.top = "50%";
+        con.style.top = "0%";
         con.style.transformOrigin = "center";
 
-        body.appendChild(con);
+        document.body.appendChild(con);
         
     }
     _InitCanvas() {
@@ -72,19 +61,17 @@ export class Renderer {
         } else {
             this._scale = width / this._width;
         }
-        this._container.style.transform = "translate(-50%, -50%) scale(" + this._scale + ")";
+        this._container.style.transform = "translate(-50%, calc(-50% + " + (this._height / 2 * this._scale) + "px)) scale(" + this._scale + ")";
         this._context.imageSmoothingEnabled = false;
     }
-    Render(scene) {
+    Render() {
 
         const ctx = this._context;
         
         
-        
-        if(!scene) return;
 
-
-        scene._Draw(ctx, this._width, this._height);
+        ctx.beginPath();
+        ctx.clearRect(0, 0, this._width, this._height);
 
 
     }

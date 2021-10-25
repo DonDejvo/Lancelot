@@ -5,73 +5,173 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Document</title>
+    <style>
+        
+    </style>
 </head>
 <body>
     
     <script type="module">
         import defaultExport from "../src/Lancelot.js";
 
-        class TransitionController extends Lancelot.Component {
+        class TreeVisualiser extends Lancelot.drawable.Drawable {
             constructor(params) {
                 super();
-                this.dur = params.dur;
-                this.counter = 0;
+                this.tree = params.tree;
+                this._width = this.tree._bounds[1][0] - this.tree._bounds[0][0];
+                this._width = this.tree._bounds[1][1] - this.tree._bounds[0][1];
             }
-            Update(elapsedTimeS) {
-                const light = this.GetComponent("RadialLight");
-                this.counter += elapsedTimeS * 1000;
-                const progress = Lancelot.math.sat(this.counter / this.dur);
-                const dist = Lancelot.math.lerp(progress, 300, 0);
-                const angle = Lancelot.math.lerp(progress, -0.8, 4 * Math.PI);
+            Draw(ctx) {
+                this.tree.Draw(ctx);
+            }
+        }
 
-                light.position.Set(dist * Math.cos(angle), dist * Math.sin(angle));
-                light.radius = progress * 600;
+        class PlayerController extends Lancelot.Component {
+            constructor() {
+                super();
+            }
+            Update(dt) {
 
-                const count = 2;
-                if(this.counter > this.dur) {
-                    const progress1 = (this.counter * count % this.dur) / this.dur;
-                    let [from, to] = Math.floor(this.counter * count / this.dur) % 2 == 0 ? [50, 250] : [250, 50];
-                    light.color = `rgb(${Lancelot.math.lerp(progress1, from, to)}, 0, 0)`;
+                const sprite = this.GetComponent("Sprite");
+                const body = this.parent.body;
+                const scene = this.scene;
+
+                const frameAccelerationX = 1600 * dt;
+                const onGround = body.collisions.bottom.size > 0;
+
+                if(scene.IsPressed("a")) {
+                    if(onGround) {
+                        body.velocity.x -= frameAccelerationX;
+                    } else {
+                        body.velocity.x -= frameAccelerationX * 0.5;
+                    }
                 }
+                if(scene.IsPressed("d")) {
+                    if(onGround) {
+                        body.velocity.x += frameAccelerationX;
+                    } else {
+                        body.velocity.x += frameAccelerationX * 0.5;
+                    }
+                }
+                if(onGround) {
+                    if(scene.IsPressed("w")) {
+                        body.velocity.y = -900;
+                    }
+                }
+
+                body.velocity.y += 1600 * dt;
+
+                sprite.angle = body.angle;
+
             }
         }
 
-        const game = new Lancelot.Game({
-            width: 800,
-            height: 540,
-            preload: preload,
-            init: init
-        });
+        let game;
 
-        function preload() {
-            this.loader.OnProgress((_, obj) => {
-                console.log(obj);
+        addEventListener("DOMContentLoaded", () => {
+
+            game = new Lancelot.Game({
+                width: 1000,
+                height: 1000,
+                init: init,
+                controls: {
+                    active: true,
+                    layout: {
+                        B: "w"
+                    }
+                }
             });
-            this.loader.AddImage("vikings", "jpg.jpg");
-        }
+
+        });
 
         function init() {
 
-            const scene = this.CreateScene("x", {
-                background: "black",
-                light: "black"
+            const level = this.CreateScene("level", {
+                zIndex: 0,
+                physics: {
+                    bounds: [[-1000, -1000], [1000, 1000]]
+                },
+                background: "darkblue"
             });
-            scene.Play();
 
-            let light = scene.CreateEntity();
-            light.AddComponent(new Lancelot.light.RadialLight({
-                color: "white",
-                radius: 5
-            }));
-            light.AddComponent(new TransitionController({
-                dur: 2000
-            }));
+            level.Play();
 
-            let bg = scene.CreateEntity();
-            bg.AddComponent(new Lancelot.drawable.Image({
-                image: scene.resources.get("vikings"),
-                width: 800,
-                height: 540
+
+            const createPlayer = () => {
+
+                const w = 48;
+                const h = 64;
+                const player = level.CreateEntity("Player");
+
+                let body;
+                player.AddComponent(body = new Lancelot.physics.Box({
+                    width: w,
+                    height: h,
+                    mass: 10,
+                    friction: {
+                        x: 0.02, y: 0.02, normal: 0.05, angular: 0.01
+                    },
+                    rotating: 0,
+                    followBottomObject: true
+                }));
+
+                let sprite;
+                player.AddComponent(sprite = new Lancelot.drawable.Rect({
+                    width: w,
+                    height: h,
+                    fillStyle: "lime"
+                }), "Sprite");
+
+                player.AddComponent(new PlayerController());
+
+                body.AddBehavior("obstacle", "ResolveCollision");
+
+                return player;
+            }
+
+            const createObstacle = (x, y, w, h, a) => {
+
+                const obstacle = level.CreateEntity();
+                obstacle.groupList.add("obstacle");
+                obstacle.position.Set(x, y);
+
+                let body;
+                obstacle.AddComponent(body = new Lancelot.physics.Box({
+                    width: w,
+                    height: h,
+                    disabled: {
+                        axes: { x: true },
+                        sides: { bottom: true, left: true, right: true }
+                    }
+                }));
+                body.velocity.Set(0, 0);
+                body.angle = a;
+
+                let sprite;
+                obstacle.AddComponent(sprite = new Lancelot.drawable.Rect({
+                    width: w,
+                    height: h,
+                    fillStyle: "orange"
+                }), "Sprite");
+                sprite.angle = a;
+
+                return obstacle;
+            }
+
+            createPlayer();
+            createObstacle(20, 240, 240, 20, 0.3);
+            let movingObstacle = createObstacle(-200, 210, 240, 20, 0);
+            createObstacle(230, 270, 240, 20, 0);
+            createObstacle(20, 40, 240, 20, 0.3);
+            createObstacle(-200, 10, 240, 20, 0);
+            createObstacle(230, 20, 240, 100, 0);
+
+            movingObstacle.body.velocity.Set(-30, -30);
+
+            const tree = level.CreateEntity();
+            
+            tree.AddComponent(new TreeVisualiser({
+                tree: level._world._quadtree
             }));
 
         }

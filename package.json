@@ -2,7 +2,7 @@
     "name": "lancelot",
     "version": "1.0.0",
     "description": "A 2d Javascript game library",
-    "main": "core.js",
+    "main": "",
     "scripts": {
         "dev": "snowpack dev --config config/snowpack.config.mjs",
         "build": "node config/esbuild.config.js"

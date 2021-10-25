@@ -4,6 +4,8 @@ import { Renderer } from "./renderer.js";
 import { SceneManager } from "./scene-manager.js";
 import { Scene } from "./scene.js";
 import { Loader } from "./loader.js";
+import { ParamParser } from "./utils/param-parser.js";
+import { Vector } from "./utils/vector.js";
 
 export class Game {
     constructor(params) {
@@ -16,12 +18,42 @@ export class Game {
 
         this._loader = new Loader();
 
+        const body = document.body;
+
+        body.style.userSelect = "none";
+        body.style.touchAction = "none";
+        body.style.position = "fixed";
+        body.style.width = "100%";
+        body.style.height = "100%";
+        body.style.overflow = "hidden";
+        body.style.margin = "0";
+        body.style.padding = "0";
+        body.style.background = "black";
+
         this._renderer = new Renderer({
             width: this._width,
             height: this._height
         });
         this._engine = new Engine();
         this._sceneManager = new SceneManager();
+
+        const controls = ParamParser.ParseObject(params.controls, {
+            active: false,
+            layout: {
+                joystick: { left: "a", right: "d", up: "w", down: "s" },
+                X: "j",
+                Y: "k",
+                A: "l",
+                B: "o",
+                SL: "control",
+                SR: "control",
+                start: "enter",
+                select: "space"
+            }
+        });
+        if(controls.active && "ontouchstart" in document) {
+            this._InitControls(controls.layout);
+        }
 
         this.timeout = this._engine.timeout;
         this.audio = (() => {
@@ -70,12 +102,42 @@ export class Game {
             };
         })();
 
+        const draw = (ctx, idx = 0) => {
+
+            
+
+            const scene = this._sceneManager._scenes[idx];
+            if(!scene) {
+                return;
+            }
+            if(scene.paused) {
+                draw(ctx, idx + 1);
+                return;
+            }
+
+            const w = this._renderer._width;
+            const h = this._renderer._height;
+            scene.DrawLights(ctx, w, h);
+
+            const b = document.createElement("canvas").getContext("2d");
+            b.canvas.width = w;
+            b.canvas.height = h;
+            if(idx < this._sceneManager._scenes.length - 1) {
+                draw(b, idx + 1);
+                b.globalCompositeOperation = "source-over";
+            }
+            scene.DrawObjects(b, w, h);
+
+            ctx.drawImage(b.canvas, 0, 0);
+        }
+
         const step = (elapsedTime) => {
             for(let scene of this._sceneManager._scenes) {
                 scene.Update(elapsedTime * 0.001);
-                this._renderer.Render(scene);
             }
             
+            this._renderer.Render();
+            draw(this._renderer._context);
         }
 
         this._engine._step = step;
@@ -100,6 +162,187 @@ export class Game {
     }
     get resources() {
         return this._resources;
+    }
+    _InitControls(layout) {
+        const applyStyle = (elem, bg = true) => {
+            const color = "rgba(150, 150, 150, 0.6)";
+            elem.style.position = "absolute";
+            elem.style.border = "2px solid " + color;
+            elem.style.color = color;
+            //elem.style.fontSize = "24px";
+            elem.style.fontFamily = "Arial";
+            //elem.style.fontWeight = "500";
+            elem.style.display = "flex";
+            elem.style.alignItems = "center";
+            elem.style.justifyContent = "center";
+            //elem.style.borderRadius = "50%";
+            if(bg) elem.style.background = "radial-gradient(circle at center, " + color + " 0, rgba(0, 0, 0, 0.6) 60%)";
+        }
+
+        const createButton = (right, bottom, text) => {
+            const button = document.createElement("div");
+            button.style.width = "46px";
+            button.style.height = "46px";
+            button.style.right = right - 5 + "px";
+            button.style.bottom = bottom + 10 + "px";
+            button.textContent = text;
+            button.style.borderRadius = "50%";
+            button.style.fontSize = "22px";
+            applyStyle(button);
+            controlsContainer.appendChild(button);
+            return button;
+        }
+
+        const createSideButton = (side) => {
+            const button = document.createElement("div");
+            button.style.width = "46px";
+            button.style.height = "46px";
+            button.style.bottom = 190 + "px";
+            button.style.fontSize = "22px";
+            if(side == "left") {
+                button.style.left = 5 + "px";
+                button.textContent = "L";
+                button.style.borderRadius = "50% 0 0 50%";
+            } else if(side == "right") {
+                button.style.right = 5 + "px";
+                button.textContent = "R";
+                button.style.borderRadius = "0 50% 50% 0";
+            }
+            
+            applyStyle(button);
+            controlsContainer.appendChild(button);
+            return button;
+        }
+
+        const createActionButton = (text) => {
+            const button = document.createElement("div");
+            button.style.width = "50px";
+            button.style.height = "22px";
+            if(text == "Start") {
+                button.style.left = "calc(50% + " + 3 + "px)";
+            } else if(text == "Select") {
+                button.style.right = "calc(50% + " + 3 + "px)";
+            }
+            button.style.bottom = 20 + "px";
+            button.textContent = text;
+            button.style.borderRadius = "12px";
+            button.style.fontSize = "12px";
+            button.style.fontWeight = "bolder";
+            applyStyle(button);
+            controlsContainer.appendChild(button);
+            return button;
+        }
+
+        const controlsContainer = document.createElement("div");
+        controlsContainer.style.width = "100%";
+        controlsContainer.style.height = "100%";
+        controlsContainer.style.zIndex = "999";
+        controlsContainer.style.position = "absolute";
+
+        const controlsMap = {};
+
+        const joystick = document.createElement("div");
+        joystick.style.width = "120px";
+        joystick.style.height = "120px";
+        joystick.style.left = "10px";
+        joystick.style.bottom = "50px";
+        joystick.style.borderRadius = "50%";
+        joystick.style.overflow = "hidden";
+        applyStyle(joystick);
+        controlsContainer.appendChild(joystick);
+
+        for(let i = 0; i < 4; ++i) {
+            const box = document.createElement("div");
+            box.style.width = "120px";
+            box.style.height = "120px";
+            box.style.left = (-75 + 150 * (i % 2)) + "px";
+            box.style.top = (-75 + 150 * Math.floor(i / 2)) + "px";
+            applyStyle(box, false);
+            joystick.appendChild(box);
+        }
+
+        controlsMap.joystick = joystick;
+        controlsMap.A = createButton(10, 63, "A");
+        controlsMap.B = createButton(63, 10, "B");
+        controlsMap.X = createButton(63, 116, "X");
+        controlsMap.Y = createButton(116, 63, "Y");
+
+        controlsMap.SL = createSideButton("left");
+        controlsMap.SR = createSideButton("right");
+
+        controlsMap.select = createActionButton("Select", -20);
+        controlsMap.start = createActionButton("Start", 20);
+
+        document.body.appendChild(controlsContainer);
+
+        const getJoystickDirection = (e) => {
+            const directions = {
+                left: new Vector(-1, 0),
+                right: new Vector(1, 0),
+                top: new Vector(0, -1),
+                bottom: new Vector(0, 1),
+            };
+            const target = joystick.getBoundingClientRect();
+            const x = e.changedTouches[0].pageX - (target.left + target.width / 2);
+            const y = e.changedTouches[0].pageY - (target.top + target.height / 2);
+            const pos = new Vector(x, y);
+            if(pos.Mag() < 20) return [];
+            const n = pos.Clone().Unit();
+            const res = [];
+            if(Vector.Dot(n, directions.left) >= 0.5) {
+                res.push("left");
+            }
+            if(Vector.Dot(n, directions.right) >= 0.5) {
+                res.push("right");
+            }
+            if(Vector.Dot(n, directions.top) >= 0.5) {
+                res.push("up");
+            }
+            if(Vector.Dot(n, directions.bottom) >= 0.5) {
+                res.push("down");
+            }
+            return res;
+        }
+
+        const handleJoystick = (ev, dirs, keys) => {
+            for(let dir of dirs) {
+                this._HandleSceneEvent(ev, {
+                    key: keys[dir]
+                });
+            }
+        };
+
+        for(let attr in controlsMap) {
+            const elem = controlsMap[attr];
+            const key = layout[attr];
+
+            if(attr == "joystick") {
+                elem.addEventListener("touchstart", (e) => {
+                    const dirs = getJoystickDirection(e);
+                    handleJoystick("keydown", dirs, key);
+                });
+                elem.addEventListener("touchmove", (e) => {
+                    handleJoystick("keyup", ["left", "right", "up", "down"], key);
+                    const dirs = getJoystickDirection(e);
+                    handleJoystick("keydown", dirs, key);
+                });
+                elem.addEventListener("touchend", (e) => {
+                    const dirs = getJoystickDirection(e);
+                    handleJoystick("keyup", ["left", "right", "up", "down"], key);
+                });
+                continue;
+            }
+            elem.addEventListener("touchdown", () => {
+                this._HandleSceneEvent("keydown", {
+                    key: key
+                });
+            });
+            elem.addEventListener("touchend", () => {
+                this._HandleSceneEvent("keyup", {
+                    key: key
+                });
+            });
+        }
     }
     _InitSceneEvents() {
 
@@ -148,11 +391,9 @@ export class Game {
         });
     }
     _HandleSceneEvent(type, params0) {
-        for(let i = this._sceneManager._scenes.length - 1; i >= 0; --i) {
+        for(let scene of this._sceneManager._scenes) {
 
             const params = Object.assign({}, params0);
-            
-            const scene = this._sceneManager._scenes[i];
             
             if(type.startsWith("mouse")) {
                 const coords = this._renderer.DisplayToSceneCoords(scene, params.x, params.y);
@@ -190,7 +431,7 @@ export class Game {
     CreateScene(n, params = {}) {
         const scene = new Scene(params);
         scene.resources = this._resources;
-        this._sceneManager.Add(scene, n, (params.priority || 0));
+        this._sceneManager.Add(scene, n, (params.zIndex || 0));
         return scene;
     }
     PlayScene(n) {

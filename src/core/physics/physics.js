@@ -19,7 +19,7 @@ friction: { x: number, y: number }
 
 export class World {
     constructor(params = {}) {
-        this._relaxationCount = ParamParser.ParseValue(params.iterations, 5);
+        this._relaxationCount = ParamParser.ParseValue(params.iterations, 3);
         this._bounds = ParamParser.ParseValue(params.bounds, [[-1000, -1000], [1000, 1000]]);
         this._cellDimensions = ParamParser.ParseObject(params.cellDimensions, { width: 100, height: 100 });
         this._limit = ParamParser.ParseValue(params.limit, 10);
@@ -105,16 +105,22 @@ class Body extends Component {
         super();
         this._type = "body";
         this._vel = new Vector();
+        this.passiveVelocity = new Vector();
         this._angVel = 0;
         this.mass = ParamParser.ParseValue(params.mass, 0);
         this.bounce = ParamParser.ParseValue(params.bounce, 0);
         this.angle = 0;
         this.rotating = ParamParser.ParseValue(params.rotating, 1);
-        this.friction = ParamParser.ParseObject(params.friction, { x: 0, y: 0, angular: 0, collide: 0.3 });
+        this.friction = ParamParser.ParseObject(params.friction, { x: 0, y: 0, angular: 0, normal: 0 });
         this._behavior = [];
         this._collisions = {
             left: new Set(), right: new Set(), top: new Set(), bottom: new Set(), all: new Set()
         };
+        this.disabled = ParamParser.ParseObject(params.disabled, {
+            axes: { x: false, y: false },
+            sides: { left: false, right: false, top: false, bottom: false }
+        });
+        this.followBottomObject = ParamParser.ParseValue(params.followBottomObject, false);
     }
     get velocity() {
         return this._vel;
@@ -146,12 +152,11 @@ class Body extends Component {
         ctx.strokeStyle = "lime";
         ctx.strokeRect(-bb.width/2, -bb.height/2, bb.width, bb.height);
     }
-    AddBehavior(groups, type, action, elseAction) {
+    AddBehavior(groups, type, action) {
         this._behavior.push({
             groups: groups.split(" "),
             type: type,
-            action: action,
-            elseAction: elseAction
+            action: action
         });
     }
     UpdatePosition(elapsedTimeS) {
@@ -160,6 +165,8 @@ class Body extends Component {
         this._vel.Sub(frame_decceleration.Mult(elapsedTimeS));
         const vel = this._vel.Clone().Mult(elapsedTimeS);
         this.position.Add(vel);
+        this.position.Add(this.passiveVelocity.Clone().Mult(elapsedTimeS));
+        this.passiveVelocity.Set(0, 0);
         this._angVel -= this._angVel * this.friction.angular * decceleration * elapsedTimeS;
         this.angle += this._angVel * elapsedTimeS;
     }
@@ -184,20 +191,16 @@ class Body extends Component {
             for(let e of entities) {
                 let info;
                 switch(behavior.type) {
-                    case "detect":
+                    case "DetectCollision":
                         info = DetectCollision(this, e.body);
                         
                         if(info.collide) {
                             if(behavior.action) {
                                 behavior.action(e.body, info.point);
                             }
-                        } else {
-                            if(behavior.elseAction) {
-                                behavior.elseAction();
-                            }
                         }
                         break;
-                    case "resolve":
+                    case "ResolveCollision":
                         info = ResolveCollision(this, e.body);
                         if(info.collide) {
                             if(behavior.action) {
@@ -652,9 +655,34 @@ const ResolveCollision = (b1, b2) => {
         };
         if(b1.mass === 0 && b2.mass === 0) return res;
 
-        const diff = detect.normal.Clone().Mult((detect.depth) / (b1.inverseMass + b2.inverseMass));
-        b1.position.Add(diff.Clone().Mult(b1.inverseMass));
-        b2.position.Sub(diff.Clone().Mult(b2.inverseMass)); 
+        if(b1.disabled.axes.x || b2.disabled.axes.x) {
+            detect.normal.x = 0;
+        }
+        if(b1.disabled.axes.y || b2.disabled.axes.y) {
+            detect.normal.y = 0;
+        }
+
+        const directions = {
+            left: new Vector(-1, 0),
+            right: new Vector(1, 0),
+            top: new Vector(0, -1),
+            bottom: new Vector(0, 1),
+        };
+        
+        let direction;
+        if (Vector.Dot(detect.normal, directions.left) >= Math.SQRT2 / 2) {
+            direction = "left";
+            
+        } else if (Vector.Dot(detect.normal, directions.right) >= Math.SQRT2 / 2) {
+            direction = "right";
+            
+        } else if (Vector.Dot(detect.normal, directions.top) >= Math.SQRT2 / 2) {
+            direction = "top";
+            
+        } else if (Vector.Dot(detect.normal, directions.bottom) >= Math.SQRT2 / 2) {
+            direction = "bottom";
+            
+        }
 
         const r1 = detect.point.Clone().Sub(b1.position);
         const r2 = detect.point.Clone().Sub(b2.position);
@@ -666,51 +694,75 @@ const ResolveCollision = (b1, b2) => {
         const vp2 = v2.Clone().Add(new Vector(-w2 * r2.y, w2 * r2.x));
         const relVel = vp1.Clone().Sub(vp2);
         const bounce = Math.max(b1.bounce, b2.bounce);
-
-        const relVelDotN = Vector.Dot(relVel, detect.normal);
-        if(relVelDotN > 0) return res;
-
         const j = (-(1 + bounce) * Vector.Dot(relVel, detect.normal)) / (b1.inverseMass + b2.inverseMass + Math.pow(Vector.Cross(r1, detect.normal), 2) / b1.inertia + Math.pow(Vector.Cross(r2, detect.normal), 2) / b2.inertia);
         const jn = detect.normal.Clone().Mult(j);
         const vel1 = jn.Clone().Mult(b1.inverseMass);
         const vel2 = jn.Clone().Mult(b2.inverseMass);
-        b1._vel.Add(vel1.Clone().Mult(1));
-        b2._vel.Sub(vel2.Clone().Mult(1));
-        b1.angularVelocity += Vector.Cross(r1, vel1.Clone().Mult(1 / b1.inertia));
-        b2.angularVelocity -= Vector.Cross(r2, vel2.Clone().Mult(1 / b1.inertia));
-        
-        const friction = Math.max(b1.friction.collide, b2.friction.collide);
-        const tangent = detect.normal.Clone().Norm();
 
-        const j2 = (-(1 + bounce) * Vector.Dot(relVel, tangent) * friction) / (b1.inverseMass + b2.inverseMass + Math.pow(Vector.Cross(r1, tangent), 2) / b1.inertia + Math.pow(Vector.Cross(r2, tangent), 2) / b2.inertia);
-        const jt = tangent.Clone().Mult(j2);
-        const vel1a = jt.Clone().Mult(b1.inverseMass);
-        const vel2a = jt.Clone().Mult(b2.inverseMass);
-        b1._vel.Add(vel1a.Clone());
-        b2._vel.Sub(vel2a.Clone());
-        b1.angularVelocity += Vector.Cross(r1, vel1a.Clone().Mult(1 / b1.inertia));
-        b2.angularVelocity -= Vector.Cross(r2, vel2a.Clone().Mult(1 / b2.inertia));
-        
-        const directions = {
-            left: new Vector(-1, 0),
-            right: new Vector(1, 0),
-            top: new Vector(0, -1),
-            bottom: new Vector(0, 1),
-        };
-        
-        if (Vector.Dot(detect.normal, directions.left) >= Math.SQRT2 / 2) {
-            b1._collisions.right.add(b2);
-            b2._collisions.left.add(b1);
-        } else if (Vector.Dot(detect.normal, directions.right) >= Math.SQRT2 / 2) {
-            b1._collisions.left.add(b2);
-            b2._collisions.right.add(b1);
-        } else if (Vector.Dot(detect.normal, directions.top) >= Math.SQRT2 / 2) {
-            b1._collisions.bottom.add(b2);
-            b2._collisions.top.add(b1);
-        } else if (Vector.Dot(detect.normal, directions.bottom) >= Math.SQRT2 / 2) {
-            b1._collisions.top.add(b2);
-            b2._collisions.bottom.add(b1);
+
+        if((Vector.Dot(jn, directions.left) >= Math.SQRT2 / 2 || (Vector.Dot(jn, directions.left) < Math.SQRT2 / 2 && direction == "left")) && (b1.disabled.sides.right || b2.disabled.sides.left)) {
+            return res;
+        } else if((Vector.Dot(jn, directions.right) >= Math.SQRT2 / 2 || (Vector.Dot(jn, directions.right) < Math.SQRT2 / 2 && direction == "right")) && (b1.disabled.sides.left || b2.disabled.sides.right)) {
+            return res;
+        } else if((Vector.Dot(jn, directions.top) >= Math.SQRT2 / 2 || (Vector.Dot(jn, directions.top) < Math.SQRT2 / 2 && direction == "top")) && (b1.disabled.sides.bottom || b2.disabled.sides.top)) {
+            return res;
+        } else if((Vector.Dot(jn, directions.bottom) >= Math.SQRT2 / 2 || (Vector.Dot(jn, directions.bottom) < Math.SQRT2 / 2 && direction == "bottom")) && (b1.disabled.sides.top || b2.disabled.sides.bottom)) {
+            return res;
         }
+
+
+        
+        const diff = detect.normal.Clone().Mult((detect.depth) / (b1.inverseMass + b2.inverseMass));
+        b1.position.Add(diff.Clone().Mult(b1.inverseMass));
+        b2.position.Sub(diff.Clone().Mult(b2.inverseMass)); 
+
+        const relVelDotN = Vector.Dot(relVel, detect.normal);
+        if (relVelDotN <= 0) {
+
+            b1._vel.Add(vel1);
+            b2._vel.Sub(vel2);
+            b1.angularVelocity += Vector.Cross(r1, vel1.Clone().Mult(1 / b1.inertia));
+            b2.angularVelocity -= Vector.Cross(r2, vel2.Clone().Mult(1 / b1.inertia));
+
+            const friction = Math.max(b1.friction.normal, b2.friction.normal);
+            const tangent = detect.normal.Clone().Norm();
+
+            const j2 = (-(1 + bounce) * Vector.Dot(relVel, tangent) * friction) / (b1.inverseMass + b2.inverseMass + Math.pow(Vector.Cross(r1, tangent), 2) / b1.inertia + Math.pow(Vector.Cross(r2, tangent), 2) / b2.inertia);
+            const jt = tangent.Clone().Mult(j2);
+            const vel1a = jt.Clone().Mult(b1.inverseMass);
+            const vel2a = jt.Clone().Mult(b2.inverseMass);
+            b1._vel.Add(vel1a.Clone());
+            b2._vel.Sub(vel2a.Clone());
+            b1.angularVelocity += Vector.Cross(r1, vel1a.Clone().Mult(1 / b1.inertia));
+            b2.angularVelocity -= Vector.Cross(r2, vel2a.Clone().Mult(1 / b2.inertia));
+
+            switch (direction) {
+                case "left":
+                    b1._collisions.right.add(b2);
+                    b2._collisions.left.add(b1);
+                    break;
+                case "right":
+                    b1._collisions.left.add(b2);
+                    b2._collisions.right.add(b1);
+                    break;
+                case "top":
+                    b1._collisions.bottom.add(b2);
+                    b2._collisions.top.add(b1);
+                    break;
+                case "bottom":
+                    b1._collisions.top.add(b2);
+                    b2._collisions.bottom.add(b1);
+                    break;
+            }
+
+        }
+
+        if(direction == "bottom") {
+            if(b2.followBottomObject) b2.passiveVelocity.Copy(b1.velocity);
+        } else if(direction == "top") {
+            if(b1.followBottomObject) b1.passiveVelocity.Copy(b2.velocity);
+        }
+        
 
         return res;
     }

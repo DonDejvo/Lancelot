@@ -74,6 +74,9 @@ export class Vector {
         this.Set(x, y);
         return this;
     }
+    static FromAngle(angle) {
+        return new Vector(1, 0).Rotate(angle);
+    }
     static Dot(v1, v2) {
         return v1.x * v2.x + v1.y * v2.y;
     }

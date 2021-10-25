@@ -269,6 +269,9 @@ var Vector = class {
     this.Set(x, y);
     return this;
   }
+  static FromAngle(angle) {
+    return new Vector(1, 0).Rotate(angle);
+  }
   static Dot(v1, v2) {
     return v1.x * v2.x + v1.y * v2.y;
   }
@@ -324,23 +327,14 @@ var Renderer = class {
     this._canvas.style.background = col;
   }
   _InitContainer() {
-    const body = document.body;
-    body.style.userSelect = "none";
-    body.style.touchAction = "none";
-    body.style.position = "fixed";
-    body.style.width = "100%";
-    body.style.height = "100%";
-    body.style.overflow = "hidden";
-    body.style.margin = "0";
-    body.style.padding = "0";
     const con = this._container = document.createElement("div");
     con.style.width = this._width + "px";
     con.style.height = this._height + "px";
     con.style.position = "absolute";
     con.style.left = "50%";
-    con.style.top = "50%";
+    con.style.top = "0%";
     con.style.transformOrigin = "center";
-    body.appendChild(con);
+    document.body.appendChild(con);
   }
   _InitCanvas() {
     const cnv = this._canvas = document.createElement("canvas");
@@ -361,14 +355,13 @@ var Renderer = class {
     } else {
       this._scale = width / this._width;
     }
-    this._container.style.transform = "translate(-50%, -50%) scale(" + this._scale + ")";
+    this._container.style.transform = "translate(-50%, calc(-50% + " + this._height / 2 * this._scale + "px)) scale(" + this._scale + ")";
     this._context.imageSmoothingEnabled = false;
   }
-  Render(scene) {
+  Render() {
     const ctx = this._context;
-    if (!scene)
-      return;
-    scene._Draw(ctx, this._width, this._height);
+    ctx.beginPath();
+    ctx.clearRect(0, 0, this._width, this._height);
   }
   DisplayToSceneCoords(scene, x, y) {
     const boundingRect = this.dimension;
@@ -389,7 +382,7 @@ var SceneManager = class {
     this._scenesMap = new Map();
   }
   Add(s, n, p = 0) {
-    s._priority = p;
+    s._zIndex = p;
     this._scenesMap.set(n, s);
     let idx = this._scenes.indexOf(s);
     if (idx != -1) {
@@ -397,7 +390,7 @@ var SceneManager = class {
     }
     this._scenes.push(s);
     for (let i2 = this._scenes.length - 1; i2 > 0; --i2) {
-      if (this._scenes[i2]._priority > this._scenes[i2 - 1]._priority) {
+      if (this._scenes[i2]._zIndex <= this._scenes[i2 - 1]._zIndex) {
         break;
       }
       [this._scenes[i2], this._scenes[i2 - 1]] = [this._scenes[i2 - 1], this._scenes[i2]];
@@ -706,11 +699,31 @@ var Component = class {
   }
 };
 
+// src/core/utils/param-parser.js
+var ParamParser = function() {
+  return {
+    ParseValue(data, val) {
+      if (data != void 0 && typeof data == typeof val) {
+        return data;
+      }
+      return val;
+    },
+    ParseObject(data, obj) {
+      if (data) {
+        for (let attr in obj) {
+          obj[attr] = typeof obj[attr] == "object" ? this.ParseObject(data[attr], obj[attr]) : this.ParseValue(data[attr], obj[attr]);
+        }
+      }
+      return obj;
+    }
+  };
+}();
+
 // src/core/interactive.js
 var Interactive = class extends Component {
   constructor(params) {
     super();
-    this._capture = params.capture === void 0 ? false : params.capture;
+    this._capture = ParamParser.ParseValue(params.capture, true);
     this._eventHandlers = new Map();
   }
   On(type, handler) {
@@ -826,26 +839,6 @@ __export(physics_exports, {
   RegularPolygon: () => RegularPolygon,
   World: () => World
 });
-
-// src/core/utils/param-parser.js
-var ParamParser = function() {
-  return {
-    ParseValue(data, val) {
-      if (data != void 0 && typeof data == typeof val) {
-        return data;
-      }
-      return val;
-    },
-    ParseObject(data, obj) {
-      if (data) {
-        for (let attr in obj) {
-          obj[attr] = typeof obj[attr] == "object" ? this.ParseObject(data[attr], obj[attr]) : this.ParseValue(data[attr], obj[attr]);
-        }
-      }
-      return obj;
-    }
-  };
-}();
 
 // src/core/spatial-hash-grid.js
 var SpatialHashGrid = class {
@@ -1087,7 +1080,7 @@ var QuadtreeController = class extends Component {
 // src/core/physics/physics.js
 var World = class {
   constructor(params = {}) {
-    this._relaxationCount = ParamParser.ParseValue(params.iterations, 5);
+    this._relaxationCount = ParamParser.ParseValue(params.iterations, 3);
     this._bounds = ParamParser.ParseValue(params.bounds, [[-1e3, -1e3], [1e3, 1e3]]);
     this._cellDimensions = ParamParser.ParseObject(params.cellDimensions, { width: 100, height: 100 });
     this._limit = ParamParser.ParseValue(params.limit, 10);
@@ -1149,12 +1142,13 @@ var Body = class extends Component {
     super();
     this._type = "body";
     this._vel = new Vector();
+    this.passiveVelocity = new Vector();
     this._angVel = 0;
     this.mass = ParamParser.ParseValue(params.mass, 0);
     this.bounce = ParamParser.ParseValue(params.bounce, 0);
     this.angle = 0;
     this.rotating = ParamParser.ParseValue(params.rotating, 1);
-    this.friction = ParamParser.ParseObject(params.friction, { x: 0, y: 0, angular: 0, collide: 0.3 });
+    this.friction = ParamParser.ParseObject(params.friction, { x: 0, y: 0, angular: 0, normal: 0 });
     this._behavior = [];
     this._collisions = {
       left: new Set(),
@@ -1163,6 +1157,11 @@ var Body = class extends Component {
       bottom: new Set(),
       all: new Set()
     };
+    this.disabled = ParamParser.ParseObject(params.disabled, {
+      axes: { x: false, y: false },
+      sides: { left: false, right: false, top: false, bottom: false }
+    });
+    this.followBottomObject = ParamParser.ParseValue(params.followBottomObject, false);
   }
   get velocity() {
     return this._vel;
@@ -1194,12 +1193,11 @@ var Body = class extends Component {
     ctx.strokeStyle = "lime";
     ctx.strokeRect(-bb.width / 2, -bb.height / 2, bb.width, bb.height);
   }
-  AddBehavior(groups, type, action, elseAction) {
+  AddBehavior(groups, type, action) {
     this._behavior.push({
       groups: groups.split(" "),
       type,
-      action,
-      elseAction
+      action
     });
   }
   UpdatePosition(elapsedTimeS) {
@@ -1208,6 +1206,8 @@ var Body = class extends Component {
     this._vel.Sub(frame_decceleration.Mult(elapsedTimeS));
     const vel = this._vel.Clone().Mult(elapsedTimeS);
     this.position.Add(vel);
+    this.position.Add(this.passiveVelocity.Clone().Mult(elapsedTimeS));
+    this.passiveVelocity.Set(0, 0);
     this._angVel -= this._angVel * this.friction.angular * decceleration * elapsedTimeS;
     this.angle += this._angVel * elapsedTimeS;
   }
@@ -1229,19 +1229,15 @@ var Body = class extends Component {
       for (let e of entities) {
         let info;
         switch (behavior.type) {
-          case "detect":
+          case "DetectCollision":
             info = DetectCollision(this, e.body);
             if (info.collide) {
               if (behavior.action) {
                 behavior.action(e.body, info.point);
               }
-            } else {
-              if (behavior.elseAction) {
-                behavior.elseAction();
-              }
             }
             break;
-          case "resolve":
+          case "ResolveCollision":
             info = ResolveCollision(this, e.body);
             if (info.collide) {
               if (behavior.action) {
@@ -1668,9 +1664,28 @@ var ResolveCollision = (b1, b2) => {
     };
     if (b1.mass === 0 && b2.mass === 0)
       return res;
-    const diff = detect.normal.Clone().Mult(detect.depth / (b1.inverseMass + b2.inverseMass));
-    b1.position.Add(diff.Clone().Mult(b1.inverseMass));
-    b2.position.Sub(diff.Clone().Mult(b2.inverseMass));
+    if (b1.disabled.axes.x || b2.disabled.axes.x) {
+      detect.normal.x = 0;
+    }
+    if (b1.disabled.axes.y || b2.disabled.axes.y) {
+      detect.normal.y = 0;
+    }
+    const directions = {
+      left: new Vector(-1, 0),
+      right: new Vector(1, 0),
+      top: new Vector(0, -1),
+      bottom: new Vector(0, 1)
+    };
+    let direction;
+    if (Vector.Dot(detect.normal, directions.left) >= Math.SQRT2 / 2) {
+      direction = "left";
+    } else if (Vector.Dot(detect.normal, directions.right) >= Math.SQRT2 / 2) {
+      direction = "right";
+    } else if (Vector.Dot(detect.normal, directions.top) >= Math.SQRT2 / 2) {
+      direction = "top";
+    } else if (Vector.Dot(detect.normal, directions.bottom) >= Math.SQRT2 / 2) {
+      direction = "bottom";
+    }
     const r1 = detect.point.Clone().Sub(b1.position);
     const r2 = detect.point.Clone().Sub(b2.position);
     const w1 = b1.angularVelocity;
@@ -1681,45 +1696,63 @@ var ResolveCollision = (b1, b2) => {
     const vp2 = v2.Clone().Add(new Vector(-w2 * r2.y, w2 * r2.x));
     const relVel = vp1.Clone().Sub(vp2);
     const bounce = Math.max(b1.bounce, b2.bounce);
-    const relVelDotN = Vector.Dot(relVel, detect.normal);
-    if (relVelDotN > 0)
-      return res;
     const j = -(1 + bounce) * Vector.Dot(relVel, detect.normal) / (b1.inverseMass + b2.inverseMass + Math.pow(Vector.Cross(r1, detect.normal), 2) / b1.inertia + Math.pow(Vector.Cross(r2, detect.normal), 2) / b2.inertia);
     const jn = detect.normal.Clone().Mult(j);
     const vel1 = jn.Clone().Mult(b1.inverseMass);
     const vel2 = jn.Clone().Mult(b2.inverseMass);
-    b1._vel.Add(vel1.Clone().Mult(1));
-    b2._vel.Sub(vel2.Clone().Mult(1));
-    b1.angularVelocity += Vector.Cross(r1, vel1.Clone().Mult(1 / b1.inertia));
-    b2.angularVelocity -= Vector.Cross(r2, vel2.Clone().Mult(1 / b1.inertia));
-    const friction = Math.max(b1.friction.collide, b2.friction.collide);
-    const tangent = detect.normal.Clone().Norm();
-    const j2 = -(1 + bounce) * Vector.Dot(relVel, tangent) * friction / (b1.inverseMass + b2.inverseMass + Math.pow(Vector.Cross(r1, tangent), 2) / b1.inertia + Math.pow(Vector.Cross(r2, tangent), 2) / b2.inertia);
-    const jt = tangent.Clone().Mult(j2);
-    const vel1a = jt.Clone().Mult(b1.inverseMass);
-    const vel2a = jt.Clone().Mult(b2.inverseMass);
-    b1._vel.Add(vel1a.Clone());
-    b2._vel.Sub(vel2a.Clone());
-    b1.angularVelocity += Vector.Cross(r1, vel1a.Clone().Mult(1 / b1.inertia));
-    b2.angularVelocity -= Vector.Cross(r2, vel2a.Clone().Mult(1 / b2.inertia));
-    const directions = {
-      left: new Vector(-1, 0),
-      right: new Vector(1, 0),
-      top: new Vector(0, -1),
-      bottom: new Vector(0, 1)
-    };
-    if (Vector.Dot(detect.normal, directions.left) >= Math.SQRT2 / 2) {
-      b1._collisions.right.add(b2);
-      b2._collisions.left.add(b1);
-    } else if (Vector.Dot(detect.normal, directions.right) >= Math.SQRT2 / 2) {
-      b1._collisions.left.add(b2);
-      b2._collisions.right.add(b1);
-    } else if (Vector.Dot(detect.normal, directions.top) >= Math.SQRT2 / 2) {
-      b1._collisions.bottom.add(b2);
-      b2._collisions.top.add(b1);
-    } else if (Vector.Dot(detect.normal, directions.bottom) >= Math.SQRT2 / 2) {
-      b1._collisions.top.add(b2);
-      b2._collisions.bottom.add(b1);
+    if ((Vector.Dot(jn, directions.left) >= Math.SQRT2 / 2 || Vector.Dot(jn, directions.left) < Math.SQRT2 / 2 && direction == "left") && (b1.disabled.sides.right || b2.disabled.sides.left)) {
+      return res;
+    } else if ((Vector.Dot(jn, directions.right) >= Math.SQRT2 / 2 || Vector.Dot(jn, directions.right) < Math.SQRT2 / 2 && direction == "right") && (b1.disabled.sides.left || b2.disabled.sides.right)) {
+      return res;
+    } else if ((Vector.Dot(jn, directions.top) >= Math.SQRT2 / 2 || Vector.Dot(jn, directions.top) < Math.SQRT2 / 2 && direction == "top") && (b1.disabled.sides.bottom || b2.disabled.sides.top)) {
+      return res;
+    } else if ((Vector.Dot(jn, directions.bottom) >= Math.SQRT2 / 2 || Vector.Dot(jn, directions.bottom) < Math.SQRT2 / 2 && direction == "bottom") && (b1.disabled.sides.top || b2.disabled.sides.bottom)) {
+      return res;
+    }
+    const diff = detect.normal.Clone().Mult(detect.depth / (b1.inverseMass + b2.inverseMass));
+    b1.position.Add(diff.Clone().Mult(b1.inverseMass));
+    b2.position.Sub(diff.Clone().Mult(b2.inverseMass));
+    const relVelDotN = Vector.Dot(relVel, detect.normal);
+    if (relVelDotN <= 0) {
+      b1._vel.Add(vel1);
+      b2._vel.Sub(vel2);
+      b1.angularVelocity += Vector.Cross(r1, vel1.Clone().Mult(1 / b1.inertia));
+      b2.angularVelocity -= Vector.Cross(r2, vel2.Clone().Mult(1 / b1.inertia));
+      const friction = Math.max(b1.friction.normal, b2.friction.normal);
+      const tangent = detect.normal.Clone().Norm();
+      const j2 = -(1 + bounce) * Vector.Dot(relVel, tangent) * friction / (b1.inverseMass + b2.inverseMass + Math.pow(Vector.Cross(r1, tangent), 2) / b1.inertia + Math.pow(Vector.Cross(r2, tangent), 2) / b2.inertia);
+      const jt = tangent.Clone().Mult(j2);
+      const vel1a = jt.Clone().Mult(b1.inverseMass);
+      const vel2a = jt.Clone().Mult(b2.inverseMass);
+      b1._vel.Add(vel1a.Clone());
+      b2._vel.Sub(vel2a.Clone());
+      b1.angularVelocity += Vector.Cross(r1, vel1a.Clone().Mult(1 / b1.inertia));
+      b2.angularVelocity -= Vector.Cross(r2, vel2a.Clone().Mult(1 / b2.inertia));
+      switch (direction) {
+        case "left":
+          b1._collisions.right.add(b2);
+          b2._collisions.left.add(b1);
+          break;
+        case "right":
+          b1._collisions.left.add(b2);
+          b2._collisions.right.add(b1);
+          break;
+        case "top":
+          b1._collisions.bottom.add(b2);
+          b2._collisions.top.add(b1);
+          break;
+        case "bottom":
+          b1._collisions.top.add(b2);
+          b2._collisions.bottom.add(b1);
+          break;
+      }
+    }
+    if (direction == "bottom") {
+      if (b2.followBottomObject)
+        b2.passiveVelocity.Copy(b1.velocity);
+    } else if (direction == "top") {
+      if (b1.followBottomObject)
+        b1.passiveVelocity.Copy(b2.velocity);
     }
     return res;
   }
@@ -1834,6 +1867,7 @@ var RadialLight = class extends Component {
 // src/core/scene.js
 var Scene = class {
   constructor(params) {
+    this._zIndex = 0;
     this._background = params.background;
     this._world = new World(params.physics);
     this.paused = true;
@@ -2012,13 +2046,7 @@ var Scene = class {
   Pause() {
     this.paused = true;
   }
-  _Draw(ctx0, renderWidth, renderHeight) {
-    if (this.paused) {
-      return;
-    }
-    const ctx = document.createElement("canvas").getContext("2d");
-    ctx.canvas.width = renderWidth;
-    ctx.canvas.height = renderHeight;
+  DrawLights(ctx, renderWidth, renderHeight) {
     ctx.globalCompositeOperation = "source-over";
     this._ambientLight.Draw(ctx);
     const cam = this.camera;
@@ -2031,6 +2059,9 @@ var Scene = class {
     }
     ctx.restore();
     ctx.globalCompositeOperation = "multiply";
+  }
+  DrawObjects(ctx, renderWidth, renderHeight) {
+    const cam = this.camera;
     const buffer = document.createElement("canvas").getContext("2d");
     buffer.canvas.width = renderWidth;
     buffer.canvas.height = renderHeight;
@@ -2053,7 +2084,6 @@ var Scene = class {
     }
     buffer.restore();
     ctx.drawImage(buffer.canvas, 0, 0);
-    ctx0.drawImage(ctx.canvas, 0, 0);
   }
 };
 
@@ -2189,12 +2219,39 @@ var Game = class {
     this._init = params.init.bind(this);
     this._resources = null;
     this._loader = new Loader();
+    const body = document.body;
+    body.style.userSelect = "none";
+    body.style.touchAction = "none";
+    body.style.position = "fixed";
+    body.style.width = "100%";
+    body.style.height = "100%";
+    body.style.overflow = "hidden";
+    body.style.margin = "0";
+    body.style.padding = "0";
+    body.style.background = "black";
     this._renderer = new Renderer({
       width: this._width,
       height: this._height
     });
     this._engine = new Engine();
     this._sceneManager = new SceneManager();
+    const controls = ParamParser.ParseObject(params.controls, {
+      active: false,
+      layout: {
+        joystick: { left: "a", right: "d", up: "w", down: "s" },
+        X: "j",
+        Y: "k",
+        A: "l",
+        B: "o",
+        SL: "control",
+        SR: "control",
+        start: "enter",
+        select: "space"
+      }
+    });
+    if (controls.active && "ontouchstart" in document) {
+      this._InitControls(controls.layout);
+    }
     this.timeout = this._engine.timeout;
     this.audio = (() => {
       const sections = new Map();
@@ -2241,11 +2298,34 @@ var Game = class {
         GetVolume
       };
     })();
+    const draw = (ctx, idx = 0) => {
+      const scene = this._sceneManager._scenes[idx];
+      if (!scene) {
+        return;
+      }
+      if (scene.paused) {
+        draw(ctx, idx + 1);
+        return;
+      }
+      const w = this._renderer._width;
+      const h = this._renderer._height;
+      scene.DrawLights(ctx, w, h);
+      const b = document.createElement("canvas").getContext("2d");
+      b.canvas.width = w;
+      b.canvas.height = h;
+      if (idx < this._sceneManager._scenes.length - 1) {
+        draw(b, idx + 1);
+        b.globalCompositeOperation = "source-over";
+      }
+      scene.DrawObjects(b, w, h);
+      ctx.drawImage(b.canvas, 0, 0);
+    };
     const step = (elapsedTime) => {
       for (let scene of this._sceneManager._scenes) {
         scene.Update(elapsedTime * 1e-3);
-        this._renderer.Render(scene);
       }
+      this._renderer.Render();
+      draw(this._renderer._context);
     };
     this._engine._step = step;
     this._InitSceneEvents();
@@ -2266,6 +2346,170 @@ var Game = class {
   }
   get resources() {
     return this._resources;
+  }
+  _InitControls(layout) {
+    const applyStyle = (elem, bg = true) => {
+      const color = "rgba(150, 150, 150, 0.6)";
+      elem.style.position = "absolute";
+      elem.style.border = "2px solid " + color;
+      elem.style.color = color;
+      elem.style.fontFamily = "Arial";
+      elem.style.display = "flex";
+      elem.style.alignItems = "center";
+      elem.style.justifyContent = "center";
+      if (bg)
+        elem.style.background = "radial-gradient(circle at center, " + color + " 0, rgba(0, 0, 0, 0.6) 60%)";
+    };
+    const createButton = (right, bottom, text) => {
+      const button = document.createElement("div");
+      button.style.width = "46px";
+      button.style.height = "46px";
+      button.style.right = right - 5 + "px";
+      button.style.bottom = bottom + 10 + "px";
+      button.textContent = text;
+      button.style.borderRadius = "50%";
+      button.style.fontSize = "22px";
+      applyStyle(button);
+      controlsContainer.appendChild(button);
+      return button;
+    };
+    const createSideButton = (side) => {
+      const button = document.createElement("div");
+      button.style.width = "46px";
+      button.style.height = "46px";
+      button.style.bottom = 190 + "px";
+      button.style.fontSize = "22px";
+      if (side == "left") {
+        button.style.left = 5 + "px";
+        button.textContent = "L";
+        button.style.borderRadius = "50% 0 0 50%";
+      } else if (side == "right") {
+        button.style.right = 5 + "px";
+        button.textContent = "R";
+        button.style.borderRadius = "0 50% 50% 0";
+      }
+      applyStyle(button);
+      controlsContainer.appendChild(button);
+      return button;
+    };
+    const createActionButton = (text) => {
+      const button = document.createElement("div");
+      button.style.width = "50px";
+      button.style.height = "22px";
+      if (text == "Start") {
+        button.style.left = "calc(50% + " + 3 + "px)";
+      } else if (text == "Select") {
+        button.style.right = "calc(50% + " + 3 + "px)";
+      }
+      button.style.bottom = 20 + "px";
+      button.textContent = text;
+      button.style.borderRadius = "12px";
+      button.style.fontSize = "12px";
+      button.style.fontWeight = "bolder";
+      applyStyle(button);
+      controlsContainer.appendChild(button);
+      return button;
+    };
+    const controlsContainer = document.createElement("div");
+    controlsContainer.style.width = "100%";
+    controlsContainer.style.height = "100%";
+    controlsContainer.style.zIndex = "999";
+    controlsContainer.style.position = "absolute";
+    const controlsMap = {};
+    const joystick = document.createElement("div");
+    joystick.style.width = "120px";
+    joystick.style.height = "120px";
+    joystick.style.left = "10px";
+    joystick.style.bottom = "50px";
+    joystick.style.borderRadius = "50%";
+    joystick.style.overflow = "hidden";
+    applyStyle(joystick);
+    controlsContainer.appendChild(joystick);
+    for (let i2 = 0; i2 < 4; ++i2) {
+      const box = document.createElement("div");
+      box.style.width = "120px";
+      box.style.height = "120px";
+      box.style.left = -75 + 150 * (i2 % 2) + "px";
+      box.style.top = -75 + 150 * Math.floor(i2 / 2) + "px";
+      applyStyle(box, false);
+      joystick.appendChild(box);
+    }
+    controlsMap.joystick = joystick;
+    controlsMap.A = createButton(10, 63, "A");
+    controlsMap.B = createButton(63, 10, "B");
+    controlsMap.X = createButton(63, 116, "X");
+    controlsMap.Y = createButton(116, 63, "Y");
+    controlsMap.SL = createSideButton("left");
+    controlsMap.SR = createSideButton("right");
+    controlsMap.select = createActionButton("Select", -20);
+    controlsMap.start = createActionButton("Start", 20);
+    document.body.appendChild(controlsContainer);
+    const getJoystickDirection = (e) => {
+      const directions = {
+        left: new Vector(-1, 0),
+        right: new Vector(1, 0),
+        top: new Vector(0, -1),
+        bottom: new Vector(0, 1)
+      };
+      const target = joystick.getBoundingClientRect();
+      const x = e.changedTouches[0].pageX - (target.left + target.width / 2);
+      const y = e.changedTouches[0].pageY - (target.top + target.height / 2);
+      const pos = new Vector(x, y);
+      if (pos.Mag() < 20)
+        return [];
+      const n = pos.Clone().Unit();
+      const res = [];
+      if (Vector.Dot(n, directions.left) >= 0.5) {
+        res.push("left");
+      }
+      if (Vector.Dot(n, directions.right) >= 0.5) {
+        res.push("right");
+      }
+      if (Vector.Dot(n, directions.top) >= 0.5) {
+        res.push("up");
+      }
+      if (Vector.Dot(n, directions.bottom) >= 0.5) {
+        res.push("down");
+      }
+      return res;
+    };
+    const handleJoystick = (ev, dirs, keys) => {
+      for (let dir of dirs) {
+        this._HandleSceneEvent(ev, {
+          key: keys[dir]
+        });
+      }
+    };
+    for (let attr in controlsMap) {
+      const elem = controlsMap[attr];
+      const key = layout[attr];
+      if (attr == "joystick") {
+        elem.addEventListener("touchstart", (e) => {
+          const dirs = getJoystickDirection(e);
+          handleJoystick("keydown", dirs, key);
+        });
+        elem.addEventListener("touchmove", (e) => {
+          handleJoystick("keyup", ["left", "right", "up", "down"], key);
+          const dirs = getJoystickDirection(e);
+          handleJoystick("keydown", dirs, key);
+        });
+        elem.addEventListener("touchend", (e) => {
+          const dirs = getJoystickDirection(e);
+          handleJoystick("keyup", ["left", "right", "up", "down"], key);
+        });
+        continue;
+      }
+      elem.addEventListener("touchdown", () => {
+        this._HandleSceneEvent("keydown", {
+          key
+        });
+      });
+      elem.addEventListener("touchend", () => {
+        this._HandleSceneEvent("keyup", {
+          key
+        });
+      });
+    }
   }
   _InitSceneEvents() {
     const isTouchDevice = "ontouchstart" in document;
@@ -2305,9 +2549,8 @@ var Game = class {
     });
   }
   _HandleSceneEvent(type, params0) {
-    for (let i2 = this._sceneManager._scenes.length - 1; i2 >= 0; --i2) {
+    for (let scene of this._sceneManager._scenes) {
       const params = Object.assign({}, params0);
-      const scene = this._sceneManager._scenes[i2];
       if (type.startsWith("mouse")) {
         const coords = this._renderer.DisplayToSceneCoords(scene, params.x, params.y);
         params.x = coords.x;
@@ -2342,7 +2585,7 @@ var Game = class {
   CreateScene(n, params = {}) {
     const scene = new Scene(params);
     scene.resources = this._resources;
-    this._sceneManager.Add(scene, n, params.priority || 0);
+    this._sceneManager.Add(scene, n, params.zIndex || 0);
     return scene;
   }
   PlayScene(n) {
@@ -2357,9 +2600,9 @@ __export(drawable_exports, {
   Drawable: () => Drawable,
   Image: () => Image2,
   Line: () => Line,
+  Poly: () => Poly2,
   Polygon: () => Polygon,
   Rect: () => Rect,
-  RegularPolygon: () => RegularPolygon2,
   Sprite: () => Sprite,
   Text: () => Text
 });
@@ -2367,24 +2610,18 @@ var Drawable = class extends Component {
   constructor(params = {}) {
     super();
     this._type = "drawable";
-    this._params = params;
-    this._width = this._params.width || 0;
-    this._height = this._params.height || 0;
+    this._width = ParamParser.ParseValue(params.width, 0);
+    this._height = ParamParser.ParseValue(params.height, 0);
     this._vertices = [];
-    this._zIndex = this._params.zIndex || 0;
-    this.flip = {
-      x: this._params.flipX || false,
-      y: this._params.flipY || false
-    };
-    this._scale = params.scale || 1;
-    this._rotationCount = this._params.rotationCount || 0;
-    this.opacity = this._params.opacity !== void 0 ? this._params.opacity : 1;
-    this.filter = this._params.filter || "";
-    this._angle = this._params.angle || this._rotationCount * Math.PI / 2 || 0;
-    this._fillStyle = this._params.fillStyle || "black";
-    this._strokeStyle = this._params.strokeStyle || "black";
-    this.strokeWidth = this._params.strokeWidth || 0;
-    this.mode = this._params.mode || "source-over";
+    this._zIndex = ParamParser.ParseValue(params.zIndex, 0);
+    this.flip = ParamParser.ParseObject(params.flip, { x: false, y: false });
+    this._scale = ParamParser.ParseObject(params.scale, { x: 1, y: 1 });
+    this.opacity = ParamParser.ParseValue(params.opacity, 1);
+    this._angle = 0;
+    this._fillStyle = ParamParser.ParseValue(params.fillStyle, "black");
+    this._strokeStyle = ParamParser.ParseValue(params.strokeStyle, "black");
+    this.strokeWidth = ParamParser.ParseValue(params.strokeWidth, 0);
+    this.mode = ParamParser.ParseValue(params.mode, "source-over");
     this._offset = new Vector();
     this._shaking = null;
   }
@@ -2417,13 +2654,6 @@ var Drawable = class extends Component {
   }
   get angle() {
     return this._angle;
-  }
-  get rotationCount() {
-    return this._rotationCount;
-  }
-  set rotationCount(num) {
-    this._rotationCount = num;
-    this.angle = this._rotationCount * Math.PI / 2;
   }
   get scale() {
     return this._scale;
@@ -2466,10 +2696,10 @@ var Drawable = class extends Component {
   get position0() {
     return this.position;
   }
-  Shake(range, dur, count, angle) {
+  Shake(range, dur, freq, angle) {
     this._shaking = {
       counter: 0,
-      count,
+      freq,
       angle,
       dur,
       range
@@ -2483,21 +2713,16 @@ var Drawable = class extends Component {
     this._ComputeVertices();
   }
   GetVertices() {
-    return [
+    const arr = [
       new Vector(-this._width / 2, -this._height / 2),
       new Vector(this._width / 2, -this._height / 2),
       new Vector(-this._width / 2, this._height / 2),
       new Vector(this._width / 2, this._height / 2)
     ];
+    return arr;
   }
   _ComputeVertices() {
     this._vertices = this.GetVertices();
-    for (let i2 = 0; i2 < this._vertices.length; ++i2) {
-      const v = this._vertices[i2];
-      v.x *= this.flip.x ? -this.scale : this.scale;
-      v.y *= this.flip.y ? -this.scale : this.scale;
-      v.Rotate(this.angle);
-    }
   }
   SetSize(w, h) {
     this._width = w;
@@ -2519,17 +2744,14 @@ var Drawable = class extends Component {
     this.Draw(ctx);
     ctx.restore();
     ctx.restore();
-    const bb = this.boundingBox;
-    ctx.beginPath();
-    ctx.strokeStyle = "orange";
-    ctx.strokeRect(bb.x - bb.width / 2, bb.y - bb.height / 2, bb.width, bb.height);
   }
   Update(elapsedTimeS) {
     if (this._shaking) {
       const anim = this._shaking;
+      const count = Math.floor(anim.freq / 1e3 * anim.dur);
       anim.counter += elapsedTimeS * 1e3;
       const progress = Math.min(anim.counter / anim.dur, 1);
-      this._offset.Copy(new Vector(Math.sin(progress * Math.PI * 2 * anim.count) * anim.range, 0).Rotate(anim.angle));
+      this._offset.Copy(new Vector(Math.sin(progress * Math.PI * 2 * count) * anim.range, 0).Rotate(anim.angle));
       if (progress == 1) {
         this.StopShaking();
       }
@@ -2539,13 +2761,13 @@ var Drawable = class extends Component {
 var Text = class extends Drawable {
   constructor(params) {
     super(params);
-    this._text = this._params.text;
+    this._text = params.text;
     this._lines = this._text.split(/\n/);
-    this._padding = this._params.padding || 0;
-    this._align = params.align || "center";
-    this._fontSize = this._params.fontSize || 16;
-    this._fontFamily = this._params.fontFamily || "Arial";
-    this._fontStyle = this._params.fontStyle || "normal";
+    this._padding = ParamParser.ParseValue(params.padding, 0);
+    this._align = ParamParser.ParseValue(params.align, "center");
+    this._fontSize = ParamParser.ParseValue(this._params.fontSize, 16);
+    this._fontFamily = ParamParser.ParseValue(this._params.fontFamily, "Arial");
+    this._fontStyle = ParamParser.ParseValue(this._params.fontStyle, "normal");
     this._ComputeDimensions();
   }
   get linesCount() {
@@ -2616,13 +2838,10 @@ var Text = class extends Drawable {
 var Image2 = class extends Drawable {
   constructor(params) {
     super(params);
-    this._image = this._params.image;
-    this._frameWidth = this._params.frameWidth || this._image.width;
-    this._frameHeight = this._params.frameHeight || this._image.height;
-    this._framePos = {
-      x: this._params.posX || 0,
-      y: this._params.posY || 0
-    };
+    this._image = params.image;
+    this._frameWidth = ParamParser.ParseValue(params.frameWidth, this._image.width);
+    this._frameHeight = ParamParser.ParseValue(params.frameHeight, this._image.height);
+    this._framePos = ParamParser.ParseObject(params.framePosition, { x: 0, y: 0 });
   }
   Draw(ctx) {
     ctx.drawImage(this._image, this._framePos.x * this._frameWidth, this._framePos.y * this._frameHeight, this._frameWidth, this._frameHeight, -this._width / 2, -this._height / 2, this._width, this._height);
@@ -2643,7 +2862,7 @@ var Rect = class extends Drawable {
 var Circle = class extends Drawable {
   constructor(params) {
     super(params);
-    this._radius = this._params.radius;
+    this._radius = params.radius;
   }
   get radius() {
     return this._radius;
@@ -2671,10 +2890,10 @@ var Circle = class extends Drawable {
     ctx.stroke();
   }
 };
-var Polygon = class extends Drawable {
+var Poly2 = class extends Drawable {
   constructor(params) {
     super(params);
-    this._points = this._params.points;
+    this._points = ParamParser.ParseValue(params.points, []);
   }
   GetVertices() {
     return this._points.map((v) => new Vector(v[0], v[1]));
@@ -2694,11 +2913,14 @@ var Polygon = class extends Drawable {
       ctx.stroke();
   }
 };
-var RegularPolygon2 = class extends Polygon {
+var Polygon = class extends Poly2 {
   constructor(params) {
     super(params);
-    this.radius = params.radius;
+    this._radius = params.radius;
     this.sides = params.sides;
+    this._InitPoints();
+  }
+  _InitPoints() {
     const points = [];
     for (let i2 = 0; i2 < this.sides; ++i2) {
       const angle = Math.PI * 2 / this.sides * i2;
@@ -2706,10 +2928,19 @@ var RegularPolygon2 = class extends Polygon {
     }
     this._points = points;
   }
+  get radius() {
+    return this._radius;
+  }
+  set radius(num) {
+    this._radius = num;
+  }
 };
 var Sprite = class extends Drawable {
   constructor(params) {
     super(params);
+    this._image = params.image;
+    this._frameWidth = ParamParser.ParseValue(params.frameWidth, this._image.width);
+    this._frameHeight = ParamParser.ParseValue(params.frameHeight, this._image.height);
     this._anims = new Map();
     this._currentAnim = null;
     this._paused = true;
@@ -2779,18 +3010,18 @@ var Sprite = class extends Drawable {
     return null;
   }
   Draw(ctx) {
-    ctx.drawImage(this._params.image, this._framePos.x * this._params.frameWidth, this._framePos.y * this._params.frameHeight, this._params.frameWidth, this._params.frameHeight, -this._width / 2, -this._height / 2, this._width, this._height);
+    ctx.drawImage(this._image, this._framePos.x * this._frameWidth, this._framePos.y * this._frameHeight, this._frameWidth, this._frameHeight, -this._width / 2, -this._height / 2, this._width, this._height);
   }
 };
 var Line = class extends Drawable {
   constructor(params) {
     super(params);
-    this.range = params.range;
+    this.length = params.length;
   }
   get boundingBox() {
     return {
-      width: this.range * 2,
-      height: this.range * 2,
+      width: this.length * 2,
+      height: this.length * 2,
       x: this.position.x,
       y: this.position.y
     };
@@ -2798,7 +3029,7 @@ var Line = class extends Drawable {
   Draw(ctx) {
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.lineTo(this.range, 0);
+    ctx.lineTo(this.length, 0);
     ctx.stroke();
   }
 };

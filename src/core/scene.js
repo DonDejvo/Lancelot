@@ -15,6 +15,7 @@ export class Scene {
         // this._cellDimensions = (params.cellDimensions || [100, 100]);
         // this._relaxationCount = (params.relaxationCount || 5);
 
+        this._zIndex = 0;
         this._background = params.background;
 
         this._world = new World(params.physics);
@@ -222,16 +223,8 @@ export class Scene {
     Pause() {
         this.paused = true;
     }
-    _Draw(ctx0, renderWidth, renderHeight) {
-        if(this.paused) {
-            return;
-        }
-
-        const ctx = document.createElement("canvas").getContext("2d");
-        ctx.canvas.width = renderWidth;
-        ctx.canvas.height = renderHeight;
-        // ambient
-        
+    
+    DrawLights(ctx, renderWidth, renderHeight) {
         ctx.globalCompositeOperation = "source-over";
         this._ambientLight.Draw(ctx);
         
@@ -251,6 +244,10 @@ export class Scene {
         ctx.restore();
 
         ctx.globalCompositeOperation = "multiply";
+    }
+    DrawObjects(ctx, renderWidth, renderHeight) {
+
+        const cam = this.camera;
 
         const buffer = document.createElement("canvas").getContext("2d");
         buffer.canvas.width = renderWidth;
@@ -284,7 +281,5 @@ export class Scene {
         buffer.restore();
 
         ctx.drawImage(buffer.canvas, 0, 0);
-
-        ctx0.drawImage(ctx.canvas, 0, 0);
     }
 }
