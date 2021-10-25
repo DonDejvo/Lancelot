@@ -2239,15 +2239,15 @@
       const controls = ParamParser.ParseObject(params.controls, {
         active: false,
         layout: {
-          joystick: { left: "a", right: "d", up: "w", down: "s" },
-          X: "j",
-          Y: "k",
-          A: "l",
-          B: "o",
-          SL: "control",
-          SR: "control",
-          start: "enter",
-          select: "space"
+          joystick: { left: "ArrowLeft", right: "ArrowRight", up: "ArrowUp", down: "ArrowDown" },
+          X: "e",
+          Y: "d",
+          A: "s",
+          B: "f",
+          SL: "Control",
+          SR: "Control",
+          start: " ",
+          select: "Tab"
         }
       });
       if (controls.active && "ontouchstart" in document) {
@@ -2500,7 +2500,7 @@
           });
           continue;
         }
-        elem.addEventListener("touchdown", () => {
+        elem.addEventListener("touchstart", () => {
           this._HandleSceneEvent("keydown", {
             key
           });
@@ -3040,16 +3040,17 @@
     constructor(params) {
       super();
       this._particles = [];
+      const temp = ParamParser.ParseObject(params.acceleration, { x: 0, y: 0 });
       this._options = {
         lifetime: ParamParser.ParseObject(params.lifetime, { min: 1e3, max: 1e3 }),
         friction: ParamParser.ParseValue(params.friction, 0),
-        angleVariance: ParamParser.ParseValue(params.angleVariance, 0),
+        angleVariance: ParamParser.ParseValue(params.variance, 0),
         angle: ParamParser.ParseObject(params.angle, { min: 0, max: 0 }),
         speed: ParamParser.ParseObject(params.speed, { min: 0, max: 0 }),
-        acceleration: params.acceleration || new Vector(),
-        scale: ParamParser.ParseObject(params.scale, { from: 1, to: 0 }),
-        opacity: ParamParser.ParseObject(params.opacity, { from: 1, to: 0 }),
-        rotationSpeed: ParamParser.ParseValue(params.rotationSpeed, 0)
+        acceleration: new Vector(temp.x, temp.y),
+        scale: ParamParser.ParseObject(params.scale, { from: 1, to: 1 }),
+        opacity: ParamParser.ParseObject(params.opacity, { from: 1, to: 1 }),
+        rotationSpeed: ParamParser.ParseValue(params.rotationalSpeed, 0)
       };
       this._emitting = null;
     }

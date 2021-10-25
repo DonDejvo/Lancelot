@@ -40,15 +40,15 @@ export class Game {
         const controls = ParamParser.ParseObject(params.controls, {
             active: false,
             layout: {
-                joystick: { left: "a", right: "d", up: "w", down: "s" },
-                X: "j",
-                Y: "k",
-                A: "l",
-                B: "o",
-                SL: "control",
-                SR: "control",
-                start: "enter",
-                select: "space"
+                joystick: { left: "ArrowLeft", right: "ArrowRight", up: "ArrowUp", down: "ArrowDown" },
+                X: "e",
+                Y: "d",
+                A: "s",
+                B: "f",
+                SL: "Control",
+                SR: "Control",
+                start: " ",
+                select: "Tab"
             }
         });
         if(controls.active && "ontouchstart" in document) {
@@ -332,7 +332,7 @@ export class Game {
                 });
                 continue;
             }
-            elem.addEventListener("touchdown", () => {
+            elem.addEventListener("touchstart", () => {
                 this._HandleSceneEvent("keydown", {
                     key: key
                 });

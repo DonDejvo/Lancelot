@@ -7,16 +7,17 @@ class Emitter extends Component {
     constructor(params) {
         super();
         this._particles = [];
+        const temp = ParamParser.ParseObject(params.acceleration, { x: 0, y: 0 });
         this._options = {
             lifetime: ParamParser.ParseObject(params.lifetime, { min: 1000, max: 1000 }),
             friction: ParamParser.ParseValue(params.friction, 0),
-            angleVariance: ParamParser.ParseValue(params.angleVariance, 0),
+            angleVariance: ParamParser.ParseValue(params.variance, 0),
             angle: ParamParser.ParseObject(params.angle, { min: 0, max: 0 }),
             speed: ParamParser.ParseObject(params.speed, { min: 0, max: 0 }),
-            acceleration: (params.acceleration || new Vector()),
-            scale: ParamParser.ParseObject(params.scale, { from: 1, to: 0 }),
-            opacity: ParamParser.ParseObject(params.opacity, { from: 1, to: 0 }),
-            rotationSpeed: ParamParser.ParseValue(params.rotationSpeed, 0)
+            acceleration: new Vector(temp.x, temp.y),
+            scale: ParamParser.ParseObject(params.scale, { from: 1, to: 1 }),
+            opacity: ParamParser.ParseObject(params.opacity, { from: 1, to: 1 }),
+            rotationSpeed: ParamParser.ParseValue(params.rotationalSpeed, 0)
         };
         this._emitting = null;
     }
