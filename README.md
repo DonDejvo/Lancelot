@@ -13,5 +13,5 @@
 If you want to include Lancelot.js into your code, place following tag before all other scripts:
 
 ```javascript
-<script src="https://cdn.jsdelivr.net/gh/DonDejvo/Lancelot/dist/lancelot-cdn-nomodule.min.js" type="text/javascript"></script>
+<script src="https://cdn.jsdelivr.net/gh/DonDejvo/Lancelot@latest/dist/lancelot-cdn-nomodule.js" type="text/javascript"></script>
 ```
