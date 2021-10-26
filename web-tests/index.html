@@ -14,167 +14,213 @@
     <script type="module">
         import defaultExport from "../src/Lancelot.js";
 
-        class TreeVisualiser extends Lancelot.drawable.Drawable {
-            constructor(params) {
-                super();
-                this.tree = params.tree;
-                this._width = this.tree._bounds[1][0] - this.tree._bounds[0][0];
-                this._width = this.tree._bounds[1][1] - this.tree._bounds[0][1];
-            }
-            Draw(ctx) {
-                this.tree.Draw(ctx);
+        class CarController extends Lancelot.Component {
+    constructor(params) {
+        super();
+        this.wheels = params.wheels;
+    }
+    Update(dt) {
+        const body = this.parent.body;
+        const sprite = this.GetComponent("Sprite");
+
+        if(body.position.y > 1000) {
+            body.position.Set(0, -200);
+            this.wheels[0].position.Set(body.width * 0.45, -200);
+            this.wheels[1].position.Set(body.width * 0.45, -200);
+        }
+        
+        const onGround = (this.wheels[0].body.collisions.all.size > 0 || this.wheels[1].body.collisions.all.size > 0);
+
+        body.velocity.y += 500 * dt;
+        
+        sprite.angle = body.angle;
+        const speed = 50;
+        const rotSpeed = 15;
+
+        if(this.scene.IsPressed("ArrowRight")) {
+            if(onGround) {
+                this.wheels[0].body.angularVelocity += speed * dt;
+                this.wheels[1].body.angularVelocity += speed * dt;
+            } else {
+                body.angularVelocity -= rotSpeed * dt;
             }
         }
-
-        class PlayerController extends Lancelot.Component {
-            constructor() {
-                super();
-            }
-            Update(dt) {
-
-                const sprite = this.GetComponent("Sprite");
-                const body = this.parent.body;
-                const scene = this.scene;
-
-                const frameAccelerationX = 1600 * dt;
-                const onGround = body.collisions.bottom.size > 0;
-
-                if(scene.IsPressed("a")) {
-                    if(onGround) {
-                        body.velocity.x -= frameAccelerationX;
-                    } else {
-                        body.velocity.x -= frameAccelerationX * 0.5;
-                    }
-                }
-                if(scene.IsPressed("d")) {
-                    if(onGround) {
-                        body.velocity.x += frameAccelerationX;
-                    } else {
-                        body.velocity.x += frameAccelerationX * 0.5;
-                    }
-                }
-                if(onGround) {
-                    if(scene.IsPressed("w")) {
-                        body.velocity.y = -900;
-                    }
-                }
-
-                body.velocity.y += 1600 * dt;
-
-                sprite.angle = body.angle;
-
+        if(this.scene.IsPressed("ArrowLeft")) {
+            if(onGround) {
+                this.wheels[0].body.angularVelocity -= speed * dt;
+                this.wheels[1].body.angularVelocity -= speed * dt;
+            } else {
+                body.angularVelocity += rotSpeed * dt;
             }
         }
+        if(this.scene.IsPressed("f")) {
+            this.wheels[0].body.angularVelocity = 0;
+            this.wheels[1].body.angularVelocity = 0;
+        }
 
-        let game;
-
-        addEventListener("DOMContentLoaded", () => {
-
-            game = new Lancelot.Game({
-                width: 1000,
-                height: 1000,
-                init: init,
-                controls: {
-                    active: true,
-                    layout: {
-                        B: "w"
-                    }
-                }
-            });
-
-        });
-
-        function init() {
-
-            const level = this.CreateScene("level", {
-                zIndex: 0,
-                physics: {
-                    bounds: [[-1000, -1000], [1000, 1000]]
-                },
-                background: "darkblue"
-            });
-
-            level.Play();
-
-
-            const createPlayer = () => {
-
-                const w = 48;
-                const h = 64;
-                const player = level.CreateEntity("Player");
-
-                let body;
-                player.AddComponent(body = new Lancelot.physics.Box({
-                    width: w,
-                    height: h,
-                    mass: 10,
-                    friction: {
-                        x: 0.02, y: 0.02, normal: 0.05, angular: 0.01
-                    },
-                    rotating: 0,
-                    followBottomObject: true
-                }));
-
-                let sprite;
-                player.AddComponent(sprite = new Lancelot.drawable.Rect({
-                    width: w,
-                    height: h,
-                    fillStyle: "lime"
-                }), "Sprite");
-
-                player.AddComponent(new PlayerController());
-
-                body.AddBehavior("obstacle", "ResolveCollision");
-
-                return player;
-            }
-
-            const createObstacle = (x, y, w, h, a) => {
-
-                const obstacle = level.CreateEntity();
-                obstacle.groupList.add("obstacle");
-                obstacle.position.Set(x, y);
-
-                let body;
-                obstacle.AddComponent(body = new Lancelot.physics.Box({
-                    width: w,
-                    height: h,
-                    disabled: {
-                        axes: { x: true },
-                        sides: { bottom: true, left: true, right: true }
-                    }
-                }));
-                body.velocity.Set(0, 0);
-                body.angle = a;
-
-                let sprite;
-                obstacle.AddComponent(sprite = new Lancelot.drawable.Rect({
-                    width: w,
-                    height: h,
-                    fillStyle: "orange"
-                }), "Sprite");
-                sprite.angle = a;
-
-                return obstacle;
-            }
-
-            createPlayer();
-            createObstacle(20, 240, 240, 20, 0.3);
-            let movingObstacle = createObstacle(-200, 210, 240, 20, 0);
-            createObstacle(230, 270, 240, 20, 0);
-            createObstacle(20, 40, 240, 20, 0.3);
-            createObstacle(-200, 10, 240, 20, 0);
-            createObstacle(230, 20, 240, 100, 0);
-
-            movingObstacle.body.velocity.Set(-30, -30);
-
-            const tree = level.CreateEntity();
+        for(let w of this.wheels) {
+            const wbody = w.body;
+            const wsprite = w.GetComponent("Sprite");
             
-            tree.AddComponent(new TreeVisualiser({
-                tree: level._world._quadtree
-            }));
-
+            
+        
+            wbody.velocity.y += 500 * dt;
+        
+            wsprite.angle = wbody.angle;
         }
+    }
+}
+
+let game;
+
+addEventListener("DOMContentLoaded", () => {
+    
+    game = new Lancelot.Game({
+        width: 720,
+        height: 480,
+        init: init,
+        controls: {
+            active: true,
+        }
+    });
+    
+});
+
+function init() {
+    
+    const level = this.CreateScene("level", {
+        background: "#646464",
+        light: "#FFF",
+        physics: {
+            iterations: 3,
+            bounds: [[-100, -1100], [4000, 1400]]
+        }
+    });
+    
+    level.Play();
+    
+    
+    const createCar = () => {
+        
+        const w = 128, h = 32;
+        const car = level.CreateEntity();
+        car.groupList.add("car");
+        
+        let body;
+        car.AddComponent(body = new Lancelot.physics.Box({
+            width: w,
+            height: h,
+            mass: 20,
+            friction: { normal: 0, angular: 0.01, x: 0.01, y: 0.01 },
+            rotating: 1
+        }));
+        let sprite;
+        car.AddComponent(sprite = new Lancelot.drawable.Rect({
+            width: w,
+            height: h,
+            fillStyle: "black",
+            strokeStyle: "white",
+            strokeWidth: 2
+        }), "Sprite");
+        
+        const createWheel = (x, y, r) => {
+            
+            const wheel = level.CreateEntity();
+            wheel.groupList.add("wheel");
+            wheel.position.Set(x,y);
+            
+            let wheelBody;
+            wheel.AddComponent(wheelBody = new Lancelot.physics.Ball({
+                radius: r,
+                mass: r,
+                friction: { normal: 1, angular: 0.01, x: 0.01, y: 0.01 },
+            }));
+            let wheelSprite;
+            wheel.AddComponent(wheelSprite = new Lancelot.drawable.Circle({
+                radius: r,
+                fillStyle: "black",
+                strokeStyle: "white",
+                strokeWidth: 2,
+                zIndex: 5
+            }), "Sprite");
+            
+           
+            for(let i = 0; i < 1; ++i) {
+                
+                body.Join(wheelBody, "stick", {
+                    offset1: { x: x, y: y },
+                });
+            }
+            
+            wheelBody.AddBehavior("obst", "ResolveCollision")
+            
+            return wheel;
+        }
+        
+        const wheels = [];
+        
+        wheels.push(createWheel(-w * 0.45, 0, h * 1.2));
+        wheels.push(createWheel(w * 0.45, 0, h * 1.2));
+        
+        car.AddComponent(new CarController({
+
+            wheels: wheels
+        }));
+        
+        body.AddBehavior("obst", "ResolveCollision")
+        
+        level.camera.Follow(car);
+
+    }
+    
+    const createObstacle = (x, y, w, h, a) => {
+        const obst = level.CreateEntity();
+        obst.groupList.add("obst");
+        obst.position.Set(x, y);
+        
+        let body;
+        obst.AddComponent(body = new Lancelot.physics.Box({
+            width: w,
+            height: h,
+        }));
+        body.angle = a;
+        
+        let sprite;
+        obst.AddComponent(sprite = new Lancelot.drawable.Rect({
+            width: w,
+            height: h,
+            strokeStyle: "orange",
+            strokeWidth: 2
+        }), "Sprite");
+        sprite.angle = a;
+    }
+    
+    const sin = (x) => {
+        const progress = Lancelot.math.lerp(x / 50, 0, Math.PI * 4);
+        return Math.sin(progress) * 200 + 100;
+    }
+    
+    let curDiffH = 0;
+    let curY = 300;
+    let stepX = 40;
+    for(let i = 0; i < 100; ++i) {
+        curDiffH += Lancelot.math.rand(-5, 5);
+        const lastY = sin(i);
+        curY = sin(i + 1);
+        const lastX = (i - 3) * stepX;
+        const curX = (i - 2) * stepX;
+        
+        const lastPos = new Lancelot.Vector(lastX, lastY);
+        const curPos = new Lancelot.Vector(curX, curY);
+        const center = curPos.Clone().Add(lastPos).Mult(0.5);
+        const ang = curPos.Clone().Sub(lastPos).Angle();
+        
+        createObstacle(center.x, center.y, curPos.Clone().Sub(lastPos).Mag() * 1, 20, ang)
+    }
+
+    createCar();
+    
+}
         
     </script>
     

@@ -116,9 +116,9 @@ class Body extends Component {
         this._collisions = {
             left: new Set(), right: new Set(), top: new Set(), bottom: new Set(), all: new Set()
         };
-        this.disabled = ParamParser.ParseObject(params.disabled, {
-            axes: { x: false, y: false },
-            sides: { left: false, right: false, top: false, bottom: false }
+        this.options = ParamParser.ParseObject(params.options, {
+            axes: { x: true, y: true },
+            sides: { left: true, right: true, top: true, bottom: true }
         });
         this.followBottomObject = ParamParser.ParseValue(params.followBottomObject, false);
     }
@@ -333,7 +333,7 @@ export class Box extends Poly {
         return this._height;
     }
     get inertia() {
-        return ((this.width) ** 2 + (this.height) ** 2) / 1 / this.rotating;
+        return ((this.width) ** 2 + (this.height) ** 2) / 2 / this.rotating;
     }
 }
 
@@ -349,7 +349,7 @@ export class Ball extends Body {
         return { width : 2 * this.radius, height : 2 * this.radius };
     }
     get inertia() {
-        return (Math.PI * this.radius ** 2) / 1 / this.rotating;
+        return (Math.PI * this.radius ** 2) / 2 / this.rotating;
     }
     FindSupportPoint(n, ptOnEdge){
         let circVerts = [];
@@ -655,10 +655,10 @@ const ResolveCollision = (b1, b2) => {
         };
         if(b1.mass === 0 && b2.mass === 0) return res;
 
-        if(b1.disabled.axes.x || b2.disabled.axes.x) {
+        if(!(b1.options.axes.x && b2.options.axes.x)) {
             detect.normal.x = 0;
         }
-        if(b1.disabled.axes.y || b2.disabled.axes.y) {
+        if(!(b1.options.axes.y && b2.options.axes.y)) {
             detect.normal.y = 0;
         }
 
@@ -700,13 +700,13 @@ const ResolveCollision = (b1, b2) => {
         const vel2 = jn.Clone().Mult(b2.inverseMass);
 
 
-        if((Vector.Dot(jn, directions.left) >= Math.SQRT2 / 2 || (Vector.Dot(jn, directions.left) < Math.SQRT2 / 2 && direction == "left")) && (b1.disabled.sides.right || b2.disabled.sides.left)) {
+        if((Vector.Dot(jn, directions.left) >= Math.SQRT2 / 2 || (Vector.Dot(jn, directions.left) < Math.SQRT2 / 2 && direction == "left")) && (!b1.options.sides.right || !b2.options.sides.left)) {
             return res;
-        } else if((Vector.Dot(jn, directions.right) >= Math.SQRT2 / 2 || (Vector.Dot(jn, directions.right) < Math.SQRT2 / 2 && direction == "right")) && (b1.disabled.sides.left || b2.disabled.sides.right)) {
+        } else if((Vector.Dot(jn, directions.right) >= Math.SQRT2 / 2 || (Vector.Dot(jn, directions.right) < Math.SQRT2 / 2 && direction == "right")) && (!b1.options.sides.left || !b2.options.sides.right)) {
             return res;
-        } else if((Vector.Dot(jn, directions.top) >= Math.SQRT2 / 2 || (Vector.Dot(jn, directions.top) < Math.SQRT2 / 2 && direction == "top")) && (b1.disabled.sides.bottom || b2.disabled.sides.top)) {
+        } else if((Vector.Dot(jn, directions.top) >= Math.SQRT2 / 2 || (Vector.Dot(jn, directions.top) < Math.SQRT2 / 2 && direction == "top")) && (!b1.options.sides.bottom || !b2.options.sides.top)) {
             return res;
-        } else if((Vector.Dot(jn, directions.bottom) >= Math.SQRT2 / 2 || (Vector.Dot(jn, directions.bottom) < Math.SQRT2 / 2 && direction == "bottom")) && (b1.disabled.sides.top || b2.disabled.sides.bottom)) {
+        } else if((Vector.Dot(jn, directions.bottom) >= Math.SQRT2 / 2 || (Vector.Dot(jn, directions.bottom) < Math.SQRT2 / 2 && direction == "bottom")) && (!b1.options.sides.top || !b2.options.sides.bottom)) {
             return res;
         }
 
@@ -790,7 +790,8 @@ class Joint {
 class Spring extends Joint {
     constructor(b1, b2, params) {
         super(b1, b2, params);
-        this._stiffness = ParamParser.ParseValue(params.stiffness, 0) * 10;
+        this._elasticity = ParamParser.ParseValue(params.elasticity, 1) * 10;
+        this._options = ParamParser.ParseObject(params.options, { expansion: true, depression: true })
     }
     Update() {
         const offset1 = this._offset1.Clone().Rotate(this._body1.angle);
@@ -802,14 +803,18 @@ class Spring extends Joint {
         const n = vec.Clone().Unit();
         const dist = vec.Mag();
 
-        const diff = n.Clone().Mult((dist - this._length) * -this._stiffness / (this._body1.inverseMass + this._body2.inverseMass));
-        
+        if((!this._options.expansion && dist < this._length) || (!this._options.depression && dist > this._length)) {
+            return;
+        }
+
+        const diff = n.Clone().Mult((dist - this._length) * -(1 - this._elasticity) / (this._body1.inverseMass + this._body2.inverseMass));
+
         const vel1 = diff.Clone().Mult(this._body1.inverseMass);
-        this._body1.velocity.Add(vel1.Clone().Mult(1));
+        this._body1.velocity.Add(vel1);
         this._body1.angularVelocity += Vector.Cross(offset1, vel1.Clone().Mult(1 / this._body1.inertia));
 
         const vel2 = diff.Clone().Mult(this._body2.inverseMass);
-        this._body2.velocity.Sub(vel2.Clone().Mult(1));
+        this._body2.velocity.Sub(vel2);
         this._body2.angularVelocity -= Vector.Cross(offset2, vel2.Clone().Mult(1 / this._body2.inertia));
 
     }
@@ -830,7 +835,17 @@ class Stick extends Joint {
         const n = vec.Clone().Unit();
         const dist = vec.Mag();
 
-        const diff = n.Clone().Mult((dist - this._length) * -this._stiffness / (this._body1.inverseMass + this._body2.inverseMass));
+        const diff = n.Clone().Mult((dist - this._length) * -10 / (this._body1.inverseMass + this._body2.inverseMass));
+
+        const vel1 = diff.Clone().Mult(this._body1.inverseMass);
+        this._body1.position.Add(vel1.Clone().Mult(0.1));
+        this._body1.velocity.Add(vel1);
+        this._body1.angularVelocity += Vector.Cross(offset1, vel1.Clone().Mult(1 / this._body1.inertia));
+
+        const vel2 = diff.Clone().Mult(this._body2.inverseMass);
+        this._body2.position.Sub(vel2.Clone().Mult(0.1));
+        this._body2.velocity.Sub(vel2);
+        this._body2.angularVelocity -= Vector.Cross(offset2, vel2.Clone().Mult(1 / this._body2.inertia));
 
     }
 }
