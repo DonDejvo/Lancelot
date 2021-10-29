@@ -16,13 +16,13 @@ export const math = (function () {
             return x >= a && x <= b;
         },
         sat(x) {
-            return Math.min(Math.max(x, 0), 1);
+            return this.clamp(x, 0, 1);
         },
         ease_out(x) {
-            return Math.min(Math.max(Math.pow(x, 1 / 2), 0), 1);
+            return this.sat(Math.pow(x, 1 / 2));
         },
         ease_in(x) {
-            return Math.min(Math.max(Math.pow(x, 3), 0), 1);
+            return this.sat(Math.pow(x, 3));
         },
         choice(arr) {
             const len = arr.length;
