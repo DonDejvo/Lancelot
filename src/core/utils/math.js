@@ -32,7 +32,7 @@ export const math = (function () {
             const len = arr.length;
             for(let i = 0; i < len; ++i) {
                 const j = this.randint(0, len - 1);
-                [ arr[i], arr[j] ] = [ arr[j], arr[i] ];
+                [arr[i], arr[j]] = [arr[j], arr[i]];
             }
         }
     };
