@@ -19,10 +19,10 @@ export const math = (function () {
             return this.clamp(x, 0, 1);
         },
         ease_out(x) {
-            return this.sat(x ** 0.5);
+            return this.sat(Math.pow(x, 1 / 2));
         },
         ease_in(x) {
-            return this.sat(x ** 3);
+            return this.sat(Math.pow(x, 3));
         },
         choice(arr) {
             const len = arr.length;
