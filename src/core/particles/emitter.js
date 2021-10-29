@@ -1,38 +1,43 @@
-import { Component } from "./component.js";
-import { math } from "./utils/math.js";
-import { ParamParser } from "./utils/param-parser.js";
-import { Vector } from "./utils/vector.js";
+import { Component } from "../component.js"
+import { math } from "../utils/math.js";
+import { ParamParser } from "../utils/param-parser.js";
+import { Vector } from "../utils/vector.js";
 
-class Emitter extends Component {
+export class Emitter extends Component {
     constructor(params) {
         super();
         this._particles = [];
-        const temp = ParamParser.ParseObject(params.acceleration, { x: 0, y: 0 });
-        this._options = {
-            lifetime: ParamParser.ParseObject(params.lifetime, { min: 1000, max: 1000 }),
-            friction: ParamParser.ParseValue(params.friction, 0),
-            angleVariance: ParamParser.ParseValue(params.variance, 0),
-            angle: ParamParser.ParseObject(params.angle, { min: 0, max: 0 }),
-            speed: ParamParser.ParseObject(params.speed, { min: 0, max: 0 }),
-            acceleration: new Vector(temp.x, temp.y),
-            scale: ParamParser.ParseObject(params.scale, { from: 1, to: 1 }),
-            opacity: ParamParser.ParseObject(params.opacity, { from: 1, to: 1 }),
-            rotationSpeed: ParamParser.ParseValue(params.rotationalSpeed, 0)
-        };
+        this._width = ParamParser.ParseValue(params.width, 0);
+        this._angle = ParamParser.ParseValue(params.angle, 0);
+        this._options = ParamParser.ParseObject(params.options, {
+            lifetime: { min: 1000, max: 1000 },
+            friction: { min: 0, max: 0 },
+            variance: { min: 0, max: 0 },
+            angle: { min: 0, max: Math.PI * 2 },
+            speed: { min: 300, max: 300 },
+            force: { x: 0, y: 0 },
+            scale: { from: 1, to: 1 },
+            opacity: { from: 1, to: 1 },
+            rotationSpeed: { min: 0, max: 0 }
+        });
         this._emitting = null;
     }
     _CreateParticle() {
         
         const particle = this.scene.CreateEntity();
+        
+        const n = Vector.FromAngle(this._angle);
+        const pos = this.position.Clone().Add(n.Clone().Mult(math.rand(-this._width / 2, this._width / 2)));
+        particle.position.Copy(pos);
+        
         particle.groupList.add("particle");
-        particle.position.Copy(this.position);
 
         const particleType = math.choice(this._particles);
         particle.AddComponent(new particleType[0](particleType[1]), "Sprite");
 
-        particle.AddComponent(new ParticleController(this._options));
+        particle.AddComponent(new ParticleController(this._options, this._angle));
     }
-    AddParticle(type, params) {
+    Add(type, params) {
         this._particles.push([type, params]);
     }
     Emit(count, repeat = false, delay = 0) {
@@ -61,17 +66,17 @@ class Emitter extends Component {
 }
 
 class ParticleController extends Component {
-    constructor(params) {
+    constructor(params, angle) {
         super();
-        this._friction = (params.friction || 0);
+        this._friction = this._InitMinMax(params.friction);
         this._lifetime = this._InitMinMax(params.lifetime);
-        this._angleVariance = (params.angleVariance || 0);
-        this._acc = (params.acceleration || new Vector());
+        this._angleVariance = this._InitMinMax(params.variance);
+        this._acc = new Vector(params.force.x, params.force.y);
         this._counter = 0;
         this._scale = this._InitRange(params.scale);
         this._opacity = this._InitRange(params.opacity);
-        this._vel = new Vector(this._InitMinMax(params.speed), 0).Rotate(this._InitMinMax(params.angle));
-        this._rotationSpeed = (params.rotationSpeed || 0);
+        this._vel = new Vector(this._InitMinMax(params.speed), 0).Rotate(angle - Math.PI / 2 + this._InitMinMax(params.angle));
+        this._rotationSpeed = this._InitMinMax(params.rotationSpeed);
     }
     _InitMinMax(param) {
         return math.rand(param.min, param.max);
@@ -91,7 +96,7 @@ class ParticleController extends Component {
             return;
         }
 
-        this._vel.Add(this._acc.Mult(elapsedTimeS));
+        this._vel.Add(this._acc.Clone().Mult(elapsedTimeS));
         const decceleration = 60;
         const frameDecceleration = new Vector(this._vel.x * decceleration * this._friction, this._vel.y * decceleration * this._friction);
         this._vel.Sub(frameDecceleration.Mult(elapsedTimeS));
@@ -106,11 +111,6 @@ class ParticleController extends Component {
         if(this._opacity) {
             sprite.opacity = math.lerp(progress, this._opacity.from, this._opacity.to);
         }
-        this._rotationSpeed -= this._rotationSpeed * decceleration * this._friction;
         sprite.angle += this._rotationSpeed * elapsedTimeS;
     }
 }
-
-export const particle = {
-    Emitter
-};

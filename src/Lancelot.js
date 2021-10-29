@@ -3,7 +3,7 @@ import { Component } from "./core/component.js";
 import * as drawable from "./core/drawable/drawable.js";
 import { Vector } from "./core/utils/vector.js";
 import * as physics from "./core/physics/physics.js";
-import { particle } from "./core/particle.js";
+import * as particles from "./core/particles/emitter.js";
 import { math } from "./core/utils/math.js";
 import * as light from "./core/light/light.js";
 
@@ -13,7 +13,7 @@ let __export = {
     Vector,
     Game,
     Component,
-    particle,
+    particles,
     drawable,
     physics,
     math,

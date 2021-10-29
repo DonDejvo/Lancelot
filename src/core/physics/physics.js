@@ -110,7 +110,7 @@ class Body extends Component {
         this.mass = ParamParser.ParseValue(params.mass, 0);
         this.bounce = ParamParser.ParseValue(params.bounce, 0);
         this.angle = 0;
-        this.rotating = ParamParser.ParseValue(params.rotating, 1);
+        this.rotation = ParamParser.ParseValue(params.rotation, 1);
         this.friction = ParamParser.ParseObject(params.friction, { x: 0, y: 0, angular: 0, normal: 0 });
         this._behavior = [];
         this._collisions = {
@@ -333,7 +333,7 @@ export class Box extends Poly {
         return this._height;
     }
     get inertia() {
-        return ((this.width) ** 2 + (this.height) ** 2) / 2 / this.rotating;
+        return ((this.width) ** 2 + (this.height) ** 2) / 2 / this.rotation;
     }
 }
 
@@ -349,7 +349,7 @@ export class Ball extends Body {
         return { width : 2 * this.radius, height : 2 * this.radius };
     }
     get inertia() {
-        return (Math.PI * this.radius ** 2) / 2 / this.rotating;
+        return (Math.PI * this.radius ** 2) / 2 / this.rotation;
     }
     FindSupportPoint(n, ptOnEdge){
         let circVerts = [];
@@ -404,7 +404,7 @@ export class RegularPolygon extends Poly {
         return { width : 2 * this.radius, height : 2 * this.radius };
     }
     get inertia() {
-        return (Math.PI * this.radius ** 2) / 1 / this.rotating;
+        return (Math.PI * this.radius ** 2) / 1 / this.rotation;
     }
 }
 
@@ -776,13 +776,15 @@ class Joint {
         this._body1 = b1;
         this._body2 = b2;
         const offset1 = ParamParser.ParseObject(params.offset1, { x: 0, y: 0 });
-        this._offset1 = new Vector(offset1.x, offset1.y);
+        this.offset1 = new Vector(offset1.x, offset1.y);
         const offset2 = ParamParser.ParseObject(params.offset2, { x: 0, y: 0 });
-        this._offset2 = new Vector(offset2.x, offset2.y);
+        this.offset2 = new Vector(offset2.x, offset2.y);
 
-        const start = this._body1.position.Clone().Add(this._offset1.Clone().Rotate(this._body1.angle));
-        const end = this._body2.position.Clone().Add(this._offset2.Clone().Rotate(this._body2.angle));
-        this._length = ParamParser.ParseValue(params.length, Vector.Dist(start, end));
+        const start = this._body1.position.Clone().Add(this.offset1.Clone().Rotate(this._body1.angle));
+        const end = this._body2.position.Clone().Add(this.offset2.Clone().Rotate(this._body2.angle));
+        this.length = ParamParser.ParseValue(params.length, Vector.Dist(start, end));
+
+        this._multiplier = 600;
     }
     Update(_) {}
 }
@@ -790,12 +792,12 @@ class Joint {
 class Spring extends Joint {
     constructor(b1, b2, params) {
         super(b1, b2, params);
-        this._elasticity = ParamParser.ParseValue(params.elasticity, 1) * 10;
-        this._options = ParamParser.ParseObject(params.options, { expansion: true, depression: true })
+        this.strength = ParamParser.ParseValue(params.strength, 1);
     }
-    Update() {
-        const offset1 = this._offset1.Clone().Rotate(this._body1.angle);
-        const offset2 = this._offset2.Clone().Rotate(this._body2.angle);
+    Update(elapsedTimeS) {
+        if(this._body1.mass === 0 && this._body2.mass === 0) return;
+        const offset1 = this.offset1.Clone().Rotate(this._body1.angle);
+        const offset2 = this.offset2.Clone().Rotate(this._body2.angle);
         const start = this._body1.position.Clone().Add(offset1);
         const end = this._body2.position.Clone().Add(offset2);
 
@@ -803,17 +805,15 @@ class Spring extends Joint {
         const n = vec.Clone().Unit();
         const dist = vec.Mag();
 
-        if((!this._options.expansion && dist < this._length) || (!this._options.depression && dist > this._length)) {
-            return;
-        }
+        if(dist < this.length) return;
 
-        const diff = n.Clone().Mult((dist - this._length) * -(1 - this._elasticity) / (this._body1.inverseMass + this._body2.inverseMass));
+        const diff = n.Clone().Mult((dist - this.length) * -this.strength / (this._body1.inverseMass + this._body2.inverseMass));
 
-        const vel1 = diff.Clone().Mult(this._body1.inverseMass);
+        const vel1 = diff.Clone().Mult(this._body1.inverseMass * elapsedTimeS * this._multiplier);
         this._body1.velocity.Add(vel1);
         this._body1.angularVelocity += Vector.Cross(offset1, vel1.Clone().Mult(1 / this._body1.inertia));
 
-        const vel2 = diff.Clone().Mult(this._body2.inverseMass);
+        const vel2 = diff.Clone().Mult(this._body2.inverseMass * elapsedTimeS * this._multiplier);
         this._body2.velocity.Sub(vel2);
         this._body2.angularVelocity -= Vector.Cross(offset2, vel2.Clone().Mult(1 / this._body2.inertia));
 
@@ -823,11 +823,12 @@ class Spring extends Joint {
 class Stick extends Joint {
     constructor(b1, b2, params) {
         super(b1, b2, params);
-
+        this.strength = ParamParser.ParseValue(params.strength, 1);
     }
-    Update() {
-        const offset1 = this._offset1.Clone().Rotate(this._body1.angle);
-        const offset2 = this._offset2.Clone().Rotate(this._body2.angle);
+    Update(elapsedTimeS) {
+        if(this._body1.mass === 0 && this._body2.mass === 0) return;
+        const offset1 = this.offset1.Clone().Rotate(this._body1.angle);
+        const offset2 = this.offset2.Clone().Rotate(this._body2.angle);
         const start = this._body1.position.Clone().Add(offset1);
         const end = this._body2.position.Clone().Add(offset2);
 
@@ -835,17 +836,17 @@ class Stick extends Joint {
         const n = vec.Clone().Unit();
         const dist = vec.Mag();
 
-        const diff = n.Clone().Mult((dist - this._length) * -10 / (this._body1.inverseMass + this._body2.inverseMass));
+        const diff = n.Clone().Mult((dist - this.length) * -this.strength / (this._body1.inverseMass + this._body2.inverseMass));
 
         const vel1 = diff.Clone().Mult(this._body1.inverseMass);
-        this._body1.position.Add(vel1.Clone().Mult(0.1));
-        this._body1.velocity.Add(vel1);
-        this._body1.angularVelocity += Vector.Cross(offset1, vel1.Clone().Mult(1 / this._body1.inertia));
+        this._body1.position.Add(vel1.Clone());
+        this._body1.velocity.Add(vel1.Clone().Mult(elapsedTimeS * this._multiplier));
+        this._body1.angularVelocity += Vector.Cross(offset1, vel1.Clone().Mult(1 / this._body1.inertia * elapsedTimeS * this._multiplier));
 
         const vel2 = diff.Clone().Mult(this._body2.inverseMass);
-        this._body2.position.Sub(vel2.Clone().Mult(0.1));
-        this._body2.velocity.Sub(vel2);
-        this._body2.angularVelocity -= Vector.Cross(offset2, vel2.Clone().Mult(1 / this._body2.inertia));
+        this._body2.position.Sub(vel2.Clone());
+        this._body2.velocity.Sub(vel2.Clone().Mult(elapsedTimeS * this._multiplier));
+        this._body2.angularVelocity -= Vector.Cross(offset2, vel2.Clone().Mult(1 / this._body2.inertia * elapsedTimeS * this._multiplier));
 
     }
 }

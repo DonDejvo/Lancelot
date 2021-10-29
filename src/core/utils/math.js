@@ -16,17 +16,24 @@ export const math = (function () {
             return x >= a && x <= b;
         },
         sat(x) {
-            return Math.min(Math.max(x, 0), 1);
+            return this.clamp(x, 0, 1);
         },
         ease_out(x) {
-            return Math.min(Math.max(Math.pow(x, 1 / 2), 0), 1);
+            return this.sat(x ** 0.5);
         },
         ease_in(x) {
-            return Math.min(Math.max(Math.pow(x, 3), 0), 1);
+            return this.sat(x ** 3);
         },
         choice(arr) {
             const len = arr.length;
-            return arr[Math.floor(Math.random() * len)];
+            return arr[this.randint(0, len - 1)];
+        },
+        shuffle(arr) {
+            const len = arr.length;
+            for(let i = 0; i < len; ++i) {
+                const j = this.randint(0, len - 1);
+                [ arr[i], arr[j] ] = [ arr[j], arr[i] ];
+            }
         }
     };
 })();

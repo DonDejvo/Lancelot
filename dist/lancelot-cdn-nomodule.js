@@ -26,17 +26,24 @@
         return x >= a && x <= b;
       },
       sat(x) {
-        return Math.min(Math.max(x, 0), 1);
+        return this.clamp(x, 0, 1);
       },
       ease_out(x) {
-        return Math.min(Math.max(Math.pow(x, 1 / 2), 0), 1);
+        return this.sat(x ** 0.5);
       },
       ease_in(x) {
-        return Math.min(Math.max(Math.pow(x, 3), 0), 1);
+        return this.sat(x ** 3);
       },
       choice(arr) {
         const len = arr.length;
-        return arr[Math.floor(Math.random() * len)];
+        return arr[this.randint(0, len - 1)];
+      },
+      shuffle(arr) {
+        const len = arr.length;
+        for (let i2 = 0; i2 < len; ++i2) {
+          const j = this.randint(0, len - 1);
+          [arr[i2], arr[j]] = [arr[j], arr[i2]];
+        }
       }
     };
   }();
@@ -1148,7 +1155,7 @@
       this.mass = ParamParser.ParseValue(params.mass, 0);
       this.bounce = ParamParser.ParseValue(params.bounce, 0);
       this.angle = 0;
-      this.rotating = ParamParser.ParseValue(params.rotating, 1);
+      this.rotation = ParamParser.ParseValue(params.rotation, 1);
       this.friction = ParamParser.ParseObject(params.friction, { x: 0, y: 0, angular: 0, normal: 0 });
       this._behavior = [];
       this._collisions = {
@@ -1366,7 +1373,7 @@
       return this._height;
     }
     get inertia() {
-      return (this.width ** 2 + this.height ** 2) / 2 / this.rotating;
+      return (this.width ** 2 + this.height ** 2) / 2 / this.rotation;
     }
   };
   var Ball = class extends Body {
@@ -1381,7 +1388,7 @@
       return { width: 2 * this.radius, height: 2 * this.radius };
     }
     get inertia() {
-      return Math.PI * this.radius ** 2 / 2 / this.rotating;
+      return Math.PI * this.radius ** 2 / 2 / this.rotation;
     }
     FindSupportPoint(n, ptOnEdge) {
       let circVerts = [];
@@ -1434,7 +1441,7 @@
       return { width: 2 * this.radius, height: 2 * this.radius };
     }
     get inertia() {
-      return Math.PI * this.radius ** 2 / 1 / this.rotating;
+      return Math.PI * this.radius ** 2 / 1 / this.rotation;
     }
   };
   var Ray = class extends Body {
@@ -1766,12 +1773,12 @@
       this._body1 = b1;
       this._body2 = b2;
       const offset1 = ParamParser.ParseObject(params.offset1, { x: 0, y: 0 });
-      this._offset1 = new Vector(offset1.x, offset1.y);
+      this.offset1 = new Vector(offset1.x, offset1.y);
       const offset2 = ParamParser.ParseObject(params.offset2, { x: 0, y: 0 });
-      this._offset2 = new Vector(offset2.x, offset2.y);
-      const start = this._body1.position.Clone().Add(this._offset1.Clone().Rotate(this._body1.angle));
-      const end = this._body2.position.Clone().Add(this._offset2.Clone().Rotate(this._body2.angle));
-      this._length = ParamParser.ParseValue(params.length, Vector.Dist(start, end));
+      this.offset2 = new Vector(offset2.x, offset2.y);
+      const start = this._body1.position.Clone().Add(this.offset1.Clone().Rotate(this._body1.angle));
+      const end = this._body2.position.Clone().Add(this.offset2.Clone().Rotate(this._body2.angle));
+      this.length = ParamParser.ParseValue(params.length, Vector.Dist(start, end));
     }
     Update(_) {
     }
@@ -1779,21 +1786,19 @@
   var Spring = class extends Joint {
     constructor(b1, b2, params) {
       super(b1, b2, params);
-      this._elasticity = ParamParser.ParseValue(params.elasticity, 1) * 10;
-      this._options = ParamParser.ParseObject(params.options, { expansion: true, depression: true });
+      this.strength = ParamParser.ParseValue(params.strength, 1) * 10;
     }
     Update() {
-      const offset1 = this._offset1.Clone().Rotate(this._body1.angle);
-      const offset2 = this._offset2.Clone().Rotate(this._body2.angle);
+      if (this._body1.mass === 0 && this._body2.mass === 0)
+        return;
+      const offset1 = this.offset1.Clone().Rotate(this._body1.angle);
+      const offset2 = this.offset2.Clone().Rotate(this._body2.angle);
       const start = this._body1.position.Clone().Add(offset1);
       const end = this._body2.position.Clone().Add(offset2);
       const vec = start.Clone().Sub(end);
       const n = vec.Clone().Unit();
       const dist = vec.Mag();
-      if (!this._options.expansion && dist < this._length || !this._options.depression && dist > this._length) {
-        return;
-      }
-      const diff = n.Clone().Mult((dist - this._length) * -(1 - this._elasticity) / (this._body1.inverseMass + this._body2.inverseMass));
+      const diff = n.Clone().Mult((dist - this.length) * -this.strength / (this._body1.inverseMass + this._body2.inverseMass));
       const vel1 = diff.Clone().Mult(this._body1.inverseMass);
       this._body1.velocity.Add(vel1);
       this._body1.angularVelocity += Vector.Cross(offset1, vel1.Clone().Mult(1 / this._body1.inertia));
@@ -1805,16 +1810,19 @@
   var Stick = class extends Joint {
     constructor(b1, b2, params) {
       super(b1, b2, params);
+      this.strength = ParamParser.ParseValue(params.strength, 1) * 10;
     }
     Update() {
-      const offset1 = this._offset1.Clone().Rotate(this._body1.angle);
-      const offset2 = this._offset2.Clone().Rotate(this._body2.angle);
+      if (this._body1.mass === 0 && this._body2.mass === 0)
+        return;
+      const offset1 = this.offset1.Clone().Rotate(this._body1.angle);
+      const offset2 = this.offset2.Clone().Rotate(this._body2.angle);
       const start = this._body1.position.Clone().Add(offset1);
       const end = this._body2.position.Clone().Add(offset2);
       const vec = start.Clone().Sub(end);
       const n = vec.Clone().Unit();
       const dist = vec.Mag();
-      const diff = n.Clone().Mult((dist - this._length) * -10 / (this._body1.inverseMass + this._body2.inverseMass));
+      const diff = n.Clone().Mult((dist - this.length) * -this.strength / (this._body1.inverseMass + this._body2.inverseMass));
       const vel1 = diff.Clone().Mult(this._body1.inverseMass);
       this._body1.position.Add(vel1.Clone().Mult(0.1));
       this._body1.velocity.Add(vel1);
@@ -2637,6 +2645,7 @@
       this.mode = ParamParser.ParseValue(params.mode, "source-over");
       this._offset = new Vector();
       this._shaking = null;
+      this._imageOptions = params.image;
     }
     get zIndex() {
       return this._zIndex;
@@ -2724,6 +2733,15 @@
     }
     InitComponent() {
       this._ComputeVertices();
+      this._image = null;
+      if (this._imageOptions) {
+        this._image = this.scene.resources.get(this._imageOptions.src);
+        this._imageOptions = ParamParser.ParseObject(this._imageOptions, {
+          frameWidth: this._image.width,
+          frameHeight: this._image.height,
+          framePosition: { x: 0, y: 0 }
+        });
+      }
     }
     GetVertices() {
       const arr = [
@@ -2778,9 +2796,9 @@
       this._lines = this._text.split(/\n/);
       this._padding = ParamParser.ParseValue(params.padding, 0);
       this._align = ParamParser.ParseValue(params.align, "center");
-      this._fontSize = ParamParser.ParseValue(this._params.fontSize, 16);
-      this._fontFamily = ParamParser.ParseValue(this._params.fontFamily, "Arial");
-      this._fontStyle = ParamParser.ParseValue(this._params.fontStyle, "normal");
+      this._fontSize = ParamParser.ParseValue(params.fontSize, 16);
+      this._fontFamily = ParamParser.ParseValue(params.fontFamily, "Arial");
+      this._fontStyle = ParamParser.ParseValue(params.fontStyle, "normal");
       this._ComputeDimensions();
     }
     get linesCount() {
@@ -2851,7 +2869,7 @@
   var Image2 = class extends Drawable {
     constructor(params) {
       super(params);
-      this._image = params.image;
+      this._image = this.scene.resources.get(params.src);
       this._frameWidth = ParamParser.ParseValue(params.frameWidth, this._image.width);
       this._frameHeight = ParamParser.ParseValue(params.frameHeight, this._image.height);
       this._framePos = ParamParser.ParseObject(params.framePosition, { x: 0, y: 0 });
@@ -2870,6 +2888,10 @@
       ctx.fill();
       if (this.strokeWidth > 0)
         ctx.stroke();
+      if (this._image) {
+        ctx.clip();
+        ctx.drawImage(this._image, this._imageOptions.framePosition.x * this._imageOptions.frameWidth, this._imageOptions.framePosition.y * this._imageOptions.frameHeight, this._imageOptions.frameWidth, this._imageOptions.frameHeight, -this._width / 2, -this._height / 2, this._width, this._height);
+      }
     }
   };
   var Circle = class extends Drawable {
@@ -2897,10 +2919,10 @@
       ctx.fill();
       if (this.strokeWidth > 0)
         ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(this.radius, 0);
-      ctx.stroke();
+      if (this._image) {
+        ctx.clip();
+        ctx.drawImage(this._image, this._imageOptions.framePosition.x * this._imageOptions.frameWidth, this._imageOptions.framePosition.y * this._imageOptions.frameHeight, this._imageOptions.frameWidth, this._imageOptions.frameHeight, -this._radius, -this._radius, this._radius * 2, this._radius * 2);
+      }
     }
   };
   var Poly2 = class extends Drawable {
@@ -2947,11 +2969,18 @@
     set radius(num) {
       this._radius = num;
     }
+    Draw(ctx) {
+      super.Draw(ctx);
+      if (this._image) {
+        ctx.clip();
+        ctx.drawImage(this._image, this._imageOptions.framePosition.x * this._imageOptions.frameWidth, this._imageOptions.framePosition.y * this._imageOptions.frameHeight, this._imageOptions.frameWidth, this._imageOptions.frameHeight, -this._radius, -this._radius, this._radius * 2, this._radius * 2);
+      }
+    }
   };
   var Sprite = class extends Drawable {
     constructor(params) {
       super(params);
-      this._image = params.image;
+      this._image = this.scene.resources.get(params.src);
       this._frameWidth = ParamParser.ParseValue(params.frameWidth, this._image.width);
       this._frameHeight = ParamParser.ParseValue(params.frameHeight, this._image.height);
       this._anims = new Map();
@@ -3047,34 +3076,53 @@
     }
   };
 
-  // src/core/particle.js
+  // src/core/particles/emitter.js
+  var emitter_exports = {};
+  __export(emitter_exports, {
+    Emitter: () => Emitter
+  });
   var Emitter = class extends Component {
     constructor(params) {
       super();
       this._particles = [];
-      const temp = ParamParser.ParseObject(params.acceleration, { x: 0, y: 0 });
+      const temp = ParamParser.ParseObject(params.force, { x: 0, y: 0 });
       this._options = {
-        lifetime: ParamParser.ParseObject(params.lifetime, { min: 1e3, max: 1e3 }),
-        friction: ParamParser.ParseValue(params.friction, 0),
-        angleVariance: ParamParser.ParseValue(params.variance, 0),
-        angle: ParamParser.ParseObject(params.angle, { min: 0, max: 0 }),
-        speed: ParamParser.ParseObject(params.speed, { min: 0, max: 0 }),
+        lifetime: this._ParseMinMax(params.lifetime, { min: 1e3, max: 1e3 }),
+        friction: this._ParseMinMax(params.friction, { min: 0, max: 0 }),
+        angleVariance: this._ParseMinMax(params.variance, { min: 0, max: 0 }),
+        angle: this._ParseMinMax(params.angle, { min: 0, max: 2 * Math.PI }),
+        speed: this._ParseMinMax(params.speed, { min: 300, max: 300 }),
         acceleration: new Vector(temp.x, temp.y),
         scale: ParamParser.ParseObject(params.scale, { from: 1, to: 1 }),
         opacity: ParamParser.ParseObject(params.opacity, { from: 1, to: 1 }),
-        rotationSpeed: ParamParser.ParseValue(params.rotationalSpeed, 0)
+        rotationSpeed: this._ParseMinMax(params.rotationSpeed, { min: 0, max: 0 })
       };
       this._emitting = null;
     }
-    _CreateParticle() {
-      const particle2 = this.scene.CreateEntity();
-      particle2.groupList.add("particle");
-      particle2.position.Copy(this.position);
-      const particleType = math.choice(this._particles);
-      particle2.AddComponent(new particleType[0](particleType[1]), "Sprite");
-      particle2.AddComponent(new ParticleController(this._options));
+    _ParseMinMax(param, x) {
+      if (param === void 0) {
+        return x;
+      } else if (typeof param != "object") {
+        return { min: param, max: param };
+      } else {
+        if (param.min !== void 0) {
+          x.min = param.min;
+        }
+        if (param.max !== void 0) {
+          x.max = param.max;
+        }
+        return x;
+      }
     }
-    AddParticle(type, params) {
+    _CreateParticle() {
+      const particle = this.scene.CreateEntity();
+      particle.groupList.add("particle");
+      particle.position.Copy(this.position);
+      const particleType = math.choice(this._particles);
+      particle.AddComponent(new particleType[0](particleType[1]), "Sprite");
+      particle.AddComponent(new ParticleController(this._options));
+    }
+    Add(type, params) {
       this._particles.push([type, params]);
     }
     Emit(count, repeat = false, delay = 0) {
@@ -3104,15 +3152,15 @@
   var ParticleController = class extends Component {
     constructor(params) {
       super();
-      this._friction = params.friction || 0;
+      this._friction = this._InitMinMax(params.friction);
       this._lifetime = this._InitMinMax(params.lifetime);
-      this._angleVariance = params.angleVariance || 0;
-      this._acc = params.acceleration || new Vector();
+      this._angleVariance = this._InitMinMax(params.angleVariance);
+      this._acc = params.acceleration;
       this._counter = 0;
       this._scale = this._InitRange(params.scale);
       this._opacity = this._InitRange(params.opacity);
       this._vel = new Vector(this._InitMinMax(params.speed), 0).Rotate(this._InitMinMax(params.angle));
-      this._rotationSpeed = params.rotationSpeed || 0;
+      this._rotationSpeed = this._InitMinMax(params.rotationSpeed);
     }
     _InitMinMax(param) {
       return math.rand(param.min, param.max);
@@ -3130,7 +3178,7 @@
         this.scene.RemoveEntity(this.parent);
         return;
       }
-      this._vel.Add(this._acc.Mult(elapsedTimeS));
+      this._vel.Add(this._acc.Clone().Mult(elapsedTimeS));
       const decceleration = 60;
       const frameDecceleration = new Vector(this._vel.x * decceleration * this._friction, this._vel.y * decceleration * this._friction);
       this._vel.Sub(frameDecceleration.Mult(elapsedTimeS));
@@ -3144,12 +3192,8 @@
       if (this._opacity) {
         sprite.opacity = math.lerp(progress, this._opacity.from, this._opacity.to);
       }
-      this._rotationSpeed -= this._rotationSpeed * decceleration * this._friction;
       sprite.angle += this._rotationSpeed * elapsedTimeS;
     }
-  };
-  var particle = {
-    Emitter
   };
 
   // src/Lancelot.js
@@ -3158,7 +3202,7 @@
     Vector,
     Game,
     Component,
-    particle,
+    particles: emitter_exports,
     drawable: drawable_exports,
     physics: physics_exports,
     math,

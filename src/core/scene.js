@@ -193,22 +193,6 @@ export class Scene {
         }
         */
     }
-    _PhysicsUpdate(elapsedTimeS) {
-        for(let body of this._bodies) {
-            body._collisions.left.clear();
-            body._collisions.right.clear();
-            body._collisions.top.clear();
-            body._collisions.bottom.clear();
-        }
-        for(let body of this._bodies) {
-            body.UpdatePosition(elapsedTimeS);
-        }
-        for(let i = 0; i < this._relaxationCount; ++i) {
-            for(let body of this._bodies) {
-                body.HandleBehavior();
-            }
-        }
-    }
     Update(elapsedTimeS) {
         if (this.paused) { return; }
         this.timeout.Update(elapsedTimeS * 1000);

@@ -21,6 +21,7 @@ export class Drawable extends Component {
         this.mode = ParamParser.ParseValue(params.mode, "source-over");
         this._offset = new Vector();
         this._shaking = null;
+        this._imageOptions = params.image;
     }
     get zIndex() {
         return this._zIndex;
@@ -109,6 +110,16 @@ export class Drawable extends Component {
     }
     InitComponent() {
         this._ComputeVertices();
+
+        this._image = null;
+        if(this._imageOptions) {
+            this._image = this.scene.resources.get(this._imageOptions.src);
+            this._imageOptions = ParamParser.ParseObject(this._imageOptions, {
+                frameWidth: this._image.width,
+                frameHeight: this._image.height,
+                framePosition: { x: 0, y: 0 }
+            });
+        }
     }
     GetVertices() {
         const arr = [
@@ -176,9 +187,9 @@ export class Text extends Drawable {
         this._lines = this._text.split(/\n/);
         this._padding = ParamParser.ParseValue(params.padding, 0);
         this._align = ParamParser.ParseValue(params.align, "center");
-        this._fontSize = ParamParser.ParseValue(this._params.fontSize, 16);
-        this._fontFamily = ParamParser.ParseValue(this._params.fontFamily, "Arial");
-        this._fontStyle = ParamParser.ParseValue(this._params.fontStyle, "normal");
+        this._fontSize = ParamParser.ParseValue(params.fontSize, 16);
+        this._fontFamily = ParamParser.ParseValue(params.fontFamily, "Arial");
+        this._fontStyle = ParamParser.ParseValue(params.fontStyle, "normal");
 
         this._ComputeDimensions();
     }
@@ -263,7 +274,7 @@ export class Text extends Drawable {
 export class Image extends Drawable {
     constructor(params) {
         super(params);
-        this._image = params.image;
+        this._image = this.scene.resources.get(params.src);
         this._frameWidth = ParamParser.ParseValue(params.frameWidth, this._image.width);
         this._frameHeight = ParamParser.ParseValue(params.frameHeight, this._image.height);
         this._framePos = ParamParser.ParseObject(params.framePosition, { x: 0, y: 0 });
@@ -308,6 +319,11 @@ export class Rect extends Drawable {
         /*
         ctx.restore();
         */
+
+        if(this._image) {
+            ctx.clip();
+            ctx.drawImage(this._image, this._imageOptions.framePosition.x * this._imageOptions.frameWidth, this._imageOptions.framePosition.y * this._imageOptions.frameHeight, this._imageOptions.frameWidth, this._imageOptions.frameHeight, -this._width / 2, -this._height / 2, this._width, this._height);
+        }
     }
 }
 
@@ -315,6 +331,8 @@ export class Circle extends Drawable {
     constructor(params) {
         super(params);
         this._radius = params.radius;
+
+        
     }
     get radius() {
         return this._radius;
@@ -348,10 +366,17 @@ export class Circle extends Drawable {
         ctx.fill();
         if(this.strokeWidth > 0) ctx.stroke();
         
+        /*
         ctx.beginPath();
         ctx.moveTo(0, 0);
         ctx.lineTo(this.radius, 0);
         ctx.stroke();
+        */
+
+        if(this._image) {
+            ctx.clip();
+            ctx.drawImage(this._image, this._imageOptions.framePosition.x * this._imageOptions.frameWidth, this._imageOptions.framePosition.y * this._imageOptions.frameHeight, this._imageOptions.frameWidth, this._imageOptions.frameHeight, -this._radius, -this._radius, this._radius * 2, this._radius * 2);
+        }
         
         /*
         ctx.restore();
@@ -416,12 +441,19 @@ export class Polygon extends Poly {
     set radius(num) {
         this._radius = num;
     }
+    Draw(ctx) {
+        super.Draw(ctx);
+        if(this._image) {
+            ctx.clip();
+            ctx.drawImage(this._image, this._imageOptions.framePosition.x * this._imageOptions.frameWidth, this._imageOptions.framePosition.y * this._imageOptions.frameHeight, this._imageOptions.frameWidth, this._imageOptions.frameHeight, -this._radius, -this._radius, this._radius * 2, this._radius * 2);
+        }
+    }
 }
 
 export class Sprite extends Drawable {
     constructor(params) {
         super(params);
-        this._image = params.image;
+        this._image = this.scene.resources.get(params.src);
         this._frameWidth = ParamParser.ParseValue(params.frameWidth, this._image.width);
         this._frameHeight = ParamParser.ParseValue(params.frameHeight, this._image.height);
         this._anims = new Map();
