@@ -1,7 +1,3 @@
-function _sat(x) {
-    return Math.min(Math.max(x, 0), 1);
-}
-
 export const math = (function () {
     return {
         rand(min, max) {
@@ -20,13 +16,13 @@ export const math = (function () {
             return x >= a && x <= b;
         },
         sat(x) {
-            return _sat(x);
+            return this.clamp(x, 0, 1);
         },
         ease_out(x) {
-            return _sat(Math.pow(x, 1 / 2));
+            return this.sat(Math.pow(x, 1 / 2));
         },
         ease_in(x) {
-            return _sat(Math.pow(x, 3));
+            return this.sat(Math.pow(x, 3));
         },
         choice(arr) {
             const len = arr.length;
