@@ -9,7 +9,7 @@ export class Engine {
     }
     _RAF() {
 
-        if(this._paused) { return; }
+        if(this.paused) { return; }
 
         this._frame = window.requestAnimationFrame((timestamp) => {
             this._RAF();
