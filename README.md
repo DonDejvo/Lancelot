@@ -15,7 +15,8 @@ Are you interested in developing games with javascript and canvas? Lancelot offe
 - composed light system
 - particle emitter
 - 2D physics
-- New features comming soon!
+
+New features comming soon!
 
 ---
 
