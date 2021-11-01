@@ -1,17 +1,22 @@
-# Lancelot - 2D game library
+# Lancelot - HTML5 2D Game Library
 
 ![Logo](https://raw.githubusercontent.com/DonDejvo/Lancelot/main/misc/resources/png/logo_banner.png)
 
 ---
 
-![Repository Size](https://img.shields.io/github/repo-size/DonDejvo/Lancelot) ![Total lines of code](https://img.shields.io/tokei/lines/github/DonDejvo/Lancelot)
-![License](https://img.shields.io/github/license/DonDejvo/Lancelot)
-![Current Version](https://img.shields.io/github/package-json/v/DonDejvo/Lancelot)
+Lancelot is javascript library for development of 2D games on web which uses canvas for rendering.
+
+Are you interested in developing games with javascript and canvas? Lancelot offers you amazing structure for your games with lot of ready to use features which make your game shining including fully functional 2D physics engine. Still you have your freedom in using all features of javascript and canvas.
+
+### Cool features:
+- resource loader
+- SNES styled button layout
+- advanced camera
+- composed light system
+- particle emitter
+- 2D physics
+- New features comming soon!
 
 ---
 
-If you want to include Lancelot.js into your code, place following tag before all other scripts:
-
-```javascript
-<script src="https://cdn.jsdelivr.net/gh/DonDejvo/Lancelot@latest/dist/lancelot-cdn-nomodule.js" type="text/javascript"></script>
-```
+Currently in development
