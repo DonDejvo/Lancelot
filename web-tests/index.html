@@ -83,7 +83,7 @@ class ObstacleController extends Lancelot.Component {
         const body = this.parent.body;
         const sprite = this.GetComponent("Sprite");
 
-        if(body.mass != 0) {
+        if(body.mass != 0 && body.mass < 1000) {
             body.velocity.y += 500 * dt;
         }
         
@@ -136,7 +136,7 @@ function init() {
             width: w,
             height: h,
             mass: 20,
-            friction: { normal: 0, angular: 0.01, x: 0.01, y: 0.01 },
+            friction: { normal: 0, angular: 0.03, x: 0.03, y: 0.03 },
             rotation: 1
         }));
         let sprite;
@@ -157,12 +157,18 @@ function init() {
             let wheelBody;
             wheel.AddComponent(wheelBody = new Lancelot.physics.Ball({
                 radius: r,
+                sides: 8,
+                width: r * 2,
+                height: r * 2,
                 mass: r,
-                friction: { normal: 1, angular: 0.01, x: 0.01, y: 0.01 },
+                friction: { normal: 1, angular: 0.03, x: 0.03, y: 0.03 },
             }));
             let wheelSprite;
             wheel.AddComponent(wheelSprite = new Lancelot.drawable.Circle({
                 radius: r,
+                sides: 8,
+                width: r * 2,
+                height: r * 2,
                 fillStyle: "black",
                 strokeStyle: "black",
                 strokeWidth: 2,
@@ -175,9 +181,9 @@ function init() {
            
             for(let i = 0; i < 1; ++i) {
                 
-                body.Join(wheelBody, "stick", {
+                body.Join(wheelBody, "solid", {
                     offset1: { x: x, y: y },
-                    strength: 1
+                    strength: 3
                 });
             }
             
@@ -212,7 +218,7 @@ function init() {
             width: w,
             height: h,
             mass: m,
-            friction: { x: 0.01, y: 0.01, angular: 0.01 }
+            friction: { x: 0.03, y: 0.03, angular: 0.03 }
         }));
         body.angle = a;
         
@@ -255,73 +261,21 @@ function init() {
         
         let curObst = createObstacle(center.x, center.y, curPos.Clone().Sub(lastPos).Mag() * 1, 20, ang, (i % 10 == 0 || i % 10 == 9) ? 0 : 50);
         if(prevObst) {
-            prevObst.body.Join(curObst.body, "spring", {
-                strength: 0.99,
+            prevObst.body.Join(curObst.body, "solid", {
+                strength: 1,
                 offset1: { x: prevObst.body.width / 2},
-                offset2: { x: -curObst.body.width / 2 }
+                offset2: { x: -curObst.body.width / 2 },
             });
         }
         prevObst = curObst;
     }
 
+    
     let car = createCar();
     
     let text;
     
     let emitter;
-    car.AddComponent(emitter = new Lancelot.particles.Emitter({
-        width: 800,
-        options: {
-            angle: 0,
-            force: { y: 750 },
-            lifetime: 2000,
-            rotationSpeed: 5,
-            speed: 0,
-            friction: { min: 0.01, max: 0.02 }
-        }
-    }));
-    emitter.offset.y = -500;
-    emitter.Add(Lancelot.drawable.Rect, {
-        width: 16,
-        height: 16,
-        fillStyle: "blueviolet",
-        zIndex: 50
-    });
-    emitter.Add(Lancelot.drawable.Circle, {
-        radius: 8,
-        fillStyle: "crimson",
-        zIndex: 50
-    });
-    emitter.Add(Lancelot.drawable.Polygon, {
-        radius: 12,
-        sides: 3,
-        fillStyle: "purple",
-        zIndex: 50
-    });
-    emitter.Add(Lancelot.drawable.Rect, {
-        width: 16,
-        height: 16,
-        fillStyle: "deeppink",
-        zIndex: 50
-    });
-    emitter.Add(Lancelot.drawable.Circle, {
-        radius: 8,
-        fillStyle: "dodgerblue",
-        zIndex: 50
-    });
-    emitter.Add(Lancelot.drawable.Polygon, {
-        radius: 12,
-        sides: 3,
-        fillStyle: "indigo",
-        zIndex: 50
-    });
-    emitter.Add(Lancelot.drawable.Rect, {
-        width: 16,
-        height: 16,
-        fillStyle: "midnightblue",
-        zIndex: 50
-    });
-    emitter.Emit(1, true, 20);
 
     let flame;
     car.AddComponent(flame = new Lancelot.particles.Emitter({
@@ -335,15 +289,10 @@ function init() {
     }), "Flame");
     flame.Add(Lancelot.drawable.Circle, {
         radius: 16,
-        fillStyle: "radial-gradient;0,0,0,0,0,16;rgb(255,100,0)=0;rgba(255,100,0,0)=1",
-        zIndex: -1
-    });
-    flame.Add(Lancelot.drawable.Circle, {
-        radius: 16,
         fillStyle: "radial-gradient;0,0,0,0,0,16;black=0;rgba(0,0,0,0)=1",
         zIndex: -1
     });
-    flame.Emit(1, true, 20);
+    flame.Emit(2, true, 20);
     
     text = level.CreateEntity();
     text.AddComponent(new Lancelot.drawable.Text({

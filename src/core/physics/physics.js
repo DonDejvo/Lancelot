@@ -160,7 +160,7 @@ class Body extends Component {
         });
     }
     UpdatePosition(elapsedTimeS) {
-        const decceleration = 60;
+        const decceleration = 16;
         const frame_decceleration = new Vector(this._vel.x * this.friction.x * decceleration, this._vel.y * this.friction.y * decceleration);
         this._vel.Sub(frame_decceleration.Mult(elapsedTimeS));
         const vel = this._vel.Clone().Mult(elapsedTimeS);
@@ -215,11 +215,11 @@ class Body extends Component {
     Join(b, type, params) {
         let joint;
         switch(type) {
-            case "spring":
-                joint = new Spring(this, b, params);
+            case "elastic":
+                joint = new ElasticJoint(this, b, params);
                 break;
-            case "stick":
-                joint = new Stick(this, b, params);
+            case "solid":
+                joint = new SolidJoint(this, b, params);
                 break;
         }
         if(!joint) {
@@ -385,7 +385,7 @@ export class Ball extends Body {
     }
 }
 
-export class RegularPolygon extends Poly {
+export class Polygon extends Poly {
     constructor(params) {
         super(params);
         this._radius = params.radius;
@@ -615,13 +615,13 @@ const DetectCollisionBallVsPoly = (b1, b2) => {
         e1SupportPoints[i] = info;
     }
     let nearestVertex = b1.FindNearestVertex(verts);
-    let normal = nearestVertex.Clone().Sub(b1.position).Unit();
-    let info = Poly.FindSupportPoint(verts, normal.Clone(), b1.position.Clone());
+    let normal = b2.position.Clone().Sub(b1.position).Unit().Mult(-1);
+    let info = Poly.FindSupportPoint(verts, normal.Clone(), b1.position.Clone().Add(normal.Clone().Mult(-b1.radius)));
     if(info.sp == undefined) return { collide : false };
     info.n = normal.Clone();
     e1SupportPoints.push(info);
     let max = Infinity;
-    let index = null;
+    let index = 0;
     for(let i = 0; i < e1SupportPoints.length; i++){
         if(e1SupportPoints[i].depth < max){
             max = e1SupportPoints[i].depth;
@@ -700,13 +700,17 @@ const ResolveCollision = (b1, b2) => {
         const vel2 = jn.Clone().Mult(b2.inverseMass);
 
 
-        if((Vector.Dot(jn, directions.left) >= Math.SQRT2 / 2 || (Vector.Dot(jn, directions.left) < Math.SQRT2 / 2 && direction == "left")) && (!b1.options.sides.right || !b2.options.sides.left)) {
+        const left = Vector.Dot(jn, directions.left),
+        right = Vector.Dot(jn, directions.right),
+        top = Vector.Dot(jn, directions.top),
+        bottom = Vector.Dot(jn, directions.bottom);
+        if((left >= Math.SQRT2 / 2 || (left < Math.SQRT2 / 2 && direction == "left")) && (!b1.options.sides.right || !b2.options.sides.left)) {
             return res;
-        } else if((Vector.Dot(jn, directions.right) >= Math.SQRT2 / 2 || (Vector.Dot(jn, directions.right) < Math.SQRT2 / 2 && direction == "right")) && (!b1.options.sides.left || !b2.options.sides.right)) {
+        } else if((right >= Math.SQRT2 / 2 || (right < Math.SQRT2 / 2 && direction == "right")) && (!b1.options.sides.left || !b2.options.sides.right)) {
             return res;
-        } else if((Vector.Dot(jn, directions.top) >= Math.SQRT2 / 2 || (Vector.Dot(jn, directions.top) < Math.SQRT2 / 2 && direction == "top")) && (!b1.options.sides.bottom || !b2.options.sides.top)) {
+        } else if((top >= Math.SQRT2 / 2 || (top < Math.SQRT2 / 2 && direction == "top")) && (!b1.options.sides.bottom || !b2.options.sides.top)) {
             return res;
-        } else if((Vector.Dot(jn, directions.bottom) >= Math.SQRT2 / 2 || (Vector.Dot(jn, directions.bottom) < Math.SQRT2 / 2 && direction == "bottom")) && (!b1.options.sides.top || !b2.options.sides.bottom)) {
+        } else if((bottom >= Math.SQRT2 / 2 || (bottom < Math.SQRT2 / 2 && direction == "bottom")) && (!b1.options.sides.top || !b2.options.sides.bottom)) {
             return res;
         }
 
@@ -782,20 +786,20 @@ class Joint {
 
         const start = this._body1.position.Clone().Add(this.offset1.Clone().Rotate(this._body1.angle));
         const end = this._body2.position.Clone().Add(this.offset2.Clone().Rotate(this._body2.angle));
-        this.length = ParamParser.ParseValue(params.length, Vector.Dist(start, end));
-
-        this._multiplier = 600;
+        this.length = ParamParser.ParseValue(params.length, Math.max(Vector.Dist(start, end), 1));
+        this.strength = ParamParser.ParseValue(params.strength, 1);
     }
     Update(_) {}
 }
 
-class Spring extends Joint {
+class ElasticJoint extends Joint {
     constructor(b1, b2, params) {
         super(b1, b2, params);
-        this.strength = ParamParser.ParseValue(params.strength, 1);
     }
     Update(elapsedTimeS) {
+
         if(this._body1.mass === 0 && this._body2.mass === 0) return;
+
         const offset1 = this.offset1.Clone().Rotate(this._body1.angle);
         const offset2 = this.offset2.Clone().Rotate(this._body2.angle);
         const start = this._body1.position.Clone().Add(offset1);
@@ -805,28 +809,29 @@ class Spring extends Joint {
         const n = vec.Clone().Unit();
         const dist = vec.Mag();
 
-        if(dist < this.length) return;
+        const relLenDiff = (dist - this.length) / this.length;
 
-        const diff = n.Clone().Mult((dist - this.length) * -this.strength / (this._body1.inverseMass + this._body2.inverseMass));
+        const relVel = n.Clone().Mult(relLenDiff * -this.strength * 512 / (this._body1.inverseMass + this._body2.inverseMass));
 
-        const vel1 = diff.Clone().Mult(this._body1.inverseMass * elapsedTimeS * this._multiplier);
-        this._body1.velocity.Add(vel1);
-        this._body1.angularVelocity += Vector.Cross(offset1, vel1.Clone().Mult(1 / this._body1.inertia));
+        const vel1 = relVel.Clone().Mult(this._body1.inverseMass);
+        this._body1.velocity.Add(vel1.Clone().Mult(elapsedTimeS));
+        this._body1.angularVelocity += Vector.Cross(offset1, vel1.Clone().Mult(1 / this._body1.inertia)) * elapsedTimeS;
 
-        const vel2 = diff.Clone().Mult(this._body2.inverseMass * elapsedTimeS * this._multiplier);
-        this._body2.velocity.Sub(vel2);
-        this._body2.angularVelocity -= Vector.Cross(offset2, vel2.Clone().Mult(1 / this._body2.inertia));
-
+        const vel2 = relVel.Clone().Mult(this._body2.inverseMass);
+        this._body2.velocity.Sub(vel2.Clone().Mult(elapsedTimeS));
+        this._body2.angularVelocity -= Vector.Cross(offset2, vel2.Clone().Mult(1 / this._body2.inertia)) * elapsedTimeS;
+        
     }
 }
 
-class Stick extends Joint {
+class SolidJoint extends Joint {
     constructor(b1, b2, params) {
         super(b1, b2, params);
-        this.strength = ParamParser.ParseValue(params.strength, 1);
     }
     Update(elapsedTimeS) {
+
         if(this._body1.mass === 0 && this._body2.mass === 0) return;
+
         const offset1 = this.offset1.Clone().Rotate(this._body1.angle);
         const offset2 = this.offset2.Clone().Rotate(this._body2.angle);
         const start = this._body1.position.Clone().Add(offset1);
@@ -836,17 +841,22 @@ class Stick extends Joint {
         const n = vec.Clone().Unit();
         const dist = vec.Mag();
 
-        const diff = n.Clone().Mult((dist - this.length) * -this.strength / (this._body1.inverseMass + this._body2.inverseMass));
+        const repos = 16;
+        const diff = n.Clone().Mult((dist - this.length) * -1 / (this._body1.inverseMass + this._body2.inverseMass));
+        this._body1.position.Add(diff.Clone().Mult(this._body1.inverseMass * repos * elapsedTimeS));
+        this._body2.position.Sub(diff.Clone().Mult(this._body2.inverseMass * repos * elapsedTimeS));
 
-        const vel1 = diff.Clone().Mult(this._body1.inverseMass);
-        this._body1.position.Add(vel1.Clone());
-        this._body1.velocity.Add(vel1.Clone().Mult(elapsedTimeS * this._multiplier));
-        this._body1.angularVelocity += Vector.Cross(offset1, vel1.Clone().Mult(1 / this._body1.inertia * elapsedTimeS * this._multiplier));
+        const relLenDiff = (dist - this.length) / this.length;
 
-        const vel2 = diff.Clone().Mult(this._body2.inverseMass);
-        this._body2.position.Sub(vel2.Clone());
-        this._body2.velocity.Sub(vel2.Clone().Mult(elapsedTimeS * this._multiplier));
-        this._body2.angularVelocity -= Vector.Cross(offset2, vel2.Clone().Mult(1 / this._body2.inertia * elapsedTimeS * this._multiplier));
+        const relVel = n.Clone().Mult(relLenDiff * -this.strength * 512 / (this._body1.inverseMass + this._body2.inverseMass));
+
+        const vel1 = relVel.Clone().Mult(this._body1.inverseMass);
+        this._body1.velocity.Add(vel1.Clone().Mult(elapsedTimeS));
+        this._body1.angularVelocity += Vector.Cross(offset1, vel1.Clone().Mult(1 / this._body1.inertia)) * elapsedTimeS;
+
+        const vel2 = relVel.Clone().Mult(this._body2.inverseMass);
+        this._body2.velocity.Sub(vel2.Clone().Mult(elapsedTimeS));
+        this._body2.angularVelocity -= Vector.Cross(offset2, vel2.Clone().Mult(1 / this._body2.inertia)) * elapsedTimeS;
 
     }
 }

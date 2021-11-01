@@ -97,7 +97,7 @@ class ParticleController extends Component {
         }
 
         this._vel.Add(this._acc.Clone().Mult(elapsedTimeS));
-        const decceleration = 60;
+        const decceleration = 16;
         const frameDecceleration = new Vector(this._vel.x * decceleration * this._friction, this._vel.y * decceleration * this._friction);
         this._vel.Sub(frameDecceleration.Mult(elapsedTimeS));
         this._vel.Rotate(math.rand(-this._angleVariance, this._angleVariance)  * elapsedTimeS);
