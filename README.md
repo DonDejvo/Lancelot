@@ -24,9 +24,18 @@ Currently in development
 
 # Getting Started
 
-1. [Introduction](#Introduction)
-2. Get Lancelot
-3. Hello World
-4. Next Steps
+1. [Introduction](#introduction)
+2. [Get Lancelot](#get-lancelot)
+3. [Hello World](#hello-world)
+4. [Next Steps](#next-steps)
 
 ## Introduction
+
+
+## Get Lancelot
+
+
+## Hello World
+
+
+## Next Steps
