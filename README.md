@@ -20,7 +20,7 @@ New features comming soon!
 
 ---
 
-Currently in development
+*Currently in development...*
 
 # Getting Started
 
@@ -31,6 +31,7 @@ Currently in development
 
 ## Introduction
 
+In this tutorial we're going to cover setting-up a development environment with which you can build your Lancelot games. 
 
 ## Get Lancelot
 
