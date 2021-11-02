@@ -102,42 +102,14 @@ export class Game {
             };
         })();
 
-        const draw = (ctx, idx = 0) => {
-
-            
-
-            const scene = this._sceneManager._scenes[idx];
-            if(!scene) {
-                return;
-            }
-            if(scene.paused) {
-                draw(ctx, idx + 1);
-                return;
-            }
-
-            const w = this._renderer._width;
-            const h = this._renderer._height;
-            scene.DrawLights(ctx, w, h);
-
-            const b = document.createElement("canvas").getContext("2d");
-            b.canvas.width = w;
-            b.canvas.height = h;
-            if(idx < this._sceneManager._scenes.length - 1) {
-                draw(b, idx + 1);
-                b.globalCompositeOperation = "source-over";
-            }
-            scene.DrawObjects(b, w, h);
-
-            ctx.drawImage(b.canvas, 0, 0);
-        }
+        
 
         const step = (elapsedTime) => {
             for(let scene of this._sceneManager._scenes) {
                 scene.Update(elapsedTime * 0.001);
             }
             
-            this._renderer.Render();
-            draw(this._renderer._context);
+            this._renderer.Render(this._sceneManager._scenes);
         }
 
         this._engine._step = step;

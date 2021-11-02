@@ -13,6 +13,33 @@ export class Renderer {
 
         this._OnResize();
         window.addEventListener("resize", () => this._OnResize());
+
+        this.draw = (scenes, ctx, idx = 0) => {
+
+            const scene = scenes[idx];
+            if(!scene) {
+                return;
+            }
+            if(scene.paused) {
+                draw(scenes, ctx, idx + 1);
+                return;
+            }
+
+            const w = this._width;
+            const h = this._height;
+            scene.DrawLights(ctx, w, h);
+
+            const b = document.createElement("canvas").getContext("2d");
+            b.canvas.width = w;
+            b.canvas.height = h;
+            if(idx < scenes.length - 1) {
+                draw(scenes, b, idx + 1);
+                b.globalCompositeOperation = "source-over";
+            }
+            scene.DrawObjects(b, w, h);
+
+            ctx.drawImage(b.canvas, 0, 0);
+        }
     }
     get dimension() {
         return this._canvas.getBoundingClientRect();
@@ -64,14 +91,14 @@ export class Renderer {
         this._container.style.transform = "translate(-50%, calc(-50% + " + (this._height / 2 * this._scale) + "px)) scale(" + this._scale + ")";
         this._context.imageSmoothingEnabled = false;
     }
-    Render() {
+    Render(scenes) {
 
         const ctx = this._context;
-        
-        
 
         ctx.beginPath();
         ctx.clearRect(0, 0, this._width, this._height);
+
+        this.draw(scenes, ctx);
 
 
     }

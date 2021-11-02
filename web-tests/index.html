@@ -37,7 +37,7 @@
         body.velocity.y += 500 * dt;
         
         sprite.angle = body.angle;
-        const speed = 50;
+        const speed = 30;
         const rotSpeed = 15;
 
         if(this.scene.IsPressed("ArrowRight")) {
@@ -161,7 +161,7 @@ function init() {
                 width: r * 2,
                 height: r * 2,
                 mass: r,
-                friction: { normal: 1, angular: 0.03, x: 0.03, y: 0.03 },
+                friction: { normal: 1, angular: 0.04, x: 0.03, y: 0.03 },
             }));
             let wheelSprite;
             wheel.AddComponent(wheelSprite = new Lancelot.drawable.Circle({
@@ -239,13 +239,13 @@ function init() {
     
     const sin = (x) => {
         const progress = Lancelot.math.lerp(x / count, 0, Math.PI * (count / 10));
-        return Math.sin(progress) * (x / count) * 300 + 100;
+        return Math.sin(progress) * (x / count) * 0 + x * 3 - 0.5 * x ** 2 + 100;
     }
     
     let curDiffH = 0;
     let curY = 300;
     let stepX = 50;
-    const count = 160;
+    const count = 60;
     let prevObst;
     for(let i = 0; i < count; ++i) {
         curDiffH += Lancelot.math.rand(-5, 5);
@@ -259,7 +259,7 @@ function init() {
         const center = curPos.Clone().Add(lastPos).Mult(0.5);
         const ang = curPos.Clone().Sub(lastPos).Angle();
         
-        let curObst = createObstacle(center.x, center.y, curPos.Clone().Sub(lastPos).Mag() * 1, 20, ang, (i % 10 == 0 || i % 10 == 9) ? 0 : 50);
+        let curObst = createObstacle(center.x, center.y, curPos.Clone().Sub(lastPos).Mag() * 1, 20, ang, (i % 10 == 0 || i % 10 == 9) ? 0 : 0);
         if(prevObst) {
             prevObst.body.Join(curObst.body, "solid", {
                 strength: 1,
