@@ -21,3 +21,12 @@ New features comming soon!
 ---
 
 Currently in development
+
+# Getting Started
+
+1. [Introduction](#Introduction)
+2. Get Lancelot
+3. Hello World
+4. Next Steps
+
+## Introduction
