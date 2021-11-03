@@ -1,6 +1,13 @@
 import { Game } from "./core/game.js";
 import { Component } from "./core/component.js";
-import * as drawable from "./core/drawable/drawable.js";
+import { Drawable, FixedDrawable } from "./core/drawable/drawable.js";
+import { Circle } from "./core/drawable/circle.js";
+import { Line } from "./core/drawable/line.js";
+import { Polygon, Poly } from "./core/drawable/polygon.js";
+import { Rect } from "./core/drawable/rect.js";
+import { Sprite } from "./core/drawable/sprite.js";
+import { Text } from "./core/drawable/text.js";
+import { Path } from "./core/drawable/path.js";
 import { Vector } from "./core/utils/vector.js";
 import * as physics from "./core/physics/physics.js";
 import * as particles from "./core/particles/emitter.js";
@@ -8,6 +15,17 @@ import { math } from "./core/utils/math.js";
 import * as light from "./core/light/light.js";
 
 const __name = 'Lancelot';
+
+const drawable = {
+    Drawable, FixedDrawable,
+    Circle,
+    Line,
+    Polygon, Poly,
+    Rect,
+    Sprite,
+    Text,
+    Path
+};
 
 let __export = {
     Vector,

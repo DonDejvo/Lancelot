@@ -1304,7 +1304,7 @@
         }
       }
     }
-    Join(b, type, params) {
+    Join(b, type, params = {}) {
       let joint;
       switch (type) {
         case "elastic":
@@ -1750,7 +1750,7 @@
       const vp1 = v1.Clone().Add(new Vector(-w1 * r1.y, w1 * r1.x));
       const vp2 = v2.Clone().Add(new Vector(-w2 * r2.y, w2 * r2.x));
       const relVel = vp1.Clone().Sub(vp2);
-      const bounce = Math.max(b1.bounce, b2.bounce);
+      const bounce = b2.bounce;
       const j = -(1 + bounce) * Vector.Dot(relVel, detect.normal) / (b1.inverseMass + b2.inverseMass + Math.pow(Vector.Cross(r1, detect.normal), 2) / b1.inertia + Math.pow(Vector.Cross(r2, detect.normal), 2) / b2.inertia);
       const jn = detect.normal.Clone().Mult(j);
       const vel1 = jn.Clone().Mult(b1.inverseMass);
@@ -2627,37 +2627,19 @@
   };
 
   // src/core/drawable/drawable.js
-  var drawable_exports = {};
-  __export(drawable_exports, {
-    Circle: () => Circle,
-    Drawable: () => Drawable,
-    Image: () => Image2,
-    Line: () => Line,
-    Poly: () => Poly2,
-    Polygon: () => Polygon2,
-    Rect: () => Rect,
-    Sprite: () => Sprite,
-    Text: () => Text
-  });
   var Drawable = class extends Component {
     constructor(params = {}) {
       super();
       this._type = "drawable";
       this._width = ParamParser.ParseValue(params.width, 0);
       this._height = ParamParser.ParseValue(params.height, 0);
-      this._vertices = [];
       this._zIndex = ParamParser.ParseValue(params.zIndex, 0);
-      this.flip = ParamParser.ParseObject(params.flip, { x: false, y: false });
-      this._scale = ParamParser.ParseObject(params.scale, { x: 1, y: 1 });
       this.opacity = ParamParser.ParseValue(params.opacity, 1);
       this._angle = 0;
       this._fillStyle = ParamParser.ParseValue(params.fillStyle, "black");
       this._strokeStyle = ParamParser.ParseValue(params.strokeStyle, "black");
       this.strokeWidth = ParamParser.ParseValue(params.strokeWidth, 0);
       this.mode = ParamParser.ParseValue(params.mode, "source-over");
-      this._offset = new Vector();
-      this._shaking = null;
-      this._imageOptions = params.image;
     }
     get zIndex() {
       return this._zIndex;
@@ -2677,11 +2659,9 @@
     }
     set width(num) {
       this._width = num;
-      this._ComputeVertices();
     }
     set height(num) {
       this._height = num;
-      this._ComputeVertices();
     }
     set angle(num) {
       this._angle = num;
@@ -2708,18 +2688,7 @@
       this._strokeStyle = col;
     }
     get boundingBox() {
-      const verts = this._vertices;
-      let maxDist = 0;
-      let idx = 0;
-      for (let i2 = 0; i2 < verts.length; ++i2) {
-        const v = verts[i2];
-        const dist = v.Mag();
-        if (dist > maxDist) {
-          maxDist = dist;
-          idx = i2;
-        }
-      }
-      const d = maxDist * 2;
+      const d = Math.hypot(this._width, this._height) / 2;
       return {
         width: d,
         height: d,
@@ -2727,8 +2696,46 @@
         y: this.position.y
       };
     }
-    get position0() {
-      return this.position;
+    get boundingBox() {
+      return {
+        width: this._width,
+        height: this._height,
+        x: this.position.x,
+        y: this.position.y
+      };
+    }
+    Draw(_) {
+    }
+    Draw0(ctx) {
+      ctx.save();
+      ctx.globalCompositeOperation = this.mode;
+      ctx.globalAlpha = this.opacity;
+      ctx.fillStyle = StyleParser.ParseColor(ctx, this.fillStyle);
+      ctx.strokeStyle = StyleParser.ParseColor(ctx, this.strokeStyle);
+      ctx.lineWidth = this.strokeWidth;
+      this.Draw(ctx);
+      ctx.restore();
+    }
+  };
+  var FixedDrawable = class extends Drawable {
+    constructor(params) {
+      super(params);
+      this._offset = new Vector();
+      this._shaking = null;
+      this.flip = ParamParser.ParseObject(params.flip, { x: false, y: false });
+      this._scale = ParamParser.ParseObject(params.scale, { x: 1, y: 1 });
+      this._image = null;
+      this._imageOptions = params.image;
+    }
+    InitComponent() {
+      if (this._imageOptions) {
+        this._image = this.scene.resources.get(this._imageOptions.src);
+        this._imageOptions = ParamParser.ParseObject(this._imageOptions, {
+          frameWidth: this._image.width,
+          frameHeight: this._image.height,
+          framePosition: { x: 0, y: 0 }
+        });
+      }
     }
     Shake(range, dur, freq, angle) {
       this._shaking = {
@@ -2743,42 +2750,13 @@
       this._shaking = null;
       this._offset = new Vector();
     }
-    InitComponent() {
-      this._ComputeVertices();
-      this._image = null;
-      if (this._imageOptions) {
-        this._image = this.scene.resources.get(this._imageOptions.src);
-        this._imageOptions = ParamParser.ParseObject(this._imageOptions, {
-          frameWidth: this._image.width,
-          frameHeight: this._image.height,
-          framePosition: { x: 0, y: 0 }
-        });
-      }
-    }
-    GetVertices() {
-      const arr = [
-        new Vector(-this._width / 2, -this._height / 2),
-        new Vector(this._width / 2, -this._height / 2),
-        new Vector(-this._width / 2, this._height / 2),
-        new Vector(this._width / 2, this._height / 2)
-      ];
-      return arr;
-    }
-    _ComputeVertices() {
-      this._vertices = this.GetVertices();
-    }
-    SetSize(w, h) {
-      this._width = w;
-      this._height = h;
-    }
-    Draw(_) {
-    }
     Draw0(ctx) {
       ctx.save();
       ctx.translate(-this._offset.x, -this._offset.y);
       ctx.save();
+      ctx.globalCompositeOperation = this.mode;
       ctx.globalAlpha = this.opacity;
-      ctx.translate(this.position0.x, this.position0.y);
+      ctx.translate(this.position.x, this.position.y);
       ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
       ctx.rotate(this.angle);
       ctx.fillStyle = StyleParser.ParseColor(ctx, this.fillStyle);
@@ -2801,112 +2779,9 @@
       }
     }
   };
-  var Text = class extends Drawable {
-    constructor(params) {
-      super(params);
-      this._text = params.text;
-      this._lines = this._text.split(/\n/);
-      this._padding = ParamParser.ParseValue(params.padding, 0);
-      this._align = ParamParser.ParseValue(params.align, "center");
-      this._fontSize = ParamParser.ParseValue(params.fontSize, 16);
-      this._fontFamily = ParamParser.ParseValue(params.fontFamily, "Arial");
-      this._fontStyle = ParamParser.ParseValue(params.fontStyle, "normal");
-      this._ComputeDimensions();
-    }
-    get linesCount() {
-      return this._lines.length;
-    }
-    get lineHeight() {
-      return this._fontSize + this._padding * 2;
-    }
-    get text() {
-      return this._text;
-    }
-    set text(val) {
-      this._text = val;
-      this._ComputeDimensions();
-    }
-    get fontSize() {
-      return this._fontSize;
-    }
-    set fontSize(val) {
-      this._fontSize = val;
-      this._ComputeDimensions();
-    }
-    get fontFamily() {
-      return this._fontFamily;
-    }
-    set fontFamily(val) {
-      this._fontFamily = val;
-      this._ComputeDimensions();
-    }
-    get padding() {
-      return this._padding;
-    }
-    set padding(val) {
-      this._padding = val;
-      this._ComputeDimensions();
-    }
-    get align() {
-      return this._align;
-    }
-    set align(s) {
-      this._align = s;
-      this._ComputeDimensions();
-    }
-    _ComputeDimensions() {
-      this._height = this.lineHeight * this.linesCount;
-      let maxWidth = 0;
-      const ctx = document.createElement("canvas").getContext("2d");
-      ctx.font = `${this._fontStyle} ${this._fontSize}px '${this._fontFamily}'`;
-      for (let line of this._lines) {
-        const lineWidth = ctx.measureText(line).width;
-        if (lineWidth > maxWidth) {
-          maxWidth = lineWidth;
-        }
-      }
-      this._width = maxWidth + this._padding * 2;
-    }
-    Draw(ctx) {
-      let offsetX = this._align == "left" ? -this._width / 2 : this._align == "right" ? this._width / 2 : 0;
-      ctx.font = `${this._fontStyle} ${this._fontSize}px '${this._fontFamily}'`;
-      ctx.textAlign = this._align;
-      ctx.textBaseline = "middle";
-      ctx.beginPath();
-      for (let i2 = 0; i2 < this.linesCount; ++i2) {
-        ctx.fillText(this._lines[i2], offsetX + this._padding, this.lineHeight * i2 - (this.linesCount - 1) / 2 * this.lineHeight);
-      }
-    }
-  };
-  var Image2 = class extends Drawable {
-    constructor(params) {
-      super(params);
-      this._image = this.scene.resources.get(params.src);
-      this._frameWidth = ParamParser.ParseValue(params.frameWidth, this._image.width);
-      this._frameHeight = ParamParser.ParseValue(params.frameHeight, this._image.height);
-      this._framePos = ParamParser.ParseObject(params.framePosition, { x: 0, y: 0 });
-    }
-    Draw(ctx) {
-      ctx.drawImage(this._image, this._framePos.x * this._frameWidth, this._framePos.y * this._frameHeight, this._frameWidth, this._frameHeight, -this._width / 2, -this._height / 2, this._width, this._height);
-    }
-  };
-  var Rect = class extends Drawable {
-    constructor(params) {
-      super(params);
-    }
-    Draw(ctx) {
-      ctx.beginPath();
-      ctx.rect(-this._width / 2, -this._height / 2, this._width, this._height);
-      ctx.fill();
-      if (this.strokeWidth > 0)
-        ctx.stroke();
-      if (this._image) {
-        ctx.clip();
-        ctx.drawImage(this._image, this._imageOptions.framePosition.x * this._imageOptions.frameWidth, this._imageOptions.framePosition.y * this._imageOptions.frameHeight, this._imageOptions.frameWidth, this._imageOptions.frameHeight, -this._width / 2, -this._height / 2, this._width, this._height);
-      }
-    }
-  };
-  var Circle = class extends Drawable {
+
+  // src/core/drawable/circle.js
+  var Circle = class extends FixedDrawable {
     constructor(params) {
       super(params);
       this._radius = params.radius;
@@ -2937,27 +2812,73 @@
       }
     }
   };
-  var Poly2 = class extends Drawable {
+
+  // src/core/drawable/line.js
+  var Line = class extends FixedDrawable {
+    constructor(params) {
+      super(params);
+      this.length = params.length;
+    }
+    get boundingBox() {
+      const center = Vector.FromAngle(this.angle).Mult(this.length / 2);
+      return {
+        width: this.length,
+        height: this.length,
+        x: center.x,
+        y: center.y
+      };
+    }
+    Draw(ctx) {
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(this.length, 0);
+      ctx.stroke();
+    }
+  };
+
+  // src/core/drawable/polygon.js
+  var Poly2 = class extends FixedDrawable {
     constructor(params) {
       super(params);
       this._points = ParamParser.ParseValue(params.points, []);
     }
-    GetVertices() {
-      return this._points.map((v) => new Vector(v[0], v[1]));
+    get boundingBox() {
+      const verts = this._points;
+      let maxDist = 0;
+      let idx = 0;
+      for (let i2 = 0; i2 < verts.length; ++i2) {
+        const v = verts[i2];
+        const dist = Math.hypot(v[0], v[1]);
+        if (dist > maxDist) {
+          maxDist = dist;
+          idx = i2;
+        }
+      }
+      const d = maxDist * 2;
+      return {
+        width: d,
+        height: d,
+        x: this.position.x,
+        y: this.position.y
+      };
     }
     Draw(ctx) {
       ctx.beginPath();
-      for (let i2 = 0; i2 < this._vertices.length; ++i2) {
-        const v = this._vertices[i2];
+      for (let i2 = 0; i2 < this._points.length; ++i2) {
+        const v = this._points[i2];
         if (i2 == 0)
-          ctx.moveTo(v.x, v.y);
+          ctx.moveTo(...v);
         else
-          ctx.lineTo(v.x, v.y);
+          ctx.lineTo(...v);
       }
       ctx.closePath();
       ctx.fill();
       if (this.strokeWidth > 0)
         ctx.stroke();
+      if (this._image) {
+        ctx.clip();
+        ctx.drawImage(this._image, this._imageOptions.framePosition.x * this._imageOptions.frameWidth, this._imageOptions.framePosition.y * this._imageOptions.frameHeight, this._imageOptions.frameWidth, this._imageOptions.frameHeight, -this._radius, -this._radius, this._radius * 2, this._radius * 2);
+      }
     }
   };
   var Polygon2 = class extends Poly2 {
@@ -2981,15 +2902,36 @@
     set radius(num) {
       this._radius = num;
     }
+    get boundingBox() {
+      return {
+        width: this._radius * 2,
+        height: this._radius * 2,
+        x: this.position.x,
+        y: this.position.y
+      };
+    }
+  };
+
+  // src/core/drawable/rect.js
+  var Rect = class extends FixedDrawable {
+    constructor(params) {
+      super(params);
+    }
     Draw(ctx) {
-      super.Draw(ctx);
+      ctx.beginPath();
+      ctx.rect(-this._width / 2, -this._height / 2, this._width, this._height);
+      ctx.fill();
+      if (this.strokeWidth > 0)
+        ctx.stroke();
       if (this._image) {
         ctx.clip();
-        ctx.drawImage(this._image, this._imageOptions.framePosition.x * this._imageOptions.frameWidth, this._imageOptions.framePosition.y * this._imageOptions.frameHeight, this._imageOptions.frameWidth, this._imageOptions.frameHeight, -this._radius, -this._radius, this._radius * 2, this._radius * 2);
+        ctx.drawImage(this._image, this._imageOptions.framePosition.x * this._imageOptions.frameWidth, this._imageOptions.framePosition.y * this._imageOptions.frameHeight, this._imageOptions.frameWidth, this._imageOptions.frameHeight, -this._width / 2, -this._height / 2, this._width, this._height);
       }
     }
   };
-  var Sprite = class extends Drawable {
+
+  // src/core/drawable/sprite.js
+  var Sprite = class extends FixedDrawable {
     constructor(params) {
       super(params);
       this._image = this.scene.resources.get(params.src);
@@ -3067,24 +3009,128 @@
       ctx.drawImage(this._image, this._framePos.x * this._frameWidth, this._framePos.y * this._frameHeight, this._frameWidth, this._frameHeight, -this._width / 2, -this._height / 2, this._width, this._height);
     }
   };
-  var Line = class extends Drawable {
+
+  // src/core/drawable/text.js
+  var Text = class extends FixedDrawable {
     constructor(params) {
       super(params);
-      this.length = params.length;
+      this._text = params.text;
+      this._lines = this._text.split(/\n/);
+      this._padding = ParamParser.ParseValue(params.padding, 0);
+      this._align = ParamParser.ParseValue(params.align, "center");
+      this._fontSize = ParamParser.ParseValue(params.fontSize, 16);
+      this._fontFamily = ParamParser.ParseValue(params.fontFamily, "Arial");
+      this._fontStyle = ParamParser.ParseValue(params.fontStyle, "normal");
+      this._ComputeDimensions();
+    }
+    get linesCount() {
+      return this._lines.length;
+    }
+    get lineHeight() {
+      return this._fontSize + this._padding * 2;
+    }
+    get text() {
+      return this._text;
+    }
+    set text(val) {
+      this._text = val;
+      this._ComputeDimensions();
+    }
+    get fontSize() {
+      return this._fontSize;
+    }
+    set fontSize(val) {
+      this._fontSize = val;
+      this._ComputeDimensions();
+    }
+    get fontFamily() {
+      return this._fontFamily;
+    }
+    set fontFamily(val) {
+      this._fontFamily = val;
+      this._ComputeDimensions();
+    }
+    get padding() {
+      return this._padding;
+    }
+    set padding(val) {
+      this._padding = val;
+      this._ComputeDimensions();
+    }
+    get align() {
+      return this._align;
+    }
+    set align(s) {
+      this._align = s;
+      this._ComputeDimensions();
+    }
+    _ComputeDimensions() {
+      this._height = this.lineHeight * this.linesCount;
+      let maxWidth = 0;
+      const ctx = document.createElement("canvas").getContext("2d");
+      ctx.font = `${this._fontStyle} ${this._fontSize}px '${this._fontFamily}'`;
+      for (let line of this._lines) {
+        const lineWidth = ctx.measureText(line).width;
+        if (lineWidth > maxWidth) {
+          maxWidth = lineWidth;
+        }
+      }
+      this._width = maxWidth + this._padding * 2;
+    }
+    Draw(ctx) {
+      let offsetX = this._align == "left" ? -this._width / 2 : this._align == "right" ? this._width / 2 : 0;
+      ctx.font = `${this._fontStyle} ${this._fontSize}px '${this._fontFamily}'`;
+      ctx.textAlign = this._align;
+      ctx.textBaseline = "middle";
+      ctx.beginPath();
+      for (let i2 = 0; i2 < this.linesCount; ++i2) {
+        ctx.fillText(this._lines[i2], offsetX + this._padding, this.lineHeight * i2 - (this.linesCount - 1) / 2 * this.lineHeight);
+      }
+    }
+  };
+
+  // src/core/drawable/path.js
+  var Path = class extends Drawable {
+    constructor(params) {
+      super(params);
+      this._points = params.points;
     }
     get boundingBox() {
+      const verts = this._points;
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (let i2 = 0; i2 < verts.length; ++i2) {
+        const v = verts[i2];
+        if (v[0] < minX) {
+          minX = v[0];
+        } else if (v[0] > maxX) {
+          maxX = v[0];
+        }
+        if (v[1] < minY) {
+          minY = v[1];
+        } else if (v[1] > maxY) {
+          maxY = v[1];
+        }
+      }
       return {
-        width: this.length * 2,
-        height: this.length * 2,
-        x: this.position.x,
-        y: this.position.y
+        width: Math.abs(maxX - minX),
+        height: Math.abs(maxY - minY),
+        x: (maxX + minX) / 2,
+        y: (maxY + minY) / 2
       };
     }
     Draw(ctx) {
       ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(this.length, 0);
-      ctx.stroke();
+      for (let i2 = 0; i2 < this._points.length; ++i2) {
+        const v = this._points[i2];
+        if (i2 == 0)
+          ctx.moveTo(...v);
+        else
+          ctx.lineTo(...v);
+      }
+      ctx.closePath();
+      ctx.fill();
+      if (this.strokeWidth > 0)
+        ctx.stroke();
     }
   };
 
@@ -3198,12 +3244,24 @@
 
   // src/Lancelot.js
   var __name = "Lancelot";
+  var drawable = {
+    Drawable,
+    FixedDrawable,
+    Circle,
+    Line,
+    Polygon: Polygon2,
+    Poly: Poly2,
+    Rect,
+    Sprite,
+    Text,
+    Path
+  };
   var __export2 = {
     Vector,
     Game,
     Component,
     particles: emitter_exports,
-    drawable: drawable_exports,
+    drawable,
     physics: physics_exports,
     math,
     light: light_exports

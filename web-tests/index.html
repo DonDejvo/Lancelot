@@ -12,84 +12,53 @@
 <body>
     
     <script type="module">
-        import defaultExport from "../src/Lancelot.js";
 
-        class CarController extends Lancelot.Component {
+import defaultExport from "../src/Lancelot.js";
+
+const Vec = Lancelot.Vector;
+const math = Lancelot.math;
+
+class WaterController extends Lancelot.Component {
     constructor(params) {
         super();
-        this.wheels = params.wheels;
+        this._width = params.width;
+        this._height = params.height;
+        this._balls = params.balls;
     }
     Update(dt) {
-        const body = this.parent.body;
         const sprite = this.GetComponent("Sprite");
-        const flame = this.GetComponent("Flame");
 
-        flame.angle = body.angle;
+        const points = [];
 
-        if(body.position.y > 1000) {
-            body.position.Set(0, -200);
-            this.wheels[0].position.Set(body.width * 0.45, -200);
-            this.wheels[1].position.Set(body.width * 0.45, -200);
+        for(let ball of this._balls) {
+            points.push([ball.position.x, ball.position.y]);
         }
-        
-        const onGround = (this.wheels[0].body.collisions.all.size > 0 || this.wheels[1].body.collisions.all.size > 0);
+        points.push([this.position.x + this._width / 2, this.position.y + this._height / 2]);
+        points.push([this.position.x - this._width / 2, this.position.y + this._height / 2]);
 
-        body.velocity.y += 500 * dt;
-        
-        sprite.angle = body.angle;
-        const speed = 30;
-        const rotSpeed = 15;
-
-        if(this.scene.IsPressed("ArrowRight")) {
-            if(!onGround) {
-                body.angularVelocity -= rotSpeed * dt;
-                
-            } else {
-                this.wheels[0].body.angularVelocity += speed * dt;
-                this.wheels[1].body.angularVelocity += speed * dt;
-            }
-        }
-        if(this.scene.IsPressed("ArrowLeft")) {
-            if(!onGround) {
-                body.angularVelocity += rotSpeed * dt;
-            } else {
-                this.wheels[0].body.angularVelocity -= speed * dt;
-                this.wheels[1].body.angularVelocity -= speed * dt;
-            }
-        }
-        if(this.scene.IsPressed("f")) {
-            this.wheels[0].body.angularVelocity = 0;
-            this.wheels[1].body.angularVelocity = 0;
-        }
-
-        for(let w of this.wheels) {
-            const wbody = w.body;
-            const wsprite = w.GetComponent("Sprite");
-            
-            
-        
-            wbody.velocity.y += 500 * dt;
-        
-            wsprite.angle = wbody.angle;
-        }
+        sprite._points = points;
     }
 }
 
-class ObstacleController extends Lancelot.Component {
+class StoneController extends Lancelot.Component {
     constructor() {
         super();
     }
     Update(dt) {
-        const body = this.parent.body;
         const sprite = this.GetComponent("Sprite");
+        const body = this.parent.body;
 
-        if(body.mass != 0 && body.mass < 1000) {
-            body.velocity.y += 500 * dt;
-        }
-        
         sprite.angle = body.angle;
+
+        body.velocity.y += 500 * dt;
+
+        if(body.position.y > 400) {
+            body.position.Set(math.rand(-300, 300), -400);
+            body.velocity.Set(math.rand(-300, 300), math.rand(-200, 0));
+        }
     }
 }
+
 
 let game;
 
@@ -99,212 +68,105 @@ addEventListener("DOMContentLoaded", () => {
         width: 720,
         height: 480,
         preload: preload,
-        init: init,
-        controls: {
-            active: true,
-        }
+        init: init
     });
     
 });
 
 function preload() {
-    this.loader.AddImage("sl", "https://www.sololearn.com/Icons/Avatars/1.jpg");
+    this.loader.AddImage("stone", "https://opengameart.org/sites/default/files/stone2.jpg");
 }
 
 function init() {
     
     const level = this.CreateScene("level", {
-        background: "silver",
+        background: "skyblue",
         light: "#FFFFFF",
         physics: {
             iterations: 3,
-            bounds: [[-200, -2100], [7900, 2400]]
+            bounds: [[-500, -500], [500, 500]]
         }
     });
     
     level.Play();
-    
-    
-    const createCar = () => {
-        
-        const w = 128, h = 32;
-        const car = level.CreateEntity();
-        car.groupList.add("car");
-        
+
+    Water(level, 0, 160, 720, 160);
+
+    for(let i = 0; i < 5; ++i) Stone(level);
+}
+
+function Water(scene, x, y, w, h) {
+    const water = scene.CreateEntity();
+    water.position.Set(x, y);
+
+    const ballCount = 40;
+    let balls = [];
+    for(let i = 0; i < ballCount; ++i) {
+        const ball = scene.CreateEntity();
+        water.Clip(ball);
+        ball.position.Set(x + w * i / (ballCount - 1) - w / 2, y - h / 2);
+        ball.groupList.add("waterBall");
         let body;
-        car.AddComponent(body = new Lancelot.physics.Box({
-            width: w,
-            height: h,
-            mass: 20,
-            friction: { normal: 0, angular: 0.03, x: 0.03, y: 0.03 },
-            rotation: 1
+        ball.AddComponent(body = new Lancelot.physics.Ball({
+            radius: 2,
+            mass: (i == 0 || i == ballCount - 1) ? 0 : 1,
+            friction: { x: 0.01, y: 0.01, angular: 0.01 },
+            bounce: -0.9
         }));
-        let sprite;
-        car.AddComponent(sprite = new Lancelot.drawable.Rect({
-            width: w,
-            height: h,
-            fillStyle: "white",
-            strokeStyle: "black",
-            strokeWidth: 2
-        }), "Sprite");
-        
-        const createWheel = (x, y, r) => {
-            
-            const wheel = level.CreateEntity();
-            wheel.groupList.add("wheel");
-            wheel.position.Set(x,y);
-            
-            let wheelBody;
-            wheel.AddComponent(wheelBody = new Lancelot.physics.Ball({
-                radius: r,
-                sides: 8,
-                width: r * 2,
-                height: r * 2,
-                mass: r,
-                friction: { normal: 1, angular: 0.04, x: 0.03, y: 0.03 },
-            }));
-            let wheelSprite;
-            wheel.AddComponent(wheelSprite = new Lancelot.drawable.Circle({
-                radius: r,
-                sides: 8,
-                width: r * 2,
-                height: r * 2,
-                fillStyle: "black",
-                strokeStyle: "black",
-                strokeWidth: 2,
-                zIndex: 5,
-                image: {
-                    src: "sl"
-                }
-            }), "Sprite");
-            
-           
-            for(let i = 0; i < 1; ++i) {
-                
-                body.Join(wheelBody, "solid", {
-                    offset1: { x: x, y: y },
-                    strength: 3
-                });
-            }
-            
-            wheelBody.AddBehavior("obst", "ResolveCollision")
-            
-            return wheel;
-        }
-        
-        const wheels = [];
-        
-        wheels.push(createWheel(-w * 0.45, 0, h * 1.2));
-        wheels.push(createWheel(w * 0.45, 0, h * 1.2));
-        
-        car.AddComponent(new CarController({
 
-            wheels: wheels
-        }));
-        
-        body.AddBehavior("obst", "ResolveCollision")
-        
-        level.camera.Follow(car);
-        return car;
-    }
-    
-    const createObstacle = (x, y, w, h, a, m) => {
-        const obst = level.CreateEntity();
-        obst.groupList.add("obst");
-        obst.position.Set(x, y);
-        
-        let body;
-        obst.AddComponent(body = new Lancelot.physics.Box({
-            width: w,
-            height: h,
-            mass: m,
-            friction: { x: 0.03, y: 0.03, angular: 0.03 }
-        }));
-        body.angle = a;
-        
-        let sprite;
-        obst.AddComponent(sprite = new Lancelot.drawable.Rect({
-            width: w,
-            height: h,
-            strokeStyle: "black",
-            fillStyle: "white",
-            strokeWidth: 2
-        }), "Sprite");
-        sprite.angle = a;
-
-        obst.AddComponent(new ObstacleController());
-
-        return obst;
-    }
-    
-    const sin = (x) => {
-        const progress = Lancelot.math.lerp(x / count, 0, Math.PI * (count / 10));
-        return Math.sin(progress) * (x / count) * 0 + x * 3 - 0.5 * x ** 2 + 100;
-    }
-    
-    let curDiffH = 0;
-    let curY = 300;
-    let stepX = 50;
-    const count = 60;
-    let prevObst;
-    for(let i = 0; i < count; ++i) {
-        curDiffH += Lancelot.math.rand(-5, 5);
-        const lastY = sin(i, count);
-        curY = sin(i + 1, count);
-        const lastX = (i - 3) * stepX;
-        const curX = (i - 2) * stepX;
-        
-        const lastPos = new Lancelot.Vector(lastX, lastY);
-        const curPos = new Lancelot.Vector(curX, curY);
-        const center = curPos.Clone().Add(lastPos).Mult(0.5);
-        const ang = curPos.Clone().Sub(lastPos).Angle();
-        
-        let curObst = createObstacle(center.x, center.y, curPos.Clone().Sub(lastPos).Mag() * 1, 20, ang, (i % 10 == 0 || i % 10 == 9) ? 0 : 0);
-        if(prevObst) {
-            prevObst.body.Join(curObst.body, "solid", {
+        if(i != 0) {
+            balls[i - 1].body.Join(body, "solid", {
                 strength: 1,
-                offset1: { x: prevObst.body.width / 2},
-                offset2: { x: -curObst.body.width / 2 },
+                length: Vec.Dist(balls[i - 1].body.position, body.position) * 0.1
             });
         }
-        prevObst = curObst;
+
+        balls.push(ball);
     }
 
-    
-    let car = createCar();
-    
-    let text;
-    
-    let emitter;
-
-    let flame;
-    car.AddComponent(flame = new Lancelot.particles.Emitter({
-        angle: -Math.PI / 2,
-        options: {
-            lifetime: 1000,
-            opacity: { to: 0 },
-            speed: 20,
-            variance: 5
-        }
-    }), "Flame");
-    flame.Add(Lancelot.drawable.Circle, {
-        radius: 16,
-        fillStyle: "radial-gradient;0,0,0,0,0,16;black=0;rgba(0,0,0,0)=1",
-        zIndex: -1
-    });
-    flame.Emit(2, true, 20);
-    
-    text = level.CreateEntity();
-    text.AddComponent(new Lancelot.drawable.Text({
-        text: "Controls:\nMOVE LEFT - joystick / left arrow\nMOVE RIGHT - joystick / right arrow\nBREAK - B / F",
-        fillStyle: "darkblue",
-        fontSize: 32,
-        align: "left",
-        fontStyle: "italic",
-        zIndex: -1
+    let waterSprite;
+    water.AddComponent(waterSprite = new Lancelot.drawable.Path({
+        points: [],
+        fillStyle: "blue",
+        strokeStyle: "white",
+        zIndex: 10,
+    }), "Sprite");
+    water.AddComponent(new WaterController({
+        width: w,
+        height: h,
+        balls: balls
     }));
-    text.position.Set(100, 0);
-    
+
+    return water;
+}
+
+function Stone(scene) {
+    const stone = scene.CreateEntity();
+    stone.groupList.add("stone");
+    stone.position.y = 500;
+    let body;
+    stone.AddComponent(body = new Lancelot.physics.Polygon({
+        radius: 30,
+        sides: 5,
+        mass: 25,
+        friction: { x: 0.02, y: 0.02, angular: 0.02 }
+    }));
+    let sprite;
+    stone.AddComponent(sprite = new Lancelot.drawable.Polygon({
+        radius: 30,
+        sides: 5,
+        fillStyle: "grey",
+        image: {
+            src: "stone"
+        }
+    }), "Sprite");
+    stone.AddComponent(new StoneController());
+
+   body.AddBehavior("waterBall", "ResolveCollision");
+   body.AddBehavior("stone", "ResolveCollision");
+
+
+    return stone;
 }
         
     </script>

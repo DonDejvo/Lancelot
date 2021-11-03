@@ -212,7 +212,7 @@ class Body extends Component {
             }
         }
     }
-    Join(b, type, params) {
+    Join(b, type, params = {}) {
         let joint;
         switch(type) {
             case "elastic":
@@ -693,7 +693,7 @@ const ResolveCollision = (b1, b2) => {
         const vp1 = v1.Clone().Add(new Vector(-w1 * r1.y, w1 * r1.x));
         const vp2 = v2.Clone().Add(new Vector(-w2 * r2.y, w2 * r2.x));
         const relVel = vp1.Clone().Sub(vp2);
-        const bounce = Math.max(b1.bounce, b2.bounce);
+        const bounce = b2.bounce;
         const j = (-(1 + bounce) * Vector.Dot(relVel, detect.normal)) / (b1.inverseMass + b2.inverseMass + Math.pow(Vector.Cross(r1, detect.normal), 2) / b1.inertia + Math.pow(Vector.Cross(r2, detect.normal), 2) / b2.inertia);
         const jn = detect.normal.Clone().Mult(j);
         const vel1 = jn.Clone().Mult(b1.inverseMass);
