@@ -318,27 +318,40 @@ var Renderer = class {
     this._height = params.height;
     this._aspect = this._width / this._height;
     this._scale = 1;
+    this._parentElement = params.parentElement;
+    this._buffers = [];
+    for (let i2 = 0; i2 < 5; ++i2) {
+      const b = document.createElement("canvas").getContext("2d");
+      b.canvas.width = this._width;
+      b.canvas.height = this._height;
+      b.imageSmoothingEnabled = false;
+      this._buffers[i2] = b;
+    }
     this._InitContainer();
     this._InitCanvas();
     this._OnResize();
     window.addEventListener("resize", () => this._OnResize());
-    this.draw = (scenes, ctx, idx = 0) => {
+    this.draw = (scenes, ctx, idx, idx2) => {
       const scene = scenes[idx];
       if (!scene) {
         return;
       }
       if (scene.paused) {
-        draw(scenes, ctx, idx + 1);
+        this.draw(scenes, ctx, idx + 1, idx2);
         return;
       }
       const w = this._width;
       const h = this._height;
       scene.DrawLights(ctx, w, h);
-      const b = document.createElement("canvas").getContext("2d");
-      b.canvas.width = w;
-      b.canvas.height = h;
+      if (!this._buffers[idx2]) {
+        const b2 = document.createElement("canvas").getContext("2d");
+        b2.canvas.width = this._width;
+        b2.canvas.height = this._height;
+        this._buffers[idx2] = b2;
+      }
+      const b = this._buffers[idx2];
       if (idx < scenes.length - 1) {
-        draw(scenes, b, idx + 1);
+        this.draw(scenes, b, idx + 1, idx2 + 1);
         b.globalCompositeOperation = "source-over";
       }
       scene.DrawObjects(b, w, h);
@@ -348,22 +361,15 @@ var Renderer = class {
   get dimension() {
     return this._canvas.getBoundingClientRect();
   }
-  get background() {
-    return this._background;
-  }
-  set background(col) {
-    this._background = col;
-    this._canvas.style.background = col;
-  }
   _InitContainer() {
     const con = this._container = document.createElement("div");
     con.style.width = this._width + "px";
     con.style.height = this._height + "px";
-    con.style.position = "absolute";
+    con.style.position = "relative";
     con.style.left = "50%";
     con.style.top = "0%";
     con.style.transformOrigin = "center";
-    document.body.appendChild(con);
+    this._parentElement.appendChild(con);
   }
   _InitCanvas() {
     const cnv = this._canvas = document.createElement("canvas");
@@ -374,11 +380,11 @@ var Renderer = class {
     cnv.style.left = "0";
     cnv.style.top = "0";
     cnv.style.display = "block";
-    cnv.style.background = this._background;
+    cnv.style.background = "black";
     this._container.appendChild(cnv);
   }
   _OnResize() {
-    const [width, height] = [document.body.clientWidth, document.body.clientHeight];
+    const [width, height] = [this._parentElement.clientWidth, this._parentElement.clientHeight];
     if (width / height > this._aspect) {
       this._scale = height / this._height;
     } else {
@@ -391,7 +397,7 @@ var Renderer = class {
     const ctx = this._context;
     ctx.beginPath();
     ctx.clearRect(0, 0, this._width, this._height);
-    this.draw(scenes, ctx);
+    this.draw(scenes, ctx, 0, 0);
   }
   DisplayToSceneCoords(scene, x, y) {
     const boundingRect = this.dimension;
@@ -777,6 +783,7 @@ var ParamParser = function() {
 var Interactive = class extends Component {
   constructor(params) {
     super();
+    this._type = "interactive";
     this._capture = ParamParser.ParseValue(params.capture, true);
     this._eventHandlers = new Map();
   }
@@ -1140,6 +1147,7 @@ var World = class {
     this._limit = ParamParser.ParseValue(params.limit, 10);
     this._bodies = [];
     this._joints = [];
+    this._gravity = ParamParser.ParseValue(params.gravity, 0);
     const cellCountX = Math.floor((this._bounds[1][0] - this._bounds[0][0]) / this._cellDimensions.width);
     const cellCountY = Math.floor((this._bounds[1][1] - this._bounds[0][1]) / this._cellDimensions.height);
     this._spatialGrid = new SpatialHashGrid(this._bounds, [cellCountX, cellCountY]);
@@ -1174,6 +1182,9 @@ var World = class {
       body._collisions.all.clear();
     }
     for (let body of this._bodies) {
+      if (body.mass != 0) {
+        body.velocity.y += this._gravity * elapsedTimeS;
+      }
       body.UpdatePosition(elapsedTimeS);
     }
     for (let joint of this._joints) {
@@ -1707,6 +1718,7 @@ var DetectCollisionBallVsPoly = (b1, b2) => {
   };
 };
 var ResolveCollision = (b1, b2) => {
+  const bounce = b2.bounce;
   if (b1 instanceof Ball && b2 instanceof Poly) {
     [b1, b2] = [b2, b1];
   }
@@ -1749,7 +1761,6 @@ var ResolveCollision = (b1, b2) => {
     const vp1 = v1.Clone().Add(new Vector(-w1 * r1.y, w1 * r1.x));
     const vp2 = v2.Clone().Add(new Vector(-w2 * r2.y, w2 * r2.x));
     const relVel = vp1.Clone().Sub(vp2);
-    const bounce = b2.bounce;
     const j = -(1 + bounce) * Vector.Dot(relVel, detect.normal) / (b1.inverseMass + b2.inverseMass + Math.pow(Vector.Cross(r1, detect.normal), 2) / b1.inertia + Math.pow(Vector.Cross(r2, detect.normal), 2) / b2.inertia);
     const jn = detect.normal.Clone().Mult(j);
     const vel1 = jn.Clone().Mult(b1.inverseMass);
@@ -1890,48 +1901,56 @@ __export(light_exports, {
   AmbientLight: () => AmbientLight,
   RadialLight: () => RadialLight
 });
-var AmbientLight = class {
-  constructor(params) {
-    this._color = ParamParser.ParseValue(params.color, "white");
-  }
-  get color() {
-    return this._color;
-  }
-  set color(col) {
-    this._color = col;
-  }
-  Draw(ctx) {
-    ctx.beginPath();
-    ctx.fillStyle = StyleParser.ParseColor(ctx, this.color);
-    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  }
-};
-var RadialLight = class extends Component {
+var Light = class extends Component {
   constructor(params) {
     super();
     this._type = "light";
     this._color = ParamParser.ParseValue(params.color, "white");
-    this.radius = ParamParser.ParseValue(params.radius, 100);
-    this.angle = 0;
-    this.angleRange = ParamParser.ParseValue(params.angleRange, Math.PI * 2);
+    this._colorParsed = null;
   }
   get color() {
     return this._color;
   }
   set color(col) {
     this._color = col;
+    this._colorParsed = null;
+  }
+  Draw0(ctx) {
+    if (!this._colorParsed) {
+      this._colorParsed = StyleParser.ParseColor(ctx, this.color);
+    }
+    ctx.save();
+    ctx.fillStyle = this._colorParsed;
+    this.Draw(ctx);
+    ctx.restore();
+  }
+  Draw(_) {
+  }
+};
+var AmbientLight = class extends Light {
+  constructor(params) {
+    super(params);
   }
   Draw(ctx) {
     ctx.beginPath();
-    ctx.save();
+    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  }
+};
+var RadialLight = class extends Light {
+  constructor(params) {
+    super(params);
+    this.radius = ParamParser.ParseValue(params.radius, 100);
+    this.angle = 0;
+    this.angleRange = ParamParser.ParseValue(params.angleRange, Math.PI * 2);
+  }
+  Draw(ctx) {
+    ctx.beginPath();
     ctx.translate(this.position.x, this.position.y);
     ctx.rotate(this.angle);
-    ctx.fillStyle = StyleParser.ParseColor(ctx, this.color);
     ctx.arc(0, 0, this.radius, -this.angleRange / 2, this.angleRange / 2);
     ctx.lineTo(0, 0);
     ctx.closePath();
     ctx.fill();
-    ctx.restore();
   }
 };
 
@@ -1940,6 +1959,7 @@ var Scene = class {
   constructor(params) {
     this._zIndex = 0;
     this._background = params.background;
+    this._backgroundParsed = null;
     this._world = new World(params.physics);
     this.paused = true;
     this.speed = 1;
@@ -1954,6 +1974,7 @@ var Scene = class {
     this._eventHandlers = new Map();
     this._entityManager = new EntityManager();
     this._camera = new Camera();
+    this._buffer = null;
   }
   get camera() {
     return this._camera;
@@ -1966,6 +1987,7 @@ var Scene = class {
   }
   set background(col) {
     this._background = col;
+    this._backgroundParsed = null;
   }
   IsPressed(k) {
     return this._keys.has(k);
@@ -2002,13 +2024,7 @@ var Scene = class {
     if (this.paused) {
       return false;
     }
-    let result = false;
-    if (this._eventHandlers.has(type)) {
-      const handlers = this._eventHandlers.get(type);
-      for (let handler of handlers) {
-        handler(event);
-      }
-    }
+    let captured = false;
     if (type == "mousedown") {
       const entities = this._world._quadtree.FindNear([event.x, event.y], [0, 0]).map((c) => c.entity);
       for (let e of entities) {
@@ -2019,7 +2035,7 @@ var Scene = class {
           e.interactive._On(type, event);
           e.interactive._id = event.id;
           if (e.interactive._capture) {
-            result = true;
+            captured = true;
           }
         }
       }
@@ -2027,7 +2043,7 @@ var Scene = class {
       for (let e of this._interactiveEntities) {
         if (e.interactive._id == event.id) {
           if (e.interactive._capture) {
-            result = true;
+            captured = true;
           }
           e.interactive._On(type, event);
           if (type == "mouseup") {
@@ -2040,7 +2056,16 @@ var Scene = class {
     } else if (type == "keyup") {
       this._keys.delete(event.key);
     }
-    return result;
+    if (captured) {
+      return true;
+    }
+    if (this._eventHandlers.has(type)) {
+      const handlers = this._eventHandlers.get(type);
+      for (let handler of handlers) {
+        handler(event);
+      }
+    }
+    return captured;
   }
   GetEntityByName(n) {
     return this._entityManager.Get(n);
@@ -2055,13 +2080,19 @@ var Scene = class {
   RemoveEntity(e) {
     this._entityManager.Remove(e);
     e._components.forEach((c) => {
-      if (c._type == "drawable") {
-        this._RemoveDrawable(c);
-      } else if (c._type == "body") {
-        this._RemoveBody(e, c);
-      } else if (c._type == "light") {
-        const idx = this._lights.indexOf(c);
-        this._lights.splice(idx, 1);
+      switch (c._type) {
+        case "drawable":
+          this._RemoveDrawable(c);
+          break;
+        case "body":
+          this._RemoveBody(e, c);
+          break;
+        case "light":
+          this._lights.splice(this._lights.indexOf(c), 1);
+          break;
+        case "interactive":
+          this._interactiveEntities.splice(this._interactiveEntities.indexOf(e), 1);
+          break;
       }
     });
   }
@@ -2103,25 +2134,32 @@ var Scene = class {
   }
   DrawLights(ctx, renderWidth, renderHeight) {
     ctx.globalCompositeOperation = "source-over";
-    this._ambientLight.Draw(ctx);
+    this._ambientLight.Draw0(ctx);
     const cam = this.camera;
     ctx.globalCompositeOperation = "lighter";
     ctx.save();
     ctx.translate(-cam.position.x * cam.scale + renderWidth / 2, -cam.position.y * cam.scale + renderHeight / 2);
     ctx.scale(cam.scale, cam.scale);
     for (let light of this._lights) {
-      light.Draw(ctx);
+      light.Draw0(ctx);
     }
     ctx.restore();
     ctx.globalCompositeOperation = "multiply";
   }
   DrawObjects(ctx, renderWidth, renderHeight) {
     const cam = this.camera;
-    const buffer = document.createElement("canvas").getContext("2d");
-    buffer.canvas.width = renderWidth;
-    buffer.canvas.height = renderHeight;
+    if (!this._buffer) {
+      this._buffer = document.createElement("canvas").getContext("2d");
+      this._buffer.canvas.width = renderWidth;
+      this._buffer.canvas.height = renderHeight;
+      this._buffer.imageSmoothingEnabled = false;
+    }
+    const buffer = this._buffer;
+    if (!this._backgroundParsed) {
+      this._backgroundParsed = StyleParser.ParseColor(buffer, this.background);
+    }
     buffer.beginPath();
-    buffer.fillStyle = StyleParser.ParseColor(buffer, this.background);
+    buffer.fillStyle = this._backgroundParsed;
     buffer.fillRect(0, 0, renderWidth, renderHeight);
     buffer.save();
     buffer.translate(-cam.position.x * cam.scale + renderWidth / 2, -cam.position.y * cam.scale + renderHeight / 2);
@@ -2152,9 +2190,7 @@ var Loader = class {
   }
   _Add(n, p, type) {
     let path;
-    if (this._path == "") {
-      path = p;
-    } else if (p.startsWith("/")) {
+    if (p.startsWith("/")) {
       path = this._path + p.slice(1);
     } else {
       path = this._path + p;
@@ -2200,7 +2236,7 @@ var Loader = class {
   }
   SetPath(p) {
     this._path = p;
-    if (!this._path) {
+    if (!this._path.endsWith("/")) {
       this._path += "/";
     }
     return this;
@@ -2272,21 +2308,20 @@ var Game = class {
     this._height = params.height;
     this._preload = params.preload == void 0 ? null : params.preload.bind(this);
     this._init = params.init.bind(this);
+    this._parentElement = ParamParser.ParseValue(params.parentElement, document.body);
     this._resources = null;
     this._loader = new Loader();
-    const body = document.body;
+    const body = this._parentElement;
     body.style.userSelect = "none";
     body.style.touchAction = "none";
-    body.style.position = "fixed";
-    body.style.width = "100%";
-    body.style.height = "100%";
+    body.style.WebkitUserSelect = "none";
+    body.style.position = "relative";
     body.style.overflow = "hidden";
-    body.style.margin = "0";
-    body.style.padding = "0";
     body.style.background = "black";
     this._renderer = new Renderer({
       width: this._width,
-      height: this._height
+      height: this._height,
+      parentElement: body
     });
     this._engine = new Engine();
     this._sceneManager = new SceneManager();
@@ -2382,6 +2417,7 @@ var Game = class {
   _InitControls(layout) {
     const applyStyle = (elem, bg = true) => {
       const color = "rgba(150, 150, 150, 0.6)";
+      elem.style.pointerEvents = "auto";
       elem.style.position = "absolute";
       elem.style.border = "2px solid " + color;
       elem.style.color = color;
@@ -2445,8 +2481,11 @@ var Game = class {
     const controlsContainer = document.createElement("div");
     controlsContainer.style.width = "100%";
     controlsContainer.style.height = "100%";
+    controlsContainer.style.left = "0";
+    controlsContainer.style.top = "0";
     controlsContainer.style.zIndex = "999";
     controlsContainer.style.position = "absolute";
+    controlsContainer.style.pointerEvents = "none";
     const controlsMap = {};
     const joystick = document.createElement("div");
     joystick.style.width = "120px";
@@ -2475,7 +2514,7 @@ var Game = class {
     controlsMap.SR = createSideButton("right");
     controlsMap.select = createActionButton("Select", -20);
     controlsMap.start = createActionButton("Start", 20);
-    document.body.appendChild(controlsContainer);
+    this._parentElement.appendChild(controlsContainer);
     const getJoystickDirection = (e) => {
       const directions = {
         left: new Vector(-1, 0),
@@ -2541,6 +2580,18 @@ var Game = class {
           key
         });
       });
+    }
+  }
+  RequestFullScreen() {
+    const element = this._parentElement;
+    var requestMethod = element.requestFullScreen || element.webkitRequestFullScreen || element.mozRequestFullScreen || element.msRequestFullScreen;
+    if (requestMethod) {
+      requestMethod.call(element);
+    } else if (typeof window.ActiveXObject !== "undefined") {
+      var wscript = new ActiveXObject("WScript.Shell");
+      if (wscript !== null) {
+        wscript.SendKeys("{F11}");
+      }
     }
   }
   _InitSceneEvents() {
@@ -2630,15 +2681,14 @@ var Drawable = class extends Component {
   constructor(params = {}) {
     super();
     this._type = "drawable";
-    this._width = ParamParser.ParseValue(params.width, 0);
-    this._height = ParamParser.ParseValue(params.height, 0);
     this._zIndex = ParamParser.ParseValue(params.zIndex, 0);
     this.opacity = ParamParser.ParseValue(params.opacity, 1);
-    this._angle = 0;
     this._fillStyle = ParamParser.ParseValue(params.fillStyle, "black");
     this._strokeStyle = ParamParser.ParseValue(params.strokeStyle, "black");
     this.strokeWidth = ParamParser.ParseValue(params.strokeWidth, 0);
     this.mode = ParamParser.ParseValue(params.mode, "source-over");
+    this._fillStyleParsed = null;
+    this._strokeStyleParsed = null;
   }
   get zIndex() {
     return this._zIndex;
@@ -2648,6 +2698,74 @@ var Drawable = class extends Component {
     if (this.scene) {
       this.scene._RemoveDrawable(this);
       this.scene._AddDrawable(this);
+    }
+  }
+  get fillStyle() {
+    return this._fillStyle;
+  }
+  set fillStyle(col) {
+    this._fillStyle = col;
+    this._fillStyleParsed = null;
+  }
+  get strokeStyle() {
+    return this._strokeStyle;
+  }
+  set strokeStyle(col) {
+    this._strokeStyle = col;
+    this._strokeStyleParsed = null;
+  }
+  get boundingBox() {
+    return {
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0
+    };
+  }
+  Draw(_) {
+  }
+  Draw0(ctx) {
+    this.ParseStyles(ctx);
+    ctx.save();
+    ctx.globalCompositeOperation = this.mode;
+    ctx.globalAlpha = this.opacity;
+    ctx.fillStyle = this._fillStyleParsed;
+    ctx.strokeStyle = this._strokeStyleParsed;
+    ctx.lineWidth = this.strokeWidth;
+    this.Draw(ctx);
+    ctx.restore();
+  }
+  ParseStyles(ctx) {
+    if (!this._fillStyleParsed) {
+      this._fillStyleParsed = StyleParser.ParseColor(ctx, this.fillStyle);
+    }
+    if (!this._strokeStyleParsed) {
+      this._strokeStyleParsed = StyleParser.ParseColor(ctx, this.strokeStyle);
+    }
+  }
+};
+var FixedDrawable = class extends Drawable {
+  constructor(params) {
+    super(params);
+    this._offset = new Vector();
+    this._shaking = null;
+    this.flip = ParamParser.ParseObject(params.flip, { x: false, y: false });
+    this._scale = ParamParser.ParseObject(params.scale, { x: 1, y: 1 });
+    this._image = null;
+    this._imageOptions = params.image;
+    this.center = new Vector();
+    this._width = ParamParser.ParseValue(params.width, 0);
+    this._height = ParamParser.ParseValue(params.height, 0);
+    this._angle = 0;
+  }
+  InitComponent() {
+    if (this._imageOptions) {
+      this._image = this.scene.resources.get(this._imageOptions.src);
+      this._imageOptions = ParamParser.ParseObject(this._imageOptions, {
+        frameWidth: this._image.width,
+        frameHeight: this._image.height,
+        framePosition: { x: 0, y: 0 }
+      });
     }
   }
   get width() {
@@ -2674,67 +2792,14 @@ var Drawable = class extends Component {
   set scale(num) {
     this._scale = num;
   }
-  get fillStyle() {
-    return this._fillStyle;
-  }
-  set fillStyle(col) {
-    this._fillStyle = col;
-  }
-  get strokeStyle() {
-    return this._strokeStyle;
-  }
-  set strokeStyle(col) {
-    this._strokeStyle = col;
-  }
   get boundingBox() {
-    const d = Math.hypot(this._width, this._height) / 2;
+    const d = Math.hypot(this._width, this._height);
     return {
-      width: d,
-      height: d,
+      width: d * this.scale.x,
+      height: d * this.scale.y,
       x: this.position.x,
       y: this.position.y
     };
-  }
-  get boundingBox() {
-    return {
-      width: this._width,
-      height: this._height,
-      x: this.position.x,
-      y: this.position.y
-    };
-  }
-  Draw(_) {
-  }
-  Draw0(ctx) {
-    ctx.save();
-    ctx.globalCompositeOperation = this.mode;
-    ctx.globalAlpha = this.opacity;
-    ctx.fillStyle = StyleParser.ParseColor(ctx, this.fillStyle);
-    ctx.strokeStyle = StyleParser.ParseColor(ctx, this.strokeStyle);
-    ctx.lineWidth = this.strokeWidth;
-    this.Draw(ctx);
-    ctx.restore();
-  }
-};
-var FixedDrawable = class extends Drawable {
-  constructor(params) {
-    super(params);
-    this._offset = new Vector();
-    this._shaking = null;
-    this.flip = ParamParser.ParseObject(params.flip, { x: false, y: false });
-    this._scale = ParamParser.ParseObject(params.scale, { x: 1, y: 1 });
-    this._image = null;
-    this._imageOptions = params.image;
-  }
-  InitComponent() {
-    if (this._imageOptions) {
-      this._image = this.scene.resources.get(this._imageOptions.src);
-      this._imageOptions = ParamParser.ParseObject(this._imageOptions, {
-        frameWidth: this._image.width,
-        frameHeight: this._image.height,
-        framePosition: { x: 0, y: 0 }
-      });
-    }
   }
   Shake(range, dur, freq, angle) {
     this._shaking = {
@@ -2750,20 +2815,28 @@ var FixedDrawable = class extends Drawable {
     this._offset = new Vector();
   }
   Draw0(ctx) {
+    this.ParseStyles(ctx);
     ctx.save();
     ctx.translate(-this._offset.x, -this._offset.y);
-    ctx.save();
     ctx.globalCompositeOperation = this.mode;
     ctx.globalAlpha = this.opacity;
     ctx.translate(this.position.x, this.position.y);
-    ctx.scale(this.flip.x ? -this.scale : this.scale, this.flip.y ? -this.scale : this.scale);
+    ctx.scale(this.flip.x ? -this.scale.x : this.scale.x, this.flip.y ? -this.scale.y : this.scale.y);
     ctx.rotate(this.angle);
-    ctx.fillStyle = StyleParser.ParseColor(ctx, this.fillStyle);
-    ctx.strokeStyle = StyleParser.ParseColor(ctx, this.strokeStyle);
+    ctx.translate(this.center.x, this.center.y);
+    ctx.fillStyle = this._fillStyleParsed;
+    ctx.strokeStyle = this._strokeStyleParsed;
     ctx.lineWidth = this.strokeWidth;
     this.Draw(ctx);
     ctx.restore();
-    ctx.restore();
+  }
+  DrawImage(ctx, w, h, clip = true, framePos = this._imageOptions.framePosition) {
+    if (this._image) {
+      if (clip) {
+        ctx.clip();
+      }
+      ctx.drawImage(this._image, framePos.x * this._imageOptions.frameWidth, framePos.y * this._imageOptions.frameHeight, this._imageOptions.frameWidth, this._imageOptions.frameHeight, -w / 2, -h / 2, w, h);
+    }
   }
   Update(elapsedTimeS) {
     if (this._shaking) {
@@ -2776,6 +2849,30 @@ var FixedDrawable = class extends Drawable {
         this.StopShaking();
       }
     }
+  }
+  FollowBody() {
+    let body = this.parent.body;
+    if (!body) {
+      return;
+    }
+    this.parent.AddComponent(new BodyFollower({
+      target: this
+    }));
+  }
+  SetSize(w, h) {
+    this.width = w;
+    this.height = h;
+  }
+};
+var BodyFollower = class extends Component {
+  constructor(params) {
+    super();
+    this._target = params.target;
+  }
+  Update(dt) {
+    const body = this.parent.body;
+    this._target.angle = body.angle;
+    this._target.offset = body.offset;
   }
 };
 
@@ -2805,10 +2902,7 @@ var Circle = class extends FixedDrawable {
     ctx.fill();
     if (this.strokeWidth > 0)
       ctx.stroke();
-    if (this._image) {
-      ctx.clip();
-      ctx.drawImage(this._image, this._imageOptions.framePosition.x * this._imageOptions.frameWidth, this._imageOptions.framePosition.y * this._imageOptions.frameHeight, this._imageOptions.frameWidth, this._imageOptions.frameHeight, -this._radius, -this._radius, this._radius * 2, this._radius * 2);
-    }
+    this.DrawImage(ctx, this._radius * 2, this._radius * 2);
   }
 };
 
@@ -2874,10 +2968,6 @@ var Poly2 = class extends FixedDrawable {
     ctx.fill();
     if (this.strokeWidth > 0)
       ctx.stroke();
-    if (this._image) {
-      ctx.clip();
-      ctx.drawImage(this._image, this._imageOptions.framePosition.x * this._imageOptions.frameWidth, this._imageOptions.framePosition.y * this._imageOptions.frameHeight, this._imageOptions.frameWidth, this._imageOptions.frameHeight, -this._radius, -this._radius, this._radius * 2, this._radius * 2);
-    }
   }
 };
 var Polygon2 = class extends Poly2 {
@@ -2909,6 +2999,10 @@ var Polygon2 = class extends Poly2 {
       y: this.position.y
     };
   }
+  Draw(ctx) {
+    super.Draw(ctx);
+    this.DrawImage(ctx, this.radius * 2, this.radius * 2);
+  }
 };
 
 // src/core/drawable/rect.js
@@ -2922,10 +3016,7 @@ var Rect = class extends FixedDrawable {
     ctx.fill();
     if (this.strokeWidth > 0)
       ctx.stroke();
-    if (this._image) {
-      ctx.clip();
-      ctx.drawImage(this._image, this._imageOptions.framePosition.x * this._imageOptions.frameWidth, this._imageOptions.framePosition.y * this._imageOptions.frameHeight, this._imageOptions.frameWidth, this._imageOptions.frameHeight, -this._width / 2, -this._height / 2, this._width, this._height);
-    }
+    this.DrawImage(ctx, this._width, this._height);
   }
 };
 
@@ -2933,9 +3024,6 @@ var Rect = class extends FixedDrawable {
 var Sprite = class extends FixedDrawable {
   constructor(params) {
     super(params);
-    this._image = this.scene.resources.get(params.src);
-    this._frameWidth = ParamParser.ParseValue(params.frameWidth, this._image.width);
-    this._frameHeight = ParamParser.ParseValue(params.frameHeight, this._image.height);
     this._anims = new Map();
     this._currentAnim = null;
     this._paused = true;
@@ -2958,7 +3046,7 @@ var Sprite = class extends FixedDrawable {
       counter: 0
     };
     this._currentAnim = currentAnim;
-    this._framePos = this._anims[currentAnim.name][currentAnim.frame];
+    this._framePos = this._anims.get(currentAnim.name)[currentAnim.frame];
   }
   Reset() {
     if (this._currentAnim) {
@@ -3005,7 +3093,17 @@ var Sprite = class extends FixedDrawable {
     return null;
   }
   Draw(ctx) {
-    ctx.drawImage(this._image, this._framePos.x * this._frameWidth, this._framePos.y * this._frameHeight, this._frameWidth, this._frameHeight, -this._width / 2, -this._height / 2, this._width, this._height);
+    this.DrawImage(ctx, this._width, this._height, false, this._framePos);
+  }
+};
+
+// src/core/drawable/image.js
+var Image2 = class extends FixedDrawable {
+  constructor(params) {
+    super(params);
+  }
+  Draw(ctx) {
+    this.DrawImage(ctx, this._width, this._height, false);
   }
 };
 
@@ -3241,6 +3339,87 @@ var ParticleController = class extends Component {
   }
 };
 
+// src/core/tileset.js
+var Tileset = class {
+  constructor(params) {
+    this._image = params.image;
+    this._tileWidth = params.tileWidth;
+    this._tileHeight = params.tileHeight;
+    this._columns = params.columns;
+    this._tileData = [];
+  }
+  _CreateData(id) {
+    let data = {
+      id,
+      properties: []
+    };
+    this._tileData.push(data);
+    return data;
+  }
+  _GetData(id) {
+    return this._tileData.find((e) => e.id == id);
+  }
+  AddAnim(id, rate, frames) {
+    let data = this._GetData(id);
+    if (!data) {
+      data = this._CreateData(id);
+    }
+    data.animation = {
+      frameRate: rate,
+      frames
+    };
+  }
+  AddProperty(id, name, value) {
+    let data = this._GetData(id);
+    if (!data) {
+      data = this._CreateData(id);
+    }
+    data.properties.push({ name, value });
+  }
+  _GetPos(id) {
+    return { x: id % this._columns, y: Math.floor(id / this._columns) };
+  }
+  CreateTile(scene, id) {
+    let data = this._GetData(id);
+    let e = scene.CreateEntity();
+    let sprite;
+    if (data && data.animation) {
+      sprite = new Sprite({
+        image: {
+          src: this._image,
+          frameWidth: this._tileWidth,
+          frameHeight: this._tileHeight
+        }
+      });
+      sprite.AddAnim("loop", data.animation.frames.map((e2) => this._GetPos(e2)));
+      sprite.PlayAnim("loop", data.animation.frameRate, true);
+    } else {
+      sprite = new Image2({
+        image: {
+          src: this._image,
+          frameWidth: this._tileWidth,
+          frameHeight: this._tileHeight,
+          framePosition: this._GetPos(id)
+        }
+      });
+    }
+    e.AddComponent(sprite, "TileSprite");
+    e.AddComponent(new TileData({
+      properties: data == null ? [] : data.properties
+    }));
+    return e;
+  }
+};
+var TileData = class extends Component {
+  constructor(params) {
+    super();
+    this.properties = new Map();
+    for (let p of params.properties) {
+      this.properties.set(p.name, p.value);
+    }
+  }
+};
+
 // src/Lancelot.js
 var __name = "Lancelot";
 var drawable = {
@@ -3253,12 +3432,14 @@ var drawable = {
   Rect,
   Sprite,
   Text,
-  Path
+  Path,
+  Image: Image2
 };
 var __export2 = {
   Vector,
   Game,
   Component,
+  Tileset,
   particles: emitter_exports,
   drawable,
   physics: physics_exports,

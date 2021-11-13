@@ -7,6 +7,16 @@ export class Renderer {
         this._height = params.height;
         this._aspect = this._width / this._height;
         this._scale = 1.0;
+        this._parentElement = params.parentElement;
+
+        this._buffers = [];
+        for(let i = 0; i < 5; ++i) {
+            const b = document.createElement("canvas").getContext("2d");
+            b.canvas.width = this._width;
+            b.canvas.height = this._height;
+            b.imageSmoothingEnabled = false;
+            this._buffers[i] = b;
+        }
 
         this._InitContainer();
         this._InitCanvas();
@@ -14,14 +24,14 @@ export class Renderer {
         this._OnResize();
         window.addEventListener("resize", () => this._OnResize());
 
-        this.draw = (scenes, ctx, idx = 0) => {
+        this.draw = (scenes, ctx, idx, idx2) => {
 
             const scene = scenes[idx];
             if(!scene) {
                 return;
             }
             if(scene.paused) {
-                draw(scenes, ctx, idx + 1);
+                this.draw(scenes, ctx, idx + 1, idx2);
                 return;
             }
 
@@ -29,11 +39,15 @@ export class Renderer {
             const h = this._height;
             scene.DrawLights(ctx, w, h);
 
-            const b = document.createElement("canvas").getContext("2d");
-            b.canvas.width = w;
-            b.canvas.height = h;
+            if(!this._buffers[idx2]) {
+                const b = document.createElement("canvas").getContext("2d");
+                b.canvas.width = this._width;
+                b.canvas.height = this._height;
+                this._buffers[idx2] = b;
+            }
+            const b = this._buffers[idx2];
             if(idx < scenes.length - 1) {
-                draw(scenes, b, idx + 1);
+                this.draw(scenes, b, idx + 1, idx2 + 1);
                 b.globalCompositeOperation = "source-over";
             }
             scene.DrawObjects(b, w, h);
@@ -44,25 +58,18 @@ export class Renderer {
     get dimension() {
         return this._canvas.getBoundingClientRect();
     }
-    get background() {
-        return this._background;
-    }
-    set background(col) {
-        this._background = col;
-        this._canvas.style.background = col;
-    }
     _InitContainer() {
 
         const con = this._container = document.createElement("div");
 
         con.style.width = this._width + "px";
         con.style.height = this._height + "px";
-        con.style.position = "absolute";
+        con.style.position = "relative";
         con.style.left = "50%";
         con.style.top = "0%";
         con.style.transformOrigin = "center";
 
-        document.body.appendChild(con);
+        this._parentElement.appendChild(con);
         
     }
     _InitCanvas() {
@@ -77,12 +84,12 @@ export class Renderer {
         cnv.style.left = "0";
         cnv.style.top = "0";
         cnv.style.display = "block";
-        cnv.style.background = this._background;
+        cnv.style.background = "black";
 
         this._container.appendChild(cnv);
     } 
     _OnResize() {
-        const [width, height] = [document.body.clientWidth, document.body.clientHeight];
+        const [width, height] = [this._parentElement.clientWidth, this._parentElement.clientHeight];
         if(width / height > this._aspect) {
             this._scale = height / this._height;
         } else {
@@ -98,7 +105,7 @@ export class Renderer {
         ctx.beginPath();
         ctx.clearRect(0, 0, this._width, this._height);
 
-        this.draw(scenes, ctx);
+        this.draw(scenes, ctx, 0, 0);
 
 
     }

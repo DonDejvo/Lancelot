@@ -24,9 +24,6 @@ export class Circle extends FixedDrawable {
         ctx.arc(0, 0, this._radius, 0, 2 * Math.PI);
         ctx.fill();
         if(this.strokeWidth > 0) ctx.stroke();
-        if(this._image) {
-            ctx.clip();
-            ctx.drawImage(this._image, this._imageOptions.framePosition.x * this._imageOptions.frameWidth, this._imageOptions.framePosition.y * this._imageOptions.frameHeight, this._imageOptions.frameWidth, this._imageOptions.frameHeight, -this._radius, -this._radius, this._radius * 2, this._radius * 2);
-        }
+        if(this._imageOptions) this.DrawImage(ctx, this._radius * 2, this._radius * 2);
     }
 }

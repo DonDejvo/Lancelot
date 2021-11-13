@@ -7,9 +7,7 @@ export class Loader {
     }
     _Add(n, p, type) {
         let path;
-        if(this._path == "") {
-            path = p;
-        } else if(p.startsWith("/")) {
+        if(p.startsWith("/")) {
             path = this._path + p.slice(1);
         } else {
             path = this._path + p;
@@ -54,7 +52,7 @@ export class Loader {
     }
     SetPath(p) {
         this._path = p;
-        if(!this._path) {
+        if(!this._path.endsWith("/")) {
             this._path += "/";
         }
         return this;

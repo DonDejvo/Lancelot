@@ -13,26 +13,29 @@ export class Game {
         this._height = params.height;
         this._preload = params.preload == undefined ? null : params.preload.bind(this);
         this._init = params.init.bind(this);
+        this._parentElement = ParamParser.ParseValue(params.parentElement, document.body);
 
         this._resources = null;
 
         this._loader = new Loader();
 
-        const body = document.body;
+        const body = this._parentElement;
 
         body.style.userSelect = "none";
         body.style.touchAction = "none";
-        body.style.position = "fixed";
-        body.style.width = "100%";
-        body.style.height = "100%";
+        body.style.WebkitUserSelect = "none";
+        body.style.position = "relative";
+        /*body.style.width = "100%";
+        body.style.height = "100%";*/
         body.style.overflow = "hidden";
-        body.style.margin = "0";
-        body.style.padding = "0";
+        /*body.style.margin = "0";*/
+        /*body.style.padding = "0";*/
         body.style.background = "black";
 
         this._renderer = new Renderer({
             width: this._width,
-            height: this._height
+            height: this._height,
+            parentElement: body
         });
         this._engine = new Engine();
         this._sceneManager = new SceneManager();
@@ -138,6 +141,7 @@ export class Game {
     _InitControls(layout) {
         const applyStyle = (elem, bg = true) => {
             const color = "rgba(150, 150, 150, 0.6)";
+            elem.style.pointerEvents = "auto";
             elem.style.position = "absolute";
             elem.style.border = "2px solid " + color;
             elem.style.color = color;
@@ -208,8 +212,11 @@ export class Game {
         const controlsContainer = document.createElement("div");
         controlsContainer.style.width = "100%";
         controlsContainer.style.height = "100%";
+        controlsContainer.style.left = "0";
+        controlsContainer.style.top = "0";
         controlsContainer.style.zIndex = "999";
         controlsContainer.style.position = "absolute";
+        controlsContainer.style.pointerEvents = "none";
 
         const controlsMap = {};
 
@@ -245,7 +252,7 @@ export class Game {
         controlsMap.select = createActionButton("Select", -20);
         controlsMap.start = createActionButton("Start", 20);
 
-        document.body.appendChild(controlsContainer);
+        this._parentElement.appendChild(controlsContainer);
 
         const getJoystickDirection = (e) => {
             const directions = {
@@ -316,7 +323,21 @@ export class Game {
             });
         }
     }
+    RequestFullScreen() {
+        const element = this._parentElement;
+        var requestMethod = element.requestFullScreen || element.webkitRequestFullScreen;
+    
+        if (requestMethod) {
+            requestMethod.call(element);
+        } else if (typeof window.ActiveXObject !== "undefined") {
+            var wscript = new ActiveXObject("WScript.Shell");
+            if (wscript !== null) {
+                wscript.SendKeys("{F11}");
+            }
+        }
+    }
     _InitSceneEvents() {
+          
 
         const isTouchDevice = "ontouchstart" in document;
         const cnv = this._renderer._canvas;

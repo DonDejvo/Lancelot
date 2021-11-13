@@ -6,10 +6,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Document</title>
     <style>
-        
+        body {
+            margin: 0;
+            width: 100%;
+            height: 100vh;
+        }
+        #MyGame {
+            width: 300px;
+            height: 450px;
+        }
     </style>
 </head>
 <body>
+
+    <div id="MyGame"></div>
+    <button id="fullscreen_btn">Fullscreen</button>
     
     <script type="module">
 
@@ -18,157 +29,34 @@ import defaultExport from "../src/Lancelot.js";
 const Vec = Lancelot.Vector;
 const math = Lancelot.math;
 
-class WaterController extends Lancelot.Component {
-    constructor(params) {
-        super();
-        this._width = params.width;
-        this._height = params.height;
-        this._balls = params.balls;
+const W = 1600, H = 800;
+
+let game = new Lancelot.Game({
+    width: W,
+    height: H,
+    parentElement: document.getElementById("MyGame"),
+    init: init,
+    controls: {
+        active: false
     }
-    Update(dt) {
-        const sprite = this.GetComponent("Sprite");
+})
 
-        const points = [];
-
-        for(let ball of this._balls) {
-            points.push([ball.position.x, ball.position.y]);
-        }
-        points.push([this.position.x + this._width / 2, this.position.y + this._height / 2]);
-        points.push([this.position.x - this._width / 2, this.position.y + this._height / 2]);
-
-        sprite._points = points;
-    }
-}
-
-class StoneController extends Lancelot.Component {
-    constructor() {
-        super();
-    }
-    Update(dt) {
-        const sprite = this.GetComponent("Sprite");
-        const body = this.parent.body;
-
-        sprite.angle = body.angle;
-
-        body.velocity.y += 500 * dt;
-
-        if(body.position.y > 400) {
-            body.position.Set(math.rand(-300, 300), -400);
-            body.velocity.Set(math.rand(-300, 300), math.rand(-200, 0));
-        }
-    }
-}
-
-
-let game;
-
-addEventListener("DOMContentLoaded", () => {
-    
-    game = new Lancelot.Game({
-        width: 720,
-        height: 480,
-        preload: preload,
-        init: init
-    });
-    
-});
-
-function preload() {
-    this.loader.AddImage("stone", "https://opengameart.org/sites/default/files/stone2.jpg");
-}
+document.getElementById("fullscreen_btn").addEventListener("click", () => {
+    game.RequestFullScreen();
+})
 
 function init() {
-    
-    const level = this.CreateScene("level", {
-        background: "skyblue",
-        light: "#FFFFFF",
-        physics: {
-            iterations: 3,
-            bounds: [[-500, -500], [500, 500]]
-        }
-    });
-    
-    level.Play();
 
-    Water(level, 0, 160, 720, 160);
+    let graph = new Lancelot.PathGraph();
 
-    for(let i = 0; i < 5; ++i) Stone(level);
+    graph.AddVertex(0, 0, 0, [1, 2]);
+    graph.AddVertex(1, 0, 20, [0, 3]);
+    graph.AddVertex(2, 10, 10, [0, 3]);
+    graph.AddVertex(3, 20, 20, [1, 2]);
+
+    console.log(graph.ShortestPath(0, 3));
+
 }
-
-function Water(scene, x, y, w, h) {
-    const water = scene.CreateEntity();
-    water.position.Set(x, y);
-
-    const ballCount = 40;
-    let balls = [];
-    for(let i = 0; i < ballCount; ++i) {
-        const ball = scene.CreateEntity();
-        water.Clip(ball);
-        ball.position.Set(x + w * i / (ballCount - 1) - w / 2, y - h / 2);
-        ball.groupList.add("waterBall");
-        let body;
-        ball.AddComponent(body = new Lancelot.physics.Ball({
-            radius: 2,
-            mass: (i == 0 || i == ballCount - 1) ? 0 : 1,
-            friction: { x: 0.01, y: 0.01, angular: 0.01 },
-            bounce: -0.9
-        }));
-
-        if(i != 0) {
-            balls[i - 1].body.Join(body, "solid", {
-                strength: 1,
-                length: Vec.Dist(balls[i - 1].body.position, body.position) * 0.1
-            });
-        }
-
-        balls.push(ball);
-    }
-
-    let waterSprite;
-    water.AddComponent(waterSprite = new Lancelot.drawable.Path({
-        points: [],
-        fillStyle: "blue",
-        strokeStyle: "white",
-        zIndex: 10,
-    }), "Sprite");
-    water.AddComponent(new WaterController({
-        width: w,
-        height: h,
-        balls: balls
-    }));
-
-    return water;
-}
-
-function Stone(scene) {
-    const stone = scene.CreateEntity();
-    stone.groupList.add("stone");
-    stone.position.y = 500;
-    let body;
-    stone.AddComponent(body = new Lancelot.physics.Polygon({
-        radius: 30,
-        sides: 5,
-        mass: 25,
-        friction: { x: 0.02, y: 0.02, angular: 0.02 }
-    }));
-    let sprite;
-    stone.AddComponent(sprite = new Lancelot.drawable.Polygon({
-        radius: 30,
-        sides: 5,
-        fillStyle: "grey",
-        image: {
-            src: "stone"
-        }
-    }), "Sprite");
-    stone.AddComponent(new StoneController());
-
-   body.AddBehavior("waterBall", "ResolveCollision");
-   body.AddBehavior("stone", "ResolveCollision");
-
-
-    return stone;
-}
-        
     </script>
     
 </body>

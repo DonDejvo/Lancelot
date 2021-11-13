@@ -37,10 +37,6 @@ export class Poly extends FixedDrawable {
         ctx.closePath();
         ctx.fill();
         if(this.strokeWidth > 0) ctx.stroke();
-        if(this._image) {
-            ctx.clip();
-            ctx.drawImage(this._image, this._imageOptions.framePosition.x * this._imageOptions.frameWidth, this._imageOptions.framePosition.y * this._imageOptions.frameHeight, this._imageOptions.frameWidth, this._imageOptions.frameHeight, -this._radius, -this._radius, this._radius * 2, this._radius * 2);
-        }
     }
 }
 
@@ -73,5 +69,9 @@ export class Polygon extends Poly {
             x: this.position.x,
             y: this.position.y
         };
+    }
+    Draw(ctx) {
+        super.Draw(ctx);
+        if(this._imageOptions) this.DrawImage(ctx, this.radius * 2, this.radius * 2);
     }
 }

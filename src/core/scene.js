@@ -17,6 +17,7 @@ export class Scene {
 
         this._zIndex = 0;
         this._background = params.background;
+        this._backgroundParsed = null;
 
         this._world = new World(params.physics);
 
@@ -40,6 +41,8 @@ export class Scene {
         this._entityManager = new EntityManager();
         // this._spatialGrid = new SpatialHashGrid(this._bounds, [Math.floor((this._bounds[1][0] - this._bounds[0][0]) / this._cellDimensions[0]), Math.floor((this._bounds[1][1] - this._bounds[0][1]) / this._cellDimensions[1])]);
         this._camera = new Camera();
+
+        this._buffer = null;
         
     }
     get camera() {
@@ -53,6 +56,7 @@ export class Scene {
     }
     set background(col) {
         this._background = col;
+        this._backgroundParsed = null;
     }
     IsPressed(k) {
         return this._keys.has(k);
@@ -88,14 +92,8 @@ export class Scene {
         if(this.paused) {
             return false;
         }
-        let result = false;
-        if(this._eventHandlers.has(type)) {
-            const handlers = this._eventHandlers.get(type);
-            for(let handler of handlers) {
-                handler(event);
-            }
-            //result = true;
-        }
+        let captured = false;
+        
         if(type == "mousedown") {
             // const entities = this._world._spatialGrid.FindNear([event.x, event.y], [0, 0]).map(c => c.entity);
             const entities = this._world._quadtree.FindNear([event.x, event.y], [0, 0]).map(c => c.entity);
@@ -106,13 +104,13 @@ export class Scene {
                    
                     e.interactive._On(type, event);
                     e.interactive._id = event.id;
-                    if(e.interactive._capture) {  result = true; }
+                    if(e.interactive._capture) {  captured = true; }
                 }
             }
         } else if(type == "mousemove" || type == "mouseup") {
             for(let e of this._interactiveEntities) {
                 if(e.interactive._id == event.id) {
-                    if(e.interactive._capture) {  result = true; }
+                    if(e.interactive._capture) {  captured = true; }
                     e.interactive._On(type, event);
                     if(type == "mouseup") {
                         e.interactive._id = -1;
@@ -124,7 +122,20 @@ export class Scene {
         } else if(type == "keyup") {
             this._keys.delete(event.key);
         }
-        return result;
+
+        if(captured) {
+            return true;
+        }
+
+        if(this._eventHandlers.has(type)) {
+            const handlers = this._eventHandlers.get(type);
+            for(let handler of handlers) {
+                handler(event);
+            }
+            //result = true;
+        }
+
+        return captured;
     }
     GetEntityByName(n) {
         return this._entityManager.Get(n);
@@ -136,16 +147,25 @@ export class Scene {
         e._scene = this;
         this._entityManager.Add(e, n);
     }
+    Raycast(x, y, angle, range) {
+        return this._world.Raycast(x, y, angle, range);
+    }
     RemoveEntity(e) {
         this._entityManager.Remove(e);
         e._components.forEach((c) => {
-            if (c._type == "drawable") {
-                this._RemoveDrawable(c);
-            } else if(c._type == "body") {
-                this._RemoveBody(e, c);
-            } else if(c._type == "light") {
-                const idx = this._lights.indexOf(c);
-                this._lights.splice(idx, 1);
+            switch(c._type) {
+                case "drawable":
+                    this._RemoveDrawable(c);
+                    break;
+                case "body":
+                    this._RemoveBody(e, c);
+                    break;
+                case "light":
+                    this._lights.splice(this._lights.indexOf(c), 1);
+                    break;
+                case "interactive":
+                    this._interactiveEntities.splice(this._interactiveEntities.indexOf(e), 1);
+                    break;
             }
         });
     }
@@ -210,7 +230,7 @@ export class Scene {
     
     DrawLights(ctx, renderWidth, renderHeight) {
         ctx.globalCompositeOperation = "source-over";
-        this._ambientLight.Draw(ctx);
+        this._ambientLight.Draw0(ctx);
         
         const cam = this.camera;
 
@@ -222,7 +242,7 @@ export class Scene {
         ctx.scale(cam.scale, cam.scale);
         
         for(let light of this._lights) {
-            light.Draw(ctx);
+            light.Draw0(ctx);
         }
         
         ctx.restore();
@@ -233,12 +253,20 @@ export class Scene {
 
         const cam = this.camera;
 
-        const buffer = document.createElement("canvas").getContext("2d");
-        buffer.canvas.width = renderWidth;
-        buffer.canvas.height = renderHeight;
+        if(!this._buffer) {
+            this._buffer = document.createElement("canvas").getContext("2d");
+            this._buffer.canvas.width = renderWidth;
+            this._buffer.canvas.height = renderHeight;
+            this._buffer.imageSmoothingEnabled = false;
+        }
+        const buffer = this._buffer;
+
+        if(!this._backgroundParsed) {
+            this._backgroundParsed = StyleParser.ParseColor(buffer, this.background);
+        }
 
         buffer.beginPath();
-        buffer.fillStyle = StyleParser.ParseColor(buffer, this.background);
+        buffer.fillStyle = this._backgroundParsed;
         buffer.fillRect(0, 0, renderWidth, renderHeight);
 
         buffer.save();

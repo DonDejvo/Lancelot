@@ -4,9 +4,6 @@ import { ParamParser } from "../utils/param-parser.js";
 export class Sprite extends FixedDrawable {
     constructor(params) {
         super(params);
-        this._image = this.scene.resources.get(params.src);
-        this._frameWidth = ParamParser.ParseValue(params.frameWidth, this._image.width);
-        this._frameHeight = ParamParser.ParseValue(params.frameHeight, this._image.height);
         this._anims = new Map();
         this._currentAnim = null;
         this._paused = true;
@@ -27,7 +24,7 @@ export class Sprite extends FixedDrawable {
             counter: 0
         }
         this._currentAnim = currentAnim;
-        this._framePos = this._anims[currentAnim.name][currentAnim.frame];
+        this._framePos = this._anims.get(currentAnim.name)[currentAnim.frame];
     }
     Reset() {
         if(this._currentAnim) {
@@ -74,11 +71,7 @@ export class Sprite extends FixedDrawable {
         return null;
     }
     Draw(ctx) {
-        ctx.drawImage(
-            this._image,
-            this._framePos.x * this._frameWidth, this._framePos.y * this._frameHeight, this._frameWidth, this._frameHeight,  
-            -this._width / 2, -this._height / 2, this._width, this._height
-        );
+        this.DrawImage(ctx, this._width, this._height, false, this._framePos);
     }
 }
 

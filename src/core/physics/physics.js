@@ -26,11 +26,36 @@ export class World {
         this._bodies = [];
         this._joints = [];
 
+        this._gravity = ParamParser.ParseValue(params.gravity, 0);
+
         const cellCountX = Math.floor((this._bounds[1][0] - this._bounds[0][0]) / this._cellDimensions.width);
         const cellCountY = Math.floor((this._bounds[1][1] - this._bounds[0][1]) / this._cellDimensions.height);
         this._spatialGrid = new SpatialHashGrid(this._bounds, [cellCountX, cellCountY]);
 
         this._quadtree = new QuadTree(this._bounds, this._limit);
+    }
+    Raycast(x, y, angle, range) {
+        let result = [];
+        const ray = new Ray({
+            range: range
+        });
+        ray.position = new Vector(x, y);
+        ray.angle = angle;
+        for(let b of this._bodies) {
+            let info = DetectCollision(ray, b);
+            if(info.collide) {
+                result.push({
+                    body: b,
+                    point: info.point
+                });
+            }
+        }
+        result.sort((a, b) => {
+            const distA = Vector.Dist(ray.position, a.point);
+            const distB = Vector.Dist(ray.position, b.point);
+            return distA - distB;
+        });
+        return result;
     }
     _AddJoint(j) {
         this._joints.push(j);
@@ -78,6 +103,9 @@ export class World {
             body._collisions.all.clear();
         }
         for(let body of this._bodies) {
+            if(body.mass != 0) {
+                body.velocity.y += this._gravity * elapsedTimeS;
+            }
             body.UpdatePosition(elapsedTimeS);
         }
         for(let joint of this._joints) {
@@ -108,10 +136,9 @@ class Body extends Component {
         this.passiveVelocity = new Vector();
         this._angVel = 0;
         this.mass = ParamParser.ParseValue(params.mass, 0);
-        this.bounce = ParamParser.ParseValue(params.bounce, 0);
         this.angle = 0;
-        this.rotation = ParamParser.ParseValue(params.rotation, 1);
-        this.friction = ParamParser.ParseObject(params.friction, { x: 0, y: 0, angular: 0, normal: 0 });
+        this.rotation = ParamParser.ParseValue(params.rotation, 0);
+        this.friction = ParamParser.ParseObject(params.friction, { x: 0, y: 0, angular: 0 });
         this._behavior = [];
         this._collisions = {
             left: new Set(), right: new Set(), top: new Set(), bottom: new Set(), all: new Set()
@@ -146,17 +173,15 @@ class Body extends Component {
     get collisions() {
         return this._collisions;
     }
-    Draw(ctx) {
-        const bb = this.boundingRect;
-        ctx.beginPath();
-        ctx.strokeStyle = "lime";
-        ctx.strokeRect(-bb.width/2, -bb.height/2, bb.width, bb.height);
-    }
-    AddBehavior(groups, type, action) {
+    AddBehavior(groups, type, options = {}) {
         this._behavior.push({
             groups: groups.split(" "),
             type: type,
-            action: action
+            options: ParamParser.ParseObject(options, {
+                bounce: 0,
+                friction: 0,
+                action: (body, point) => {}
+            })
         });
     }
     UpdatePosition(elapsedTimeS) {
@@ -195,17 +220,13 @@ class Body extends Component {
                         info = DetectCollision(this, e.body);
                         
                         if(info.collide) {
-                            if(behavior.action) {
-                                behavior.action(e.body, info.point);
-                            }
+                            behavior.options.action(e.body, info.point);
                         }
                         break;
                     case "ResolveCollision":
-                        info = ResolveCollision(this, e.body);
+                        info = ResolveCollision(this, e.body, behavior.options);
                         if(info.collide) {
-                            if(behavior.action) {
-                                behavior.action(e.body, info.point);
-                            }
+                            behavior.options.action(e.body, info.point);
                         }
                         break;
                 }
@@ -642,7 +663,8 @@ const DetectCollisionBallVsPoly = (b1, b2) => {
     };
 }
 
-const ResolveCollision = (b1, b2) => {
+const ResolveCollision = (b1, b2, options) => {
+
     if(b1 instanceof Ball && b2 instanceof Poly) {
         [b1, b2] = [b2, b1];
     }
@@ -661,6 +683,9 @@ const ResolveCollision = (b1, b2) => {
         if(!(b1.options.axes.y && b2.options.axes.y)) {
             detect.normal.y = 0;
         }
+
+        const bounce = options.bounce;
+        const friction = options.friction;
 
         const directions = {
             left: new Vector(-1, 0),
@@ -693,7 +718,6 @@ const ResolveCollision = (b1, b2) => {
         const vp1 = v1.Clone().Add(new Vector(-w1 * r1.y, w1 * r1.x));
         const vp2 = v2.Clone().Add(new Vector(-w2 * r2.y, w2 * r2.x));
         const relVel = vp1.Clone().Sub(vp2);
-        const bounce = b2.bounce;
         const j = (-(1 + bounce) * Vector.Dot(relVel, detect.normal)) / (b1.inverseMass + b2.inverseMass + Math.pow(Vector.Cross(r1, detect.normal), 2) / b1.inertia + Math.pow(Vector.Cross(r2, detect.normal), 2) / b2.inertia);
         const jn = detect.normal.Clone().Mult(j);
         const vel1 = jn.Clone().Mult(b1.inverseMass);
@@ -728,7 +752,6 @@ const ResolveCollision = (b1, b2) => {
             b1.angularVelocity += Vector.Cross(r1, vel1.Clone().Mult(1 / b1.inertia));
             b2.angularVelocity -= Vector.Cross(r2, vel2.Clone().Mult(1 / b1.inertia));
 
-            const friction = Math.max(b1.friction.normal, b2.friction.normal);
             const tangent = detect.normal.Clone().Norm();
 
             const j2 = (-(1 + bounce) * Vector.Dot(relVel, tangent) * friction) / (b1.inverseMass + b2.inverseMass + Math.pow(Vector.Cross(r1, tangent), 2) / b1.inertia + Math.pow(Vector.Cross(r2, tangent), 2) / b2.inertia);

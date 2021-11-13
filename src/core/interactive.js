@@ -4,6 +4,7 @@ import { ParamParser } from "./utils/param-parser.js";
 export class Interactive extends Component {
     constructor(params) {
         super();
+        this._type = "interactive";
         this._capture = ParamParser.ParseValue(params.capture, true);
         this._eventHandlers = new Map();
     }

@@ -74,6 +74,10 @@ export class Vector {
         this.Set(x, y);
         return this;
     }
+    Project(n) {
+        const len = Vector.Dot(this, n);
+        return n.Clone().Mult(len);
+    }
     static FromAngle(angle) {
         return new Vector(1, 0).Rotate(angle);
     }
