@@ -277,6 +277,10 @@
       this.Set(x, y);
       return this;
     }
+    Project(n) {
+      const len = Vector.Dot(this, n);
+      return n.Clone().Mult(len);
+    }
     static FromAngle(angle) {
       return new Vector(1, 0).Rotate(angle);
     }
@@ -1154,6 +1158,29 @@
       this._spatialGrid = new SpatialHashGrid(this._bounds, [cellCountX, cellCountY]);
       this._quadtree = new QuadTree(this._bounds, this._limit);
     }
+    Raycast(x, y, angle, range) {
+      let result = [];
+      const ray = new Ray({
+        range
+      });
+      ray.position = new Vector(x, y);
+      ray.angle = angle;
+      for (let b of this._bodies) {
+        let info = DetectCollision(ray, b);
+        if (info.collide) {
+          result.push({
+            body: b,
+            point: info.point
+          });
+        }
+      }
+      result.sort((a, b) => {
+        const distA = Vector.Dist(ray.position, a.point);
+        const distB = Vector.Dist(ray.position, b.point);
+        return distA - distB;
+      });
+      return result;
+    }
     _AddJoint(j) {
       this._joints.push(j);
     }
@@ -1211,10 +1238,9 @@
       this.passiveVelocity = new Vector();
       this._angVel = 0;
       this.mass = ParamParser.ParseValue(params.mass, 0);
-      this.bounce = ParamParser.ParseValue(params.bounce, 0);
       this.angle = 0;
-      this.rotation = ParamParser.ParseValue(params.rotation, 1);
-      this.friction = ParamParser.ParseObject(params.friction, { x: 0, y: 0, angular: 0, normal: 0 });
+      this.rotation = ParamParser.ParseValue(params.rotation, 0);
+      this.friction = ParamParser.ParseObject(params.friction, { x: 0, y: 0, angular: 0 });
       this._behavior = [];
       this._collisions = {
         left: new Set(),
@@ -1253,17 +1279,16 @@
     get collisions() {
       return this._collisions;
     }
-    Draw(ctx) {
-      const bb = this.boundingRect;
-      ctx.beginPath();
-      ctx.strokeStyle = "lime";
-      ctx.strokeRect(-bb.width / 2, -bb.height / 2, bb.width, bb.height);
-    }
-    AddBehavior(groups, type, action) {
+    AddBehavior(groups, type, options = {}) {
       this._behavior.push({
         groups: groups.split(" "),
         type,
-        action
+        options: ParamParser.ParseObject(options, {
+          bounce: 0,
+          friction: 0,
+          action: (body, point) => {
+          }
+        })
       });
     }
     UpdatePosition(elapsedTimeS) {
@@ -1298,17 +1323,13 @@
             case "DetectCollision":
               info = DetectCollision(this, e.body);
               if (info.collide) {
-                if (behavior.action) {
-                  behavior.action(e.body, info.point);
-                }
+                behavior.options.action(e.body, info.point);
               }
               break;
             case "ResolveCollision":
-              info = ResolveCollision(this, e.body);
+              info = ResolveCollision(this, e.body, behavior.options);
               if (info.collide) {
-                if (behavior.action) {
-                  behavior.action(e.body, info.point);
-                }
+                behavior.options.action(e.body, info.point);
               }
               break;
           }
@@ -1718,8 +1739,7 @@
       depth: e1SupportPoints[index].depth
     };
   };
-  var ResolveCollision = (b1, b2) => {
-    const bounce = b2.bounce;
+  var ResolveCollision = (b1, b2, options) => {
     if (b1 instanceof Ball && b2 instanceof Poly) {
       [b1, b2] = [b2, b1];
     }
@@ -1737,6 +1757,8 @@
       if (!(b1.options.axes.y && b2.options.axes.y)) {
         detect.normal.y = 0;
       }
+      const bounce = options.bounce;
+      const friction = options.friction;
       const directions = {
         left: new Vector(-1, 0),
         right: new Vector(1, 0),
@@ -1785,7 +1807,6 @@
         b2._vel.Sub(vel2);
         b1.angularVelocity += Vector.Cross(r1, vel1.Clone().Mult(1 / b1.inertia));
         b2.angularVelocity -= Vector.Cross(r2, vel2.Clone().Mult(1 / b1.inertia));
-        const friction = Math.max(b1.friction.normal, b2.friction.normal);
         const tangent = detect.normal.Clone().Norm();
         const j2 = -(1 + bounce) * Vector.Dot(relVel, tangent) * friction / (b1.inverseMass + b2.inverseMass + Math.pow(Vector.Cross(r1, tangent), 2) / b1.inertia + Math.pow(Vector.Cross(r2, tangent), 2) / b2.inertia);
         const jt = tangent.Clone().Mult(j2);
@@ -2077,6 +2098,9 @@
     AddEntity(e, n) {
       e._scene = this;
       this._entityManager.Add(e, n);
+    }
+    Raycast(x, y, angle, range) {
+      return this._world.Raycast(x, y, angle, range);
     }
     RemoveEntity(e) {
       this._entityManager.Remove(e);
@@ -2585,7 +2609,7 @@
     }
     RequestFullScreen() {
       const element = this._parentElement;
-      var requestMethod = element.requestFullScreen || element.webkitRequestFullScreen || element.mozRequestFullScreen || element.msRequestFullScreen;
+      var requestMethod = element.requestFullScreen || element.webkitRequestFullScreen;
       if (requestMethod) {
         requestMethod.call(element);
       } else if (typeof window.ActiveXObject !== "undefined") {
@@ -2832,12 +2856,10 @@
       ctx.restore();
     }
     DrawImage(ctx, w, h, clip = true, framePos = this._imageOptions.framePosition) {
-      if (this._image) {
-        if (clip) {
-          ctx.clip();
-        }
-        ctx.drawImage(this._image, framePos.x * this._imageOptions.frameWidth, framePos.y * this._imageOptions.frameHeight, this._imageOptions.frameWidth, this._imageOptions.frameHeight, -w / 2, -h / 2, w, h);
+      if (clip) {
+        ctx.clip();
       }
+      ctx.drawImage(this._image, framePos.x * this._imageOptions.frameWidth, framePos.y * this._imageOptions.frameHeight, this._imageOptions.frameWidth, this._imageOptions.frameHeight, -w / 2, -h / 2, w, h);
     }
     Update(elapsedTimeS) {
       if (this._shaking) {
@@ -2903,7 +2925,8 @@
       ctx.fill();
       if (this.strokeWidth > 0)
         ctx.stroke();
-      this.DrawImage(ctx, this._radius * 2, this._radius * 2);
+      if (this._imageOptions)
+        this.DrawImage(ctx, this._radius * 2, this._radius * 2);
     }
   };
 
@@ -3002,7 +3025,8 @@
     }
     Draw(ctx) {
       super.Draw(ctx);
-      this.DrawImage(ctx, this.radius * 2, this.radius * 2);
+      if (this._imageOptions)
+        this.DrawImage(ctx, this.radius * 2, this.radius * 2);
     }
   };
 
@@ -3017,7 +3041,8 @@
       ctx.fill();
       if (this.strokeWidth > 0)
         ctx.stroke();
-      this.DrawImage(ctx, this._width, this._height);
+      if (this._imageOptions)
+        this.DrawImage(ctx, this._width, this._height);
     }
   };
 
@@ -3349,6 +3374,18 @@
       this._columns = params.columns;
       this._tileData = [];
     }
+    get image() {
+      return this._image;
+    }
+    get tileWidth() {
+      return this._tileWidth;
+    }
+    get tileHeight() {
+      return this._tileHeight;
+    }
+    get columns() {
+      return this._columns;
+    }
     _CreateData(id) {
       let data = {
         id,
@@ -3421,6 +3458,63 @@
     }
   };
 
+  // src/core/path-graph.js
+  var PathGraph = class {
+    constructor() {
+      this.vertices = {};
+    }
+    AddVertex(id, x, y, nb) {
+      this.vertices[id] = {
+        id,
+        x,
+        y,
+        neighbors: nb,
+        state: 0,
+        parent: null,
+        weight: Infinity
+      };
+    }
+    _Dist(v1, v2) {
+      return Math.hypot(v1.x - v2.x, v1.y - v2.y);
+    }
+    ShortestPath(start, end) {
+      const open = (vert, weight = 0, parent = null) => {
+        vert.state = 1;
+        vert.weight = weight;
+        vert.parent = parent;
+        opened.push(vert);
+        for (let i2 = opened.length - 1; i2 > 0; --i2) {
+          if (vert.weight < opened[i2 - 1].weight) {
+            break;
+          }
+          [opened[i2], opened[i2 - 1]] = [opened[i2 - 1], opened[i2]];
+        }
+      };
+      let startVert = this.vertices[start];
+      let opened = [];
+      open(startVert);
+      while (opened.length) {
+        const curVert = opened.pop();
+        for (let id of curVert.neighbors) {
+          const nb = this.vertices[id];
+          if (nb.state == 2) {
+            continue;
+          }
+          const dist = this._Dist(curVert, nb);
+          const w = curVert.weight + dist;
+          if (nb.weight > w) {
+            open(nb, w, curVert);
+            if (nb.id == end) {
+              return nb;
+            }
+          }
+        }
+        curVert.state = 2;
+      }
+      return null;
+    }
+  };
+
   // src/Lancelot.js
   var __name = "Lancelot";
   var drawable = {
@@ -3445,7 +3539,8 @@
     drawable,
     physics: physics_exports,
     math,
-    light: light_exports
+    light: light_exports,
+    PathGraph
   };
   if (typeof module === "object" && typeof module.exports === "object") {
     module.exports = __export2;
