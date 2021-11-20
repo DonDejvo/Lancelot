@@ -1,33 +1,37 @@
-import { TimeoutHandler } from "./utils/timeout-handler.js";
+import { TimeoutHandler } from "../utils/TimeoutHandler.js";
 
 export class Engine {
+
+    _paused = true;
+    _step;
+
     constructor(step) {
 
         this._step = step;
-        this.paused = true;
-        this.timeout = new TimeoutHandler();
+    }
+    get paused() {
+        return this._paused;
     }
     _RAF() {
 
-        if(this.paused) { return; }
-
         this._frame = window.requestAnimationFrame((timestamp) => {
-            this._RAF();
+            if(!this._paused) {
+                this._RAF();
+            }
             const elapsedTime = Math.min(timestamp - this._previousRAF, 1000 / 30);
 
-            this.timeout.Update(elapsedTime);
             this._step(elapsedTime);
 
             this._previousRAF = timestamp;
         });
     }
-    Start() {
-        this.paused = false;
+    start() {
+        this._paused = false;
         this._previousRAF = performance.now();
         this._RAF();
     }
-    Stop() {
-        this.paused = true;
+    stop() {
+        this._paused = true;
         window.cancelAnimationFrame(this._frame);
     }
 }

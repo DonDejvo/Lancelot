@@ -1,49 +1,58 @@
-import { Vector } from "./utils/vector.js";
-import { Position } from "./utils/position.js";
-
-/*
-
-position: Vector
-parent: Entity
-type: string
-scene: Scene
-GetComponent(name: string)
-
-*/
+import { Animator } from "../utils/Animator.js";
+import { PositionManager } from "../utils/PositionManager.js";
 
 export class Component {
-    constructor(params) {
-        this._type = "";
-        this._parent = null;
-        this._position = new Position();
-    }
+
+    _type = "";
+    _parent = null;
+    _position = new PositionManager();
+    _angle = new Animator(0);
+
     get type() {
         return this._type;
     }
+
     get scene() {
         return this._parent._scene;
     }
+
     get parent() {
         return this._parent;
     }
+
     get position() {
         return this._position.position;
     }
-    set position(p) {
-        this._position.position = p;
+
+    set position(v) {
+        this._position.position = v;
     }
+
     get offset() {
-        return this._position._offset;
+        return this._position.offset;
     }
-    set offset(vec) {
-        this._position._offset.Copy(vec);
+
+    set offset(v) {
+        this._position.offset = v;
     }
-    InitComponent() { }
-    GetComponent(n) {
-        return this._parent.GetComponent(n);
+
+    get angle() {
+        return this._angle.value;
     }
-    FindEntity(n) {
-        return this._parent.FindEntity(n);
+
+    set angle(num) {
+        this._angle.value = num;
     }
-    Update(_) { }
+
+    initComponent() {}
+
+    getComponent(n) {
+        return this._parent.getComponent(n);
+    }
+
+    rotate(val, dur, timing = "linear", onEnd = null) {
+        this._angle.animate(val, dur, timing, onEnd);
+    }
+
+    update(_) {}
 }

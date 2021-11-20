@@ -1,132 +1,89 @@
-import { Position } from "./utils/position.js";
-import { Vector } from "./utils/vector.js";
-import { math } from "./utils/math.js";
+import { Animator } from "../utils/Animator.js";
+import { Shaker } from "../utils/Shaker.js";
+import { Vector } from "../utils/Vector.js";
+import { Entity } from "./Entity.js";
 
-export class Camera {
+export class Camera extends Entity {
+    
+    _scale = new Animator(1.0);
+    _target = null;
+    _followOffset = 4;
+    _vel = new Vector();
+    _shaker = new Shaker();
+    
     constructor() {
-        this._position = new Position();
-        this.scale = 1.0;
-        this._target = null;
-        this._vel = new Vector();
-        this._scaling = null;
-        this._shaking = null;
-        this._offset = new Vector();
+        super();
     }
+
     get position() {
-        return this._position.position;
+        return this._position.position.clone().add(this._shaker.offset);
     }
-    set position(vec) {
-        this._position.position.Copy(vec);
+
+    get scale() {
+        return this._scale.value;
     }
-    get shaking() {
-        return this._shaking;
+
+    set scale(n) {
+        this._scale.value = n;
     }
-    get scaling() {
-        return this._scaling;
-    }
-    get moving() {
-        return this._position._moving;
-    }
+
     get velocity() {
         return this._vel;
     }
-    set velocity(vec) {
-        this._vel.Copy(vec);
+
+    set velocity(v) {
+        this._vel.copy(v);
     }
-    Clip(e) {
-        this._position.Clip(e._position);
+
+    get shaker() {
+        return this._shaker;
     }
-    Unclip(e) {
-        this._position.Unclip(e._position);
-    }
-    MoveTo(p, dur, timing = "linear") {
-        this._position.MoveTo(p, dur, timing);
-    }
-    StopMoving() {
-        this._position.StopMoving();
-    }
-    Follow(target) {
+
+    follow(target, offset = 4) {
         this._target = target;
+        this._followOffset = offset;
     }
-    Unfollow() {
+
+    unfollow() {
         this._target = null;
     }
-    ScaleTo(s, dur, timing = "linear") {
-        this._scaling = {
-            counter: 0,
-            dur: dur,
-            from: this.scale,
-            to: s,
-            timing: timing
-        };
+
+    isScaling() {
+        return this._scale.isAnimating();
     }
-    StopScaling() {
-        this._scaling = null;
+
+    scaleTo(n, dur, timing = "linear", onEnd = null) {
+        this._scale.animate(n, dur, timing, onEnd);
     }
-    MoveAndScale(p, s, dur, timing = "linear") {
-        this.MoveTo(p, dur, timing);
-        this.ScaleTo(s, dur, timing);
+
+    stopScaling() {
+        this._scale.stopAnimating();
     }
-    Shake(range, dur, count, angle) {
-        this._shaking = {
-            counter: 0,
-            count: count,
-            angle: angle,
-            dur: dur,
-            range: range
-        };
+
+    moveAndScale(v, n, dur, timing = "linear", onEnd = null) {
+        this.moveTo(v, dur, timing, onEnd);
+        this.scaleTo(n, dur, timing);
     }
-    StopShaking() {
-        this._shaking = null;
-        this._offset = new Vector();
+
+    stop() {
+        this.stopMoving();
+        this.stopScaling();
     }
-    Update(elapsedTimeS) {
-        
-        if (this.moving) {
-            this._position.Update(elapsedTimeS);
-        } else if (this._target) {
-            const t = 4 * elapsedTimeS;
-            this.position.Lerp(this._target.position, t);
+
+    _updatePosition(elapsedTimeS) {
+
+        if (this.isMoving()) {
+            this._position.update(elapsedTimeS);
+        } else if (this._target !== null) {
+            let t = this._followOffset * elapsedTimeS;
+            this.position.lerp(this._target.position, t);
         } else {
-            const vel = this._vel.Clone();
-            vel.Mult(elapsedTimeS);
-            this.position.Add(vel);
+            const vel = this._vel.clone();
+            vel.mult(elapsedTimeS);
+            this.position.add(vel);
         }
 
-        if (this._scaling) {
-            const anim = this._scaling;
-            anim.counter += elapsedTimeS * 1000;
-            const progress = Math.min(anim.counter / anim.dur, 1);
-            let value;
-            switch (anim.timing) {
-                case "linear":
-                    value = progress;
-                    break;
-                case "ease-in":
-                    value = math.ease_in(progress);
-                    break;
-                case "ease-out":
-                    value = math.ease_out(progress);
-                    break;
-            }
-            this.scale = math.lerp(value, anim.from, anim.to);
-            if (progress == 1) {
-                this.StopScaling();
-            }
-        }
-
-        if(this._shaking) {
-            const anim = this._shaking;
-            anim.counter += elapsedTimeS * 1000;
-            const progress = Math.min(anim.counter / anim.dur, 1);
-            this.position.Sub(this._offset);
-            this._offset.Copy(new Vector(Math.sin(progress * Math.PI * 2 * anim.count) * anim.range, 0).Rotate(anim.angle));
-            this.position.Add(this._offset);
-            if (progress == 1) {
-                this.StopShaking();
-            }
-        }
-
-        
+        this._scale.update(elapsedTimeS);
+        this._shaker.update(elapsedTimeS);
     }
 }

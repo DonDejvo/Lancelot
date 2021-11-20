@@ -1,15 +1,22 @@
-import { StyleParser } from "./utils/style-parser.js";
-import { Vector } from "./utils/vector.js";
-
 export class Renderer {
-    constructor(params) {
-        this._width = params.width;
-        this._height = params.height;
+
+    _width;
+    _height;
+    _aspect;
+    _scale;
+    _parentElement;
+    _container;
+    _canvas;
+    _context;
+
+    constructor(width, height, parentElement = document.body) {
+        this._width = width;
+        this._height = height;
+        this._parentElement = parentElement;
         this._aspect = this._width / this._height;
         this._scale = 1.0;
-        this._parentElement = params.parentElement;
-
         this._buffers = [];
+
         for(let i = 0; i < 5; ++i) {
             const b = document.createElement("canvas").getContext("2d");
             b.canvas.width = this._width;
@@ -18,48 +25,74 @@ export class Renderer {
             this._buffers[i] = b;
         }
 
-        this._InitContainer();
-        this._InitCanvas();
+        this._initContainer();
+        this._initCanvas();
+        this._onResize();
 
-        this._OnResize();
-        window.addEventListener("resize", () => this._OnResize());
+        window.addEventListener("resize", () => this._onResize());
+    }
 
-        this.draw = (scenes, ctx, idx, idx2) => {
+    get canvas() {
+        return this._canvas;
+    }
 
-            const scene = scenes[idx];
+    render(scenes) {
+
+        const ctx = this._context;
+
+        ctx.beginPath();
+        ctx.clearRect(0, 0, this._width, this._height);
+
+        const draw = (ctx, sceneIndex, bufferIndex) => {
+
+            const scene = scenes[sceneIndex];
             if(!scene) {
                 return;
             }
-            if(scene.paused) {
-                this.draw(scenes, ctx, idx + 1, idx2);
+            if(scene.hidden) {
+                draw(ctx, sceneIndex + 1, bufferIndex);
                 return;
             }
 
             const w = this._width;
             const h = this._height;
-            scene.DrawLights(ctx, w, h);
+            
+            scene.drawLights(ctx, w, h);
 
-            if(!this._buffers[idx2]) {
+            if(!this._buffers[bufferIndex]) {
                 const b = document.createElement("canvas").getContext("2d");
-                b.canvas.width = this._width;
-                b.canvas.height = this._height;
-                this._buffers[idx2] = b;
+                b.canvas.width = w;
+                b.canvas.height = h;
+                this._buffers[bufferIndex] = b;
             }
-            const b = this._buffers[idx2];
-            if(idx < scenes.length - 1) {
-                this.draw(scenes, b, idx + 1, idx2 + 1);
+
+            const b = this._buffers[bufferIndex];
+            if(sceneIndex < scenes.length - 1) {
+                draw(b, sceneIndex + 1, bufferIndex + 1);
                 b.globalCompositeOperation = "source-over";
             }
-            scene.DrawObjects(b, w, h);
+            scene.drawObjects(b, w, h);
 
             ctx.drawImage(b.canvas, 0, 0);
-        }
-    }
-    get dimension() {
-        return this._canvas.getBoundingClientRect();
-    }
-    _InitContainer() {
 
+        }
+
+        draw(ctx, 0, 0);
+
+    }
+
+    displayToSceneCoords(scene, x, y) {
+        const boundingRect = this._canvas.getBoundingClientRect();
+        const scaledX = (x - boundingRect.x) / this._scale;
+        const scaledY = (y - boundingRect.y) / this._scale;
+        const cam = scene.camera;
+        return {
+            x: (scaledX - this._width / 2) / cam.scale + cam.position.x,
+            y: (scaledY - this._height / 2) / cam.scale + cam.position.y
+        };
+    }
+
+    _initContainer() {
         const con = this._container = document.createElement("div");
 
         con.style.width = this._width + "px";
@@ -70,10 +103,9 @@ export class Renderer {
         con.style.transformOrigin = "center";
 
         this._parentElement.appendChild(con);
-        
     }
-    _InitCanvas() {
 
+    _initCanvas() {
         const cnv = this._canvas = document.createElement("canvas");
 
         cnv.width = this._width;
@@ -87,8 +119,9 @@ export class Renderer {
         cnv.style.background = "black";
 
         this._container.appendChild(cnv);
-    } 
-    _OnResize() {
+    }
+
+    _onResize() {
         const [width, height] = [this._parentElement.clientWidth, this._parentElement.clientHeight];
         if(width / height > this._aspect) {
             this._scale = height / this._height;
@@ -97,26 +130,5 @@ export class Renderer {
         }
         this._container.style.transform = "translate(-50%, calc(-50% + " + (this._height / 2 * this._scale) + "px)) scale(" + this._scale + ")";
         this._context.imageSmoothingEnabled = false;
-    }
-    Render(scenes) {
-
-        const ctx = this._context;
-
-        ctx.beginPath();
-        ctx.clearRect(0, 0, this._width, this._height);
-
-        this.draw(scenes, ctx, 0, 0);
-
-
-    }
-    DisplayToSceneCoords(scene, x, y) {
-        const boundingRect = this.dimension;
-        const scaledX = (x - boundingRect.left) / this._scale;
-        const scaledY = (y - boundingRect.top) / this._scale;
-        const cam = scene.camera;
-        return {
-            x: (scaledX - this._width / 2) / cam.scale + cam.position.x,
-            y: (scaledY - this._height / 2) / cam.scale + cam.position.y
-        };
     }
 }

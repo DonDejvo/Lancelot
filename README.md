@@ -13,7 +13,7 @@ Are you interested in developing games with javascript and canvas? Lancelot offe
 - SNES styled button layout
 - advanced camera
 - composed light system
-- particle emitter
+- animated elements
 - 2D physics
 
 New features comming soon!
@@ -35,6 +35,11 @@ In this tutorial we're going to cover setting-up a development environment with 
 
 ## Get Lancelot
 
+Lancelot is an open source project and available to download for free.
+
+We use github to manage the project and you have various options on how to download it.
+
+Getting the package from a CDN provider is the quickest and easiest way to start using Lancelot.
 
 ## Hello World
 

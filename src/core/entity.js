@@ -1,92 +1,95 @@
-import { Position } from "./utils/position.js";
-
-/*
-
-position: Vector
-name: string
-scene: Scene
-moving: boolean
-Clip(e: Entity)
-Unclip(e: Entity)
-MoveTo(position: Vector, duration: number, timing: string)
-StopMoving()
-AddComponent(c: Component, name?: string)
-GetComponent(name: string)
-
-*/
-
+import { PositionManager } from "../utils/PositionManager.js";
 
 export class Entity {
-    constructor() {
-        this._position = new Position(this.DoWeirdStuff.bind(this));
-        this._components = new Map();
-        this._parent = null;
-        this._name = null;
-        this._scene = null;
-        this.groupList = new Set();
-    }
+
+    _name = null;
+    _scene = null;
+    _parent = null;
+    _groupList = new Set();
+    _components = new Map();
+    _position = new PositionManager();
+    _interactive = null;
+    _body = null;
+    _onUpdate = null;
+
     get name() {
         return this._name;
     }
+    
     get scene() {
         return this._scene;
     }
+
     get position() {
         return this._position.position;
     }
-    set position(p) {
-        this._position.position = p;
+
+    set position(v) {
+        this._position.position = v;
     }
-    get moving() {
-        return this._position._moving;
+
+    get interactive() {
+        return this._interactive;
     }
-    DoWeirdStuff() {
-        this._components.forEach((c) => {
-            c.position.Copy(this.position.Clone().Add(c.offset));
-        });
+
+    get body() {
+        return this._body;
     }
-    Update(elapsedTimeS) {
-        this._position.Update(elapsedTimeS);
-        this._components.forEach((c) => {
-            c.Update(elapsedTimeS);
-        });
+
+    get groupList() {
+        return this._groupList;
     }
-    Clip(e, fixed = false) {
-        this._position.Clip(e._position, fixed);
+
+    clip(e, fixed = false) {
+        this._position.clip(e._position, fixed);
     }
-    Unclip(e) {
-        this._position.Unclip(e._position);
+
+    unclip(e) {
+        this._position.unclip(e._position);
     }
-    MoveTo(p, dur, timing = "linear") {
-        this._position.MoveTo(p, dur, timing);
+
+    moveTo(v, dur, timing = "linear", onEnd = null) {
+        this._position.moveTo(v, dur, timing, onEnd);
     }
-    StopMoving() {
-        this._position.StopMoving();
+
+    stopMoving() {
+        this._position.stopMoving();
     }
-    AddComponent(c, n) {
+
+    isMoving() {
+        return this._position.isMoving();
+    }
+
+    addComponent(c, n) {
         if (n === undefined) {
             n = c.constructor.name;
         }
         this._components.set(n, c);
         c._parent = this;
-        c.position.Copy(this.position.Clone().Add(c.offset));
-        this.Clip(c, true);
-        c.InitComponent();
-        switch(c.type) {
-            case "drawable":
-                this.scene._AddDrawable(c);
-                break;
-            case "body":
-                this.scene._AddBody(this, c);
-                break;
-            case "light":
-                this._scene._lights.push(c);
-        }
+        c.position.copy(this.position.clone().add(c.offset));
+        this.clip(c, true);
+        c.initComponent();
     }
-    GetComponent(n) {
+
+    getComponent(n) {
         return this._components.get(n);
     }
-    FindEntity(n) {
-        return this._parent.Get(n);
+
+    _updatePosition(elapsedTimeS) {
+        this._position.update(elapsedTimeS);
+    }
+
+    update(elapsedTimeS) {
+        this._updatePosition(elapsedTimeS);
+        if(this._onUpdate) {
+            this._onUpdate(elapsedTimeS);
+        }
+        this._components.forEach((c) => {
+            c.update(elapsedTimeS);
+        });
+    }
+
+    onUpdate(callback) {
+        this._onUpdate = callback;
     }
 }

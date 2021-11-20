@@ -1,157 +1,245 @@
-import { AudioSection } from "./audio-manager.js";
-import { Engine } from "./engine.js";
-import { Renderer } from "./renderer.js";
-import { SceneManager } from "./scene-manager.js";
-import { Scene } from "./scene.js";
-import { Loader } from "./loader.js";
-import { ParamParser } from "./utils/param-parser.js";
-import { Vector } from "./utils/vector.js";
+import { Loader } from "../utils/Loader.js";
+import { paramParser } from "../utils/ParamParser.js";
+import { Engine } from "./Engine.js";
+import { Renderer } from "./Renderer.js";
+import { SceneManager } from "./SceneManager.js";
+import { Vector } from "../utils/Vector.js";
+import { TimeoutHandler } from "../utils/TimeoutHandler.js";
+import { Scene } from "./Scene.js";
+import { AudioManager } from "../utils/AudioManager.js";
 
+/**
+ * Button layout
+ * 
+ * @typedef {Object} Layout
+ * @property {Object} DPad
+ * @property {string} DPad.up
+ * @property {string} DPad.right
+ * @property {string} DPad.down
+ * @property {string} Pad.left
+ * @property {string} X_Button
+ * @property {string} Y_Button
+ * @property {string} A_Button
+ * @property {string} B_Button
+ * @property {string} START_Button
+ * @property {string} SELECT_Button
+ * @property {string} R_Button
+ * @property {string} L_Button
+ */
+
+/**
+ * @typedef {function(): void} Callback
+ * @this Game
+ */
+
+/**
+ * @class Game
+ */
 export class Game {
-    constructor(params) {
-        this._width = params.width;
-        this._height = params.height;
-        this._preload = params.preload == undefined ? null : params.preload.bind(this);
-        this._init = params.init.bind(this);
-        this._parentElement = ParamParser.ParseValue(params.parentElement, document.body);
 
-        this._resources = null;
+    /** @type {Map<string, any>?} */
+    _resources = null;
+    _config;
+    _width;
+    _height;
+    _init;
+    _preload;
+    _parentElement;
+    _renderer;
+    _load = new Loader();
+    _sceneManager = new SceneManager();
+    _engine;
+    _timeout = new TimeoutHandler();
+    _audio = null;
 
-        this._loader = new Loader();
 
-        const body = this._parentElement;
+    /**
+     * @param {Object} config
+     * @param {number} config.width
+     * @param {number} config.height
+     * @param {Callback} config.init
+     * @param {Callback} [config.preload]
+     * @param {Object} config.controls
+     * @param {boolean} config.controls.active
+     * @param {Layout} config.controls.layout
+     * @param {HTMLElement} [config.parentElement]
+     */
+    constructor(config) {
+        this._config = config;
+        this._width = config.width;
+        this._height = config.height;
 
-        body.style.userSelect = "none";
-        body.style.touchAction = "none";
-        body.style.WebkitUserSelect = "none";
-        body.style.position = "relative";
-        /*body.style.width = "100%";
-        body.style.height = "100%";*/
-        body.style.overflow = "hidden";
-        /*body.style.margin = "0";*/
-        /*body.style.padding = "0";*/
-        body.style.background = "black";
+        this._init = config.init.bind(this);
 
-        this._renderer = new Renderer({
-            width: this._width,
-            height: this._height,
-            parentElement: body
-        });
-        this._engine = new Engine();
-        this._sceneManager = new SceneManager();
-
-        const controls = ParamParser.ParseObject(params.controls, {
-            active: false,
-            layout: {
-                joystick: { left: "ArrowLeft", right: "ArrowRight", up: "ArrowUp", down: "ArrowDown" },
-                X: "e",
-                Y: "d",
-                A: "s",
-                B: "f",
-                SL: "Control",
-                SR: "Control",
-                start: " ",
-                select: "Tab"
-            }
-        });
-        if(controls.active && "ontouchstart" in document) {
-            this._InitControls(controls.layout);
+        /** @type {Callback} */
+        let preload;
+        if((preload = paramParser.parseValue(config.preload, null)) !== null) {
+            this._preload = preload.bind(this);
         }
 
-        this.timeout = this._engine.timeout;
-        this.audio = (() => {
-            const sections = new Map();
-            const CreateSection = (n) => {
-                sections.set(n, new AudioSection());
-            }
-            const Play = (sectionName, audioName, params = {}) => {
-                if(!sections.has(sectionName)) {
-                    CreateSection(sectionName);
-                }
-                const section = sections.get(sectionName);
-                if(!section._audioMap.has(audioName)) {
-                    section.AddAudio(audioName, this._resources.get(audioName));
-                }
-                if(params.primary === false) {
-                    section.PlaySecondary(audioName);
-                } else {
-                    section.Play(audioName, params);
-                }
-            }
-            const Pause = (sectionName) => {
-                sections.get(sectionName).Pause();
-            }
-            const SetVolume = (sectionName, volume) => {
-                if(!sections.has(sectionName)) {
-                    CreateSection(sectionName);
-                }
-                sections.get(sectionName).volume = volume;
-            }
-            const IsPlaying = (sectionName) => {
-                return sections.get(sectionName).playing;
-            }
-            const GetVolume = (sectionName) => {
-                if(!sections.has(sectionName)) {
-                    CreateSection(sectionName);
-                }
-                return sections.get(sectionName).volume;
-            }
-            return {
-                Play,
-                Pause,
-                SetVolume,
-                IsPlaying,
-                GetVolume
-            };
-        })();
+        this._parentElement = paramParser.parseValue(config.parentElement, document.body);
 
-        
+        const elem = this._parentElement;
+        elem.style.WebkitUserSelect = "none";
+        elem.style.userSelect = "none";
+        elem.style.touchAction = "none";
+
+        this._renderer = new Renderer(this._width, this._height, this._parentElement);
 
         const step = (elapsedTime) => {
-            for(let scene of this._sceneManager._scenes) {
-                scene.Update(elapsedTime * 0.001);
+            this._timeout.update(elapsedTime);
+            const scenes = this._sceneManager.scenes;
+            for(let scene of scenes) {
+                scene.update(elapsedTime * 0.001);
             }
-            
-            this._renderer.Render(this._sceneManager._scenes);
+            this._renderer.render(scenes);
         }
 
-        this._engine._step = step;
-        this._InitSceneEvents();
+        this._engine = new Engine(step);
 
-        this._engine.Start();
+        this._initEventListeners();
+        this._initControls();
+
+        this._engine.start();
 
         if(this._preload) {
             this._preload();
-            this._loader.Load((data) => {
+            this._load.load((data) => {
                 this._resources = data;
+                this._audio = new AudioManager(this._resources);
                 this._init();
             });
         } else {
-            this._resources = new Map();
             this._init();
         }
+    }
 
+    get load() {
+        return this._load;
     }
-    get loader() {
-        return this._loader;
-    }
+
     get resources() {
         return this._resources;
     }
-    _InitControls(layout) {
+
+    get timeout() {
+        return this._timeout;
+    }
+
+    get audio() {
+        return this._audio;
+    }
+
+    createScene(name, zIndex, options) {
+        const scene = new Scene(options);
+        scene._resources = this._resources;
+        this._sceneManager.add(scene, name, zIndex);
+        return scene;
+    }
+
+    requestFullScreen() {
+        const elem = this._parentElement;
+        let requestMethod = (elem.requestFullScreen || elem.webkitRequestFullScreen);
+        if(requestMethod) {
+            requestMethod.call(elem);
+        }
+    }
+
+    _initEventListeners() {
+        const isTouchDevice = "ontouchstart" in document;
+        const cnv = this._renderer.canvas;
+
+        if(isTouchDevice) {
+
+            cnv.addEventListener("touchstart", (e) => this._handleTouchEvent(e));
+            cnv.addEventListener("touchmove", (e) => this._handleTouchEvent(e));
+            cnv.addEventListener("touchend", (e) => this._handleTouchEvent(e));
+
+        } else {
+
+            cnv.addEventListener("mousedown", (e) => this._handleMouseEvent(e));
+            cnv.addEventListener("mousemove", (e) => this._handleMouseEvent(e));
+            cnv.addEventListener("mouseup", (e) => this._handleMouseEvent(e));
+
+        }
+
+        addEventListener("keydown", (e) => this._handleKeyEvent(e));
+        addEventListener("keyup", (e) => this._handleKeyEvent(e));
+    }
+
+    _handleKeyEvent(e) {
+        e.preventDefault();
+        this._handleSceneEvent(e.type, {
+            key: e.key
+        });
+    }
+    _handleTouchEvent(e) {
+        e.preventDefault();
+        const touchToMouseType = {
+            "touchstart": "mousedown",
+            "touchmove": "mousemove",
+            "touchend": "mouseup"
+        };
+        this._handleSceneEvent(touchToMouseType[e.type], {
+            x: e.changedTouches[0].pageX, y: e.changedTouches[0].pageY
+        });
+    }
+    _handleMouseEvent(e) {
+        e.preventDefault();
+        this._handleSceneEvent(e.type, {
+            x: e.pageX, y: e.pageY
+        });
+    }
+    _handleSceneEvent(type, params) {
+        for(let scene of this._sceneManager.scenes) {
+
+            let paramsCopy = Object.assign({}, params);
+
+            if(type.startsWith("mouse")) {
+                const coords = this._renderer.displayToSceneCoords(scene, paramsCopy.x, paramsCopy.y);
+                paramsCopy.x = coords.x;
+                paramsCopy.y = coords.y;
+            }
+            
+            if(scene.handleEvent(type, paramsCopy, this._renderer)) {
+               break;
+            }
+
+        }
+    }
+
+    _initControls() {
+        const controls = paramParser.parseObject(this._config.controls, {
+            active: false,
+            layout: {
+                DPad: { left: "ArrowLeft", right: "ArrowRight", up: "ArrowUp", down: "ArrowDown" },
+                X_Button: "e",
+                Y_Button: "d",
+                A_Button: "s",
+                B_Button: "f",
+                L_Button: "Control",
+                R_Button: "Control",
+                START_Button: " ",
+                SELECT_Button: "Tab"
+            }
+        });
+
+        if(!controls.active || !("ontouchstart" in document)) {
+            return;
+        }
+
+        const layout = controls.layout;
+
         const applyStyle = (elem, bg = true) => {
             const color = "rgba(150, 150, 150, 0.6)";
             elem.style.pointerEvents = "auto";
             elem.style.position = "absolute";
             elem.style.border = "2px solid " + color;
             elem.style.color = color;
-            //elem.style.fontSize = "24px";
             elem.style.fontFamily = "Arial";
-            //elem.style.fontWeight = "500";
             elem.style.display = "flex";
             elem.style.alignItems = "center";
             elem.style.justifyContent = "center";
-            //elem.style.borderRadius = "50%";
             if(bg) elem.style.background = "radial-gradient(circle at center, " + color + " 0, rgba(0, 0, 0, 0.6) 60%)";
         }
 
@@ -184,7 +272,6 @@ export class Game {
                 button.textContent = "R";
                 button.style.borderRadius = "0 50% 50% 0";
             }
-            
             applyStyle(button);
             controlsContainer.appendChild(button);
             return button;
@@ -240,52 +327,54 @@ export class Game {
             joystick.appendChild(box);
         }
 
-        controlsMap.joystick = joystick;
-        controlsMap.A = createButton(10, 63, "A");
-        controlsMap.B = createButton(63, 10, "B");
-        controlsMap.X = createButton(63, 116, "X");
-        controlsMap.Y = createButton(116, 63, "Y");
+        controlsMap.DPad = joystick;
+        controlsMap.A_Button = createButton(10, 63, "A");
+        controlsMap.B_Button = createButton(63, 10, "B");
+        controlsMap.X_Button = createButton(63, 116, "X");
+        controlsMap.Y_Button = createButton(116, 63, "Y");
 
-        controlsMap.SL = createSideButton("left");
-        controlsMap.SR = createSideButton("right");
+        controlsMap.L_Button = createSideButton("left");
+        controlsMap.R_Button = createSideButton("right");
 
-        controlsMap.select = createActionButton("Select", -20);
-        controlsMap.start = createActionButton("Start", 20);
+        controlsMap.SELECT_Button = createActionButton("Select", -20);
+        controlsMap.START_Button = createActionButton("Start", 20);
 
         this._parentElement.appendChild(controlsContainer);
 
+        const directions = {
+            left: { v: new Vector(-1, 0), n: "left" },
+            right: { v: new Vector(1, 0), n: "right" },
+            up: { v: new Vector(0, -1), n: "up" },
+            down: { v: new Vector(0, 1), n: "down" },
+        };
+
         const getJoystickDirection = (e) => {
-            const directions = {
-                left: new Vector(-1, 0),
-                right: new Vector(1, 0),
-                top: new Vector(0, -1),
-                bottom: new Vector(0, 1),
-            };
-            const target = joystick.getBoundingClientRect();
-            const x = e.changedTouches[0].pageX - (target.left + target.width / 2);
-            const y = e.changedTouches[0].pageY - (target.top + target.height / 2);
+            
+            const boundingRect = joystick.getBoundingClientRect();
+            const x = e.changedTouches[0].pageX - (boundingRect.x + boundingRect.width / 2);
+            const y = e.changedTouches[0].pageY - (boundingRect.y + boundingRect.height / 2);
             const pos = new Vector(x, y);
-            if(pos.Mag() < 20) return [];
-            const n = pos.Clone().Unit();
+            if(pos.mag() < 20) return [];
+            const n = pos.clone().unit();
             const res = [];
-            if(Vector.Dot(n, directions.left) >= 0.5) {
-                res.push("left");
+            if(Vector.dot(n, directions.left.v) >= 0.5) {
+                res.push(directions.left.n);
             }
-            if(Vector.Dot(n, directions.right) >= 0.5) {
-                res.push("right");
+            if(Vector.dot(n, directions.right.v) >= 0.5) {
+                res.push(directions.right.n);
             }
-            if(Vector.Dot(n, directions.top) >= 0.5) {
-                res.push("up");
+            if(Vector.dot(n, directions.up.v) >= 0.5) {
+                res.push(directions.up.n);
             }
-            if(Vector.Dot(n, directions.bottom) >= 0.5) {
-                res.push("down");
+            if(Vector.dot(n, directions.down.v) >= 0.5) {
+                res.push(directions.down.n);
             }
             return res;
         }
 
         const handleJoystick = (ev, dirs, keys) => {
             for(let dir of dirs) {
-                this._HandleSceneEvent(ev, {
+                this._handleSceneEvent(ev, {
                     key: keys[dir]
                 });
             }
@@ -295,139 +384,43 @@ export class Game {
             const elem = controlsMap[attr];
             const key = layout[attr];
 
-            if(attr == "joystick") {
+            if(attr == "DPad") {
                 elem.addEventListener("touchstart", (e) => {
+                    e.preventDefault();
                     const dirs = getJoystickDirection(e);
                     handleJoystick("keydown", dirs, key);
                 });
                 elem.addEventListener("touchmove", (e) => {
+                    e.preventDefault();
                     handleJoystick("keyup", ["left", "right", "up", "down"], key);
                     const dirs = getJoystickDirection(e);
                     handleJoystick("keydown", dirs, key);
                 });
                 elem.addEventListener("touchend", (e) => {
+                    e.preventDefault();
                     const dirs = getJoystickDirection(e);
                     handleJoystick("keyup", ["left", "right", "up", "down"], key);
                 });
                 continue;
             }
-            elem.addEventListener("touchstart", () => {
-                this._HandleSceneEvent("keydown", {
+            elem.addEventListener("touchstart", (e) => {
+                e.preventDefault();
+                this._handleSceneEvent("keydown", {
+                    key: key
+                });
+            });
+            elem.addEventListener("touchmove", (e) => {
+                e.preventDefault();
+                this._handleSceneEvent("keydown", {
                     key: key
                 });
             });
             elem.addEventListener("touchend", () => {
-                this._HandleSceneEvent("keyup", {
+                e.preventDefault();
+                this._handleSceneEvent("keyup", {
                     key: key
                 });
             });
         }
-    }
-    RequestFullScreen() {
-        const element = this._parentElement;
-        var requestMethod = element.requestFullScreen || element.webkitRequestFullScreen;
-    
-        if (requestMethod) {
-            requestMethod.call(element);
-        } else if (typeof window.ActiveXObject !== "undefined") {
-            var wscript = new ActiveXObject("WScript.Shell");
-            if (wscript !== null) {
-                wscript.SendKeys("{F11}");
-            }
-        }
-    }
-    _InitSceneEvents() {
-          
-
-        const isTouchDevice = "ontouchstart" in document;
-        const cnv = this._renderer._canvas;
-
-        if(isTouchDevice) {
-
-            cnv.addEventListener("touchstart", (e) => this._HandleTouchEvent(e));
-            cnv.addEventListener("touchmove", (e) => this._HandleTouchEvent(e));
-            cnv.addEventListener("touchend", (e) => this._HandleTouchEvent(e));
-
-        } else {
-
-            cnv.addEventListener("mousedown", (e) => this._HandleMouseEvent(e));
-            cnv.addEventListener("mousemove", (e) => this._HandleMouseEvent(e));
-            cnv.addEventListener("mouseup", (e) => this._HandleMouseEvent(e));
-
-        }
-
-        addEventListener("keydown", (e) => this._HandleKeyEvent(e));
-        addEventListener("keyup", (e) => this._HandleKeyEvent(e));
-
-    }
-    _HandleKeyEvent(e) {
-        this._HandleSceneEvent(e.type, {
-            key: e.key
-        });
-    }
-    _HandleTouchEvent(e) {
-
-        const touchToMouseType = {
-            "touchstart": "mousedown",
-            "touchmove": "mousemove",
-            "touchend": "mouseup"
-        };
-
-        this._HandleSceneEvent(touchToMouseType[e.type], {
-            x: e.changedTouches[0].pageX, y: e.changedTouches[0].pageY
-        });
-    }
-    _HandleMouseEvent(e) {
-
-        this._HandleSceneEvent(e.type, {
-            x: e.pageX, y: e.pageY
-        });
-    }
-    _HandleSceneEvent(type, params0) {
-        for(let scene of this._sceneManager._scenes) {
-
-            const params = Object.assign({}, params0);
-            
-            if(type.startsWith("mouse")) {
-                const coords = this._renderer.DisplayToSceneCoords(scene, params.x, params.y);
-                params.x = coords.x;
-                params.y = coords.y;
-                
-            }
-            
-            if(scene._On(type, params)) {
-               break;
-            }
-        }
-    }
-    CreateSection(id) {
-        const section = document.createElement("div");
-        section.id = id;
-        section.style.position = "absolute";
-        section.style.left = "0";
-        section.style.top = "0";
-        section.style.width = "100%";
-        section.style.height = "100%";
-        section.style.display = "none";
-        this._renderer._container.appendChild(section);
-        return section;
-    }
-    GetSection(id) {
-        return document.getElementById(id);
-    }
-    ShowSection(id) {
-        this.GetSection(id).style.display = "block";
-    }
-    HideSection(id) {
-        this.GetSection(id).style.display = "none";
-    }
-    CreateScene(n, params = {}) {
-        const scene = new Scene(params);
-        scene.resources = this._resources;
-        this._sceneManager.Add(scene, n, (params.zIndex || 0));
-        return scene;
-    }
-    PlayScene(n) {
-        return this._sceneManager.Play(n);
     }
 }
