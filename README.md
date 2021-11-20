@@ -35,11 +35,18 @@ In this tutorial we're going to cover setting-up a development environment with 
 
 ## Get Lancelot
 
-Lancelot is an open source project and available to download for free.
+Lancelot 0.11.0 is current version and was released on 20th November 2021.
 
-We use github to manage the project and you have various options on how to download it.
+Lancelot is on [jsDelivr](https://www.jsdelivr.com/package/gh/dondejvo/lancelot) CDN. Include one of following before all other scripts in your html:
 
-Getting the package from a CDN provider is the quickest and easiest way to start using Lancelot.
+``` html
+<script src="https://cdn.jsdelivr.net/gh/DonDejvo/Lancelot@0.11.0/dist/lancelot-cdn-nomodule.min.js"></script>
+```
+``` html
+<script src="https://cdn.jsdelivr.net/gh/DonDejvo/Lancelot@0.11.0/dist/lancelot-cdn-nomodule.js"></script>
+```
+
+Github provides the option to download the whole repository as a zip or tar file. However we would strongly recommend you learn to use git instead. It will allow you to easily update to the latest versions of Phaser as they are released.
 
 ## Hello World
 
