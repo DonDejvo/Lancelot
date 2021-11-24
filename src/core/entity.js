@@ -11,6 +11,7 @@ export class Entity {
     _interactive = null;
     _body = null;
     _onUpdate = null;
+    _properties = new Map();
 
     get name() {
         return this._name;
@@ -38,6 +39,10 @@ export class Entity {
 
     get groupList() {
         return this._groupList;
+    }
+
+    get props() {
+        return this._properties;
     }
 
     clip(e, fixed = false) {

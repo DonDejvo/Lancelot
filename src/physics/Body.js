@@ -19,6 +19,8 @@ export class Body extends Component {
     _options;
     _followBottomObject;
     _resized = false;
+    _behaviorIds = 0;
+    _joints = [];
     
     constructor(params) {
         super();
@@ -112,7 +114,10 @@ export class Body extends Component {
         };
     }
 
-    addBehavior(groups, type, options = {}) {
+    addBehavior(groups, type, options, name) {
+        if (name === undefined) {
+            name = this._generateBehaviorName();
+        }
         this._behavior.push({
             groups: groups.split(" "),
             type: type,
@@ -120,11 +125,32 @@ export class Body extends Component {
                 bounce: 0.0,
                 friction: 0.0,
                 action: null
-            })
+            }),
+            name: name
         });
+
     }
 
-    join(body, type, params = {}) {
+    removeBehavior(name) {
+        const idx = this._behavior.findIndex((e) => e.name == name);
+        if(idx != -1) {
+            this._behavior.splice(idx, 1);
+        }
+    }
+
+    updateBehavior(name, options = {}) {
+        const behavior = this._behavior.find((e) => e.name == name);
+        if(behavior) {
+            for(let attr in options) {
+                behavior.options[attr] = options[attr];
+            }
+        }
+    }
+
+    join(body, type, params) {
+        if(params === undefined) {
+            params = {};
+        }
         let joint;
         switch(type) {
             case "elastic":
@@ -135,10 +161,13 @@ export class Body extends Component {
                 break;
         }
         if(!joint) {
-            return;
+            return null;
         }
         const world = this.scene.world;
         world._addJoint(joint);
+        this._joints.push(joint);
+        body._joints.push(joint);
+        return joint;
     }
 
     contains(v) {
@@ -153,7 +182,7 @@ export class Body extends Component {
     }
 
     updatePosition(elapsedTimeS) {
-        const decceleration = 16;
+        const decceleration = 30;
         const frame_decceleration = new Vector(this._vel.x * this._friction.x * decceleration, this._vel.y * this._friction.y * decceleration);
         this._vel.sub(frame_decceleration.mult(elapsedTimeS));
         const vel = this._vel.clone().mult(elapsedTimeS);
@@ -172,7 +201,7 @@ export class Body extends Component {
                 return behavior.groups.map((g) => e.groupList.has(g)).some(_ => _);
             });
 
-            /*
+            
             entities.sort((a, b) => {
                 const boundingRectA = a.body.getBoundingRect();
                 const boundingRectB = b.body.getBoundingRect();
@@ -180,12 +209,12 @@ export class Body extends Component {
                 const distB = Vector.dist(this.position, b.body.position) / new Vector(boundingRect.width + boundingRectB.width, boundingRect.height + boundingRectB.height).mag();
                 return distA - distB;
             });
-            */
+            
             
             for(let e of entities) {
                 let info;
                 switch(behavior.type) {
-                    case "DetectCollision":
+                    case "detect":
                         info = detectCollision(this, e.body);
                         
                         if(info.collide) {
@@ -194,7 +223,7 @@ export class Body extends Component {
                             }
                         }
                         break;
-                    case "ResolveCollision":
+                    case "resolve":
                         info = resolveCollision(this, e.body, behavior.options);
                         if(info.collide) {
                             if(behavior.options.action) {
@@ -206,6 +235,19 @@ export class Body extends Component {
             }
         }
     }
+
+    draw(ctx) {
+        const rect = this.getBoundingRect();
+        ctx.beginPath();
+        ctx.strokeStyle = "white";
+        ctx.strokeRect(this.position.x - rect.width / 2, this.position.y - rect.height / 2, rect.width, rect.height);
+    }
+
+    _generateBehaviorName() {
+        ++this._behaviorIds;
+        return "__behavior__" + this._behaviorIds;
+    }
+
 }
 
 export class Polygon extends Body {
@@ -532,7 +574,12 @@ const detectCollisionLineVsLine = (a, b, c, d) => {
 }
 
 const detectCollisionRayVsRay = (ray1, ray2) => {
-    return detectCollisionLineVsLine(ray1.position, ray1.point, ray2.position, ray2.point);
+    const info =  detectCollisionLineVsLine(ray1.position, ray1.point, ray2.position, ray2.point);
+    if(info.collide) {
+        ray1._collisions.all.add(ray2);
+        ray2._collisions.all.add(ray1);
+    }
+    return info;
 }
 
 const detectCollisionRayVsPoly = (ray, b) => {

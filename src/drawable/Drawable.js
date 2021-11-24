@@ -276,11 +276,20 @@ export class FixedDrawable extends Drawable {
         this.draw(ctx);
         ctx.restore();
     }
-    drawImage(ctx, w = this._imageOptions.width, h = this._imageOptions.height, clip = true, framePos = this._imageOptions.framePosition) {
-        if(clip) {
+    drawImage(ctx, params = {}) {
+        if(this._image == null) {
+            return;
+        }
+        let options = paramParser.parseObject(params, {
+            clip: true,
+            framePosition: this._imageOptions.framePosition,
+            width: this._imageOptions.width,
+            height: this._imageOptions.height
+        });
+        if(options.clip) {
             ctx.clip();
         }
-        ctx.drawImage(this._image, framePos.x * this._imageOptions.frameWidth, framePos.y * this._imageOptions.frameHeight, this._imageOptions.frameWidth, this._imageOptions.frameHeight, -w / 2, -h / 2, w, h);
+        ctx.drawImage(this._image, options.framePosition.x * this._imageOptions.frameWidth, options.framePosition.y * this._imageOptions.frameHeight, this._imageOptions.frameWidth, this._imageOptions.frameHeight, -options.width / 2, -options.height / 2, options.width, options.height);
     }
 
     update(elapsedTimeS) {
@@ -313,7 +322,7 @@ class BodyFollower extends Component {
         this._target = params.target;
     }
 
-    update(elapsedTimeS) {
+    update(_) {
         const body = this.parent.body;
         this._target.angle = body.angle;
         this._target.offset = body.offset;

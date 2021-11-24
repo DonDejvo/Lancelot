@@ -43,41 +43,7 @@ export class Renderer {
         ctx.beginPath();
         ctx.clearRect(0, 0, this._width, this._height);
 
-        const draw = (ctx, sceneIndex, bufferIndex) => {
-
-            const scene = scenes[sceneIndex];
-            if(!scene) {
-                return;
-            }
-            if(scene.hidden) {
-                draw(ctx, sceneIndex + 1, bufferIndex);
-                return;
-            }
-
-            const w = this._width;
-            const h = this._height;
-            
-            scene.drawLights(ctx, w, h);
-
-            if(!this._buffers[bufferIndex]) {
-                const b = document.createElement("canvas").getContext("2d");
-                b.canvas.width = w;
-                b.canvas.height = h;
-                this._buffers[bufferIndex] = b;
-            }
-
-            const b = this._buffers[bufferIndex];
-            if(sceneIndex < scenes.length - 1) {
-                draw(b, sceneIndex + 1, bufferIndex + 1);
-                b.globalCompositeOperation = "source-over";
-            }
-            scene.drawObjects(b, w, h);
-
-            ctx.drawImage(b.canvas, 0, 0);
-
-        }
-
-        draw(ctx, 0, 0);
+        this._draw(ctx, scenes, 0, 0);
 
     }
 
@@ -90,6 +56,40 @@ export class Renderer {
             x: (scaledX - this._width / 2) / cam.scale + cam.position.x,
             y: (scaledY - this._height / 2) / cam.scale + cam.position.y
         };
+    }
+
+    _draw(ctx, scenes, sceneIndex, bufferIndex) {
+
+        const scene = scenes[sceneIndex];
+        if(!scene) {
+            return;
+        }
+        if(scene.hidden) {
+            this._draw(ctx, scenes, sceneIndex + 1, bufferIndex);
+            return;
+        }
+
+        const w = this._width;
+        const h = this._height;
+        
+        scene.drawLights(ctx, w, h);
+
+        if(!this._buffers[bufferIndex]) {
+            const b = document.createElement("canvas").getContext("2d");
+            b.canvas.width = w;
+            b.canvas.height = h;
+            this._buffers[bufferIndex] = b;
+        }
+
+        const b = this._buffers[bufferIndex];
+        if(sceneIndex < scenes.length - 1) {
+            this._draw(b, scenes, sceneIndex + 1, bufferIndex + 1);
+            b.globalCompositeOperation = "source-over";
+        }
+        scene.drawObjects(b, w, h);
+
+        ctx.drawImage(b.canvas, 0, 0);
+
     }
 
     _initContainer() {
@@ -116,7 +116,6 @@ export class Renderer {
         cnv.style.left = "0";
         cnv.style.top = "0";
         cnv.style.display = "block";
-        cnv.style.background = "black";
 
         this._container.appendChild(cnv);
     }

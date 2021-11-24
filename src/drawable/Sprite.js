@@ -81,7 +81,12 @@ export class Sprite extends FixedDrawable {
 
     draw(ctx) {
         ctx.globalAlpha = this.opacity;
-        this.drawImage(ctx, this._width, this._height, false, this._framePos);
+        this.drawImage(ctx, {
+            clip: false,
+            width: this._width,
+            height: this._height,
+            framePosition: this._framePos
+        });
     }
 
     drawShadow(ctx) {

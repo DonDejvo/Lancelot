@@ -132,7 +132,7 @@ export class Game {
 
     createScene(name, zIndex, options) {
         const scene = new Scene(options);
-        scene._resources = this._resources;
+        scene._game = this;
         this._sceneManager.add(scene, name, zIndex);
         return scene;
     }
@@ -211,6 +211,7 @@ export class Game {
     _initControls() {
         const controls = paramParser.parseObject(this._config.controls, {
             active: false,
+            theme: "dark",
             layout: {
                 DPad: { left: "ArrowLeft", right: "ArrowRight", up: "ArrowUp", down: "ArrowDown" },
                 X_Button: "e",
@@ -227,11 +228,21 @@ export class Game {
         if(!controls.active || !("ontouchstart" in document)) {
             return;
         }
+        let color, color2;
+        switch(controls.theme) {
+            case "light":
+                color = "black";
+                color2 = "white";
+                break;
+            default:
+                color = "white";
+                color2 = "black";
+        }
+        
 
         const layout = controls.layout;
 
         const applyStyle = (elem, bg = true) => {
-            const color = "rgba(150, 150, 150, 0.6)";
             elem.style.pointerEvents = "auto";
             elem.style.position = "absolute";
             elem.style.border = "2px solid " + color;
@@ -240,7 +251,9 @@ export class Game {
             elem.style.display = "flex";
             elem.style.alignItems = "center";
             elem.style.justifyContent = "center";
-            if(bg) elem.style.background = "radial-gradient(circle at center, " + color + " 0, rgba(0, 0, 0, 0.6) 60%)";
+            if(bg) {
+                elem.style.background = color2;
+            }
         }
 
         const createButton = (right, bottom, text) => {
@@ -415,7 +428,7 @@ export class Game {
                     key: key
                 });
             });
-            elem.addEventListener("touchend", () => {
+            elem.addEventListener("touchend", (e) => {
                 e.preventDefault();
                 this._handleSceneEvent("keyup", {
                     key: key

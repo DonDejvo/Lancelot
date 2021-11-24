@@ -8,20 +8,28 @@ export class Tileset {
         this._tileWidth = params.tileWidth;
         this._tileHeight = params.tileHeight;
         this._columns = params.columns;
+        this._tileCount = params.tileCount;
         this._tileData = [];
     }
 
     get image() {
         return this._image;
     }
+    
     get tileWidth() {
         return this._tileWidth;
     }
+
     get tileHeight() {
         return this._tileHeight;
     }
+
     get columns() {
         return this._columns;
+    }
+
+    get tileCount() {
+        return this._tileCount;
     }
 
     createTile(scene, id) {
@@ -51,9 +59,11 @@ export class Tileset {
             });
         }
         e.addComponent(sprite, "TileSprite");
-        e.addComponent(new TileData({
-            properties: data == null ? [] : data.properties
-        }));
+        let obj = new Map();
+        for(let prop of (data == null ? [] : data.properties)) {
+            obj.set(prop.name, prop.value);
+        }
+        e.props.set("tile-data", obj);
 
         return e;
     }
@@ -69,7 +79,7 @@ export class Tileset {
         };
     }
 
-    addProperty(id, name, value) {
+    addProp(id, name, value) {
         let data = this._getData(id);
         if(!data) {
             data = this._createData(id);
@@ -93,21 +103,34 @@ export class Tileset {
     _getData(id) {
         return this._tileData.find((e) => e.id == id);
     }
-}
 
-class TileData extends Component {
+    static loadFromTiledJSON(obj, image) {
+        let tileset = new Tileset({
+            image: image,
+            tileWidth: obj.tilewidth,
+            tileHeight: obj.tileheight,
+            columns: obj.columns,
+            tileCount: obj.tilecount
+        });
 
-    _properties = new Map();
-
-    constructor(params) {
-        super();
-        
-        for(let p of params.properties) {
-            this._properties.set(p.name, p.value);
+        if(obj.tiles) {
+            for(let data of obj.tiles) {
+                const id = data.id;
+                if(data.properties) {
+                    for(let prop of data.properties) {
+                        tileset.addProp(id, prop.name, prop.value);
+                    }
+                }
+                if(data.animation) {
+                    let frames = [];
+                    for(let frame of data.animation) {
+                        frames.push(frame.tileid);
+                    }
+                    tileset.addAnim(id, data.animation[0].duration, frames);
+                }
+            }
         }
-    }
 
-    get properties() {
-        return this._properties;
+        return tileset;
     }
 }

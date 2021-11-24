@@ -55,32 +55,32 @@
         cb(loaded);
         return;
       }
-      for (let e2 of this._toLoad) {
-        switch (e2.type) {
+      for (let e of this._toLoad) {
+        switch (e.type) {
           case "image":
-            Loader.loadImage(e2.path, (elem) => {
-              this._handleCallback(loaded, e2, elem, cb);
+            Loader.loadImage(e.path, (elem) => {
+              this._handleCallback(loaded, e, elem, cb);
             });
             break;
           case "audio":
-            Loader.loadAudio(e2.path, (elem) => {
-              this._handleCallback(loaded, e2, elem, cb);
+            Loader.loadAudio(e.path, (elem) => {
+              this._handleCallback(loaded, e, elem, cb);
             });
             break;
           case "json":
-            Loader.loadJSON(e2.path, (elem) => {
-              this._handleCallback(loaded, e2, elem, cb);
+            Loader.loadJSON(e.path, (elem) => {
+              this._handleCallback(loaded, e, elem, cb);
             });
             break;
           case "font":
-            Loader.loadFont(e2.name, e2.path, (elem) => {
-              this._handleCallback(loaded, e2, elem, cb);
+            Loader.loadFont(e.name, e.path, (elem) => {
+              this._handleCallback(loaded, e, elem, cb);
             });
         }
       }
     }
-    _handleCallback(loaded, obj, e2, cb) {
-      loaded.set(obj.name, e2);
+    _handleCallback(loaded, obj, e, cb) {
+      loaded.set(obj.name, e);
       ++this._counter;
       if (this._onProgressHandler) {
         this._onProgressHandler(this._counter / this._size, obj.path);
@@ -263,33 +263,7 @@
       const ctx = this._context;
       ctx.beginPath();
       ctx.clearRect(0, 0, this._width, this._height);
-      const draw = (ctx2, sceneIndex, bufferIndex) => {
-        const scene = scenes[sceneIndex];
-        if (!scene) {
-          return;
-        }
-        if (scene.hidden) {
-          draw(ctx2, sceneIndex + 1, bufferIndex);
-          return;
-        }
-        const w = this._width;
-        const h = this._height;
-        scene.drawLights(ctx2, w, h);
-        if (!this._buffers[bufferIndex]) {
-          const b2 = document.createElement("canvas").getContext("2d");
-          b2.canvas.width = w;
-          b2.canvas.height = h;
-          this._buffers[bufferIndex] = b2;
-        }
-        const b = this._buffers[bufferIndex];
-        if (sceneIndex < scenes.length - 1) {
-          draw(b, sceneIndex + 1, bufferIndex + 1);
-          b.globalCompositeOperation = "source-over";
-        }
-        scene.drawObjects(b, w, h);
-        ctx2.drawImage(b.canvas, 0, 0);
-      };
-      draw(ctx, 0, 0);
+      this._draw(ctx, scenes, 0, 0);
     }
     displayToSceneCoords(scene, x, y) {
       const boundingRect = this._canvas.getBoundingClientRect();
@@ -300,6 +274,32 @@
         x: (scaledX - this._width / 2) / cam.scale + cam.position.x,
         y: (scaledY - this._height / 2) / cam.scale + cam.position.y
       };
+    }
+    _draw(ctx, scenes, sceneIndex, bufferIndex) {
+      const scene = scenes[sceneIndex];
+      if (!scene) {
+        return;
+      }
+      if (scene.hidden) {
+        this._draw(ctx, scenes, sceneIndex + 1, bufferIndex);
+        return;
+      }
+      const w = this._width;
+      const h = this._height;
+      scene.drawLights(ctx, w, h);
+      if (!this._buffers[bufferIndex]) {
+        const b2 = document.createElement("canvas").getContext("2d");
+        b2.canvas.width = w;
+        b2.canvas.height = h;
+        this._buffers[bufferIndex] = b2;
+      }
+      const b = this._buffers[bufferIndex];
+      if (sceneIndex < scenes.length - 1) {
+        this._draw(b, scenes, sceneIndex + 1, bufferIndex + 1);
+        b.globalCompositeOperation = "source-over";
+      }
+      scene.drawObjects(b, w, h);
+      ctx.drawImage(b.canvas, 0, 0);
     }
     _initContainer() {
       const con = this._container = document.createElement("div");
@@ -320,7 +320,6 @@
       cnv.style.left = "0";
       cnv.style.top = "0";
       cnv.style.display = "block";
-      cnv.style.background = "black";
       this._container.appendChild(cnv);
     }
     _onResize() {
@@ -339,7 +338,7 @@
   var SceneManager = class {
     _scenes = [];
     get scenes() {
-      return this._scenes.map((e2) => e2.scene);
+      return this._scenes.map((e) => e.scene);
     }
     add(scene, name, zIndex = 0) {
       let wrapper = {
@@ -356,7 +355,7 @@
       }
     }
     get(name) {
-      return this._scenes.find((e2) => e2.name == name).scene;
+      return this._scenes.find((e) => e.name == name).scene;
     }
     setZIndex(name, zIndex) {
       const scene = this.get(name);
@@ -366,7 +365,7 @@
       }
     }
     remove(name) {
-      const idx = this._scenes.findIndex((e2) => e2.name == name);
+      const idx = this._scenes.findIndex((e) => e.name == name);
       if (idx != -1) {
         this._scenes.splice(idx, 1);
         return true;
@@ -746,7 +745,7 @@
         return;
       }
       const handlers = this._eventHandlers.get(type);
-      const idx = handlers.findIndex((e2) => e2.handler == handler);
+      const idx = handlers.findIndex((e) => e.handler == handler);
       if (idx != -1) {
         handlers.splice(idx, 1);
       }
@@ -757,9 +756,9 @@
       }
       let captured = false;
       const handlers = this._eventHandlers.get(type);
-      for (let e2 of handlers) {
-        e2.handler(event);
-        if (e2.capture) {
+      for (let e of handlers) {
+        e.handler(event);
+        if (e.capture) {
           captured = true;
         }
       }
@@ -840,17 +839,17 @@
       const bounds = this._bounds;
       const w = bounds[1][0] - bounds[0][0];
       const h = bounds[1][1] - bounds[0][1];
-      this._topLeft = new QuadTree([[bounds[0][0], bounds[0][1]], [bounds[0][0] + w / 2, bounds[0][1] + h / 2]], this.limit);
-      this._topRight = new QuadTree([[bounds[0][0] + w / 2, bounds[0][1]], [bounds[0][0] + w, bounds[0][1] + h / 2]], this.limit);
-      this._bottomLeft = new QuadTree([[bounds[0][0], bounds[0][1] + h / 2], [bounds[0][0] + w / 2, bounds[0][1] + h]], this.limit);
-      this._bottomRight = new QuadTree([[bounds[0][0] + w / 2, bounds[0][1] + h / 2], [bounds[0][0] + w, bounds[0][1] + h]], this.limit);
+      this._topLeft = new QuadTree([[bounds[0][0], bounds[0][1]], [bounds[0][0] + w / 2, bounds[0][1] + h / 2]], this._limit);
+      this._topRight = new QuadTree([[bounds[0][0] + w / 2, bounds[0][1]], [bounds[0][0] + w, bounds[0][1] + h / 2]], this._limit);
+      this._bottomLeft = new QuadTree([[bounds[0][0], bounds[0][1] + h / 2], [bounds[0][0] + w / 2, bounds[0][1] + h]], this._limit);
+      this._bottomRight = new QuadTree([[bounds[0][0] + w / 2, bounds[0][1] + h / 2], [bounds[0][0] + w, bounds[0][1] + h]], this._limit);
       for (let data of this._data) {
         this._topLeft._insert(data);
         this._topRight._insert(data);
         this._bottomLeft._insert(data);
         this._bottomRight._insert(data);
       }
-      this.divided = true;
+      this._divided = true;
     }
     _search(aabb, res) {
       if (res == void 0) {
@@ -1010,6 +1009,8 @@
     _options;
     _followBottomObject;
     _resized = false;
+    _behaviorIds = 0;
+    _joints = [];
     constructor(params) {
       super();
       this._type = "body";
@@ -1082,7 +1083,10 @@
         height: 0
       };
     }
-    addBehavior(groups, type, options = {}) {
+    addBehavior(groups, type, options, name) {
+      if (name === void 0) {
+        name = this._generateBehaviorName();
+      }
       this._behavior.push({
         groups: groups.split(" "),
         type,
@@ -1090,10 +1094,28 @@
           bounce: 0,
           friction: 0,
           action: null
-        })
+        }),
+        name
       });
     }
-    join(body, type, params = {}) {
+    removeBehavior(name) {
+      const idx = this._behavior.findIndex((e) => e.name == name);
+      if (idx != -1) {
+        this._behavior.splice(idx, 1);
+      }
+    }
+    updateBehavior(name, options = {}) {
+      const behavior = this._behavior.find((e) => e.name == name);
+      if (behavior) {
+        for (let attr in options) {
+          behavior.options[attr] = options[attr];
+        }
+      }
+    }
+    join(body, type, params) {
+      if (params === void 0) {
+        params = {};
+      }
       let joint;
       switch (type) {
         case "elastic":
@@ -1104,10 +1126,13 @@
           break;
       }
       if (!joint) {
-        return;
+        return null;
       }
       const world = this.scene.world;
       world._addJoint(joint);
+      this._joints.push(joint);
+      body._joints.push(joint);
+      return joint;
     }
     contains(v) {
       return false;
@@ -1119,7 +1144,7 @@
       this.angularVelocity += Vector.cross(rPoint, vel.clone().mult(1 / this.inertia));
     }
     updatePosition(elapsedTimeS) {
-      const decceleration = 16;
+      const decceleration = 30;
       const frame_decceleration = new Vector(this._vel.x * this._friction.x * decceleration, this._vel.y * this._friction.y * decceleration);
       this._vel.sub(frame_decceleration.mult(elapsedTimeS));
       const vel = this._vel.clone().mult(elapsedTimeS);
@@ -1133,31 +1158,48 @@
       const controller = this.getComponent("QuadtreeController");
       const boundingRect = this.getBoundingRect();
       for (let behavior of this._behavior) {
-        const entities = controller.findNearby(boundingRect.width, boundingRect.height).filter((e2) => {
-          return behavior.groups.map((g) => e2.groupList.has(g)).some((_) => _);
+        const entities = controller.findNearby(boundingRect.width, boundingRect.height).filter((e) => {
+          return behavior.groups.map((g) => e.groupList.has(g)).some((_) => _);
         });
-        for (let e2 of entities) {
+        entities.sort((a, b) => {
+          const boundingRectA = a.body.getBoundingRect();
+          const boundingRectB = b.body.getBoundingRect();
+          const distA = Vector.dist(this.position, a.body.position) / new Vector(boundingRect.width + boundingRectA.width, boundingRect.height + boundingRectA.height).mag();
+          const distB = Vector.dist(this.position, b.body.position) / new Vector(boundingRect.width + boundingRectB.width, boundingRect.height + boundingRectB.height).mag();
+          return distA - distB;
+        });
+        for (let e of entities) {
           let info;
           switch (behavior.type) {
-            case "DetectCollision":
-              info = detectCollision(this, e2.body);
+            case "detect":
+              info = detectCollision(this, e.body);
               if (info.collide) {
                 if (behavior.options.action) {
-                  behavior.options.action(e2.body, info.point);
+                  behavior.options.action(e.body, info.point);
                 }
               }
               break;
-            case "ResolveCollision":
-              info = resolveCollision(this, e2.body, behavior.options);
+            case "resolve":
+              info = resolveCollision(this, e.body, behavior.options);
               if (info.collide) {
                 if (behavior.options.action) {
-                  behavior.options.action(e2.body, info.point);
+                  behavior.options.action(e.body, info.point);
                 }
               }
               break;
           }
         }
       }
+    }
+    draw(ctx) {
+      const rect = this.getBoundingRect();
+      ctx.beginPath();
+      ctx.strokeStyle = "white";
+      ctx.strokeRect(this.position.x - rect.width / 2, this.position.y - rect.height / 2, rect.width, rect.height);
+    }
+    _generateBehaviorName() {
+      ++this._behaviorIds;
+      return "__behavior__" + this._behaviorIds;
     }
   };
   var Polygon = class extends Body {
@@ -1429,7 +1471,12 @@
     };
   };
   var detectCollisionRayVsRay = (ray1, ray2) => {
-    return detectCollisionLineVsLine(ray1.position, ray1.point, ray2.position, ray2.point);
+    const info = detectCollisionLineVsLine(ray1.position, ray1.point, ray2.position, ray2.point);
+    if (info.collide) {
+      ray1._collisions.all.add(ray2);
+      ray2._collisions.all.add(ray1);
+    }
+    return info;
   };
   var detectCollisionRayVsPoly = (ray, b) => {
     const rayPoint = ray.point;
@@ -1720,17 +1767,28 @@
     addJoint(j) {
       this._joints.push(j);
     }
-    addBody(e2, b) {
-      e2._body = b;
+    removeJoint(j) {
+      const idx = this._joints.indexOf(j);
+      if (idx != -1) {
+        this._joints.splice(idx, 1);
+      }
+    }
+    addBody(e, b) {
+      e._body = b;
       const treeController = new QuadtreeController({
         quadtree: this._quadtree
       });
-      e2.addComponent(treeController);
+      e.addComponent(treeController);
       this._bodies.push(b);
     }
-    removeBody(e2, b) {
+    removeBody(e, b) {
       const i = this._bodies.indexOf(b);
       if (i != -1) {
+        for (let j of b._joints) {
+          const other = j._body2;
+          other._joints.splice(other._joints.indexOf(j), 1);
+          this.removeJoint(j);
+        }
         this._bodies.splice(i, 1);
       }
     }
@@ -1762,9 +1820,9 @@
         treeController.updateClient();
       }
     }
-    raycast(params) {
+    raycast(groups, params) {
       let result = [];
-      const groups = params.groups.split(" ");
+      groups = groups.split(" ");
       const ray = new Ray({
         range: params.range
       });
@@ -1927,6 +1985,7 @@
     _interactive = null;
     _body = null;
     _onUpdate = null;
+    _properties = new Map();
     get name() {
       return this._name;
     }
@@ -1948,11 +2007,14 @@
     get groupList() {
       return this._groupList;
     }
-    clip(e2, fixed = false) {
-      this._position.clip(e2._position, fixed);
+    get props() {
+      return this._properties;
     }
-    unclip(e2) {
-      this._position.unclip(e2._position);
+    clip(e, fixed = false) {
+      this._position.clip(e._position, fixed);
+    }
+    unclip(e) {
+      this._position.unclip(e._position);
     }
     moveTo(v, dur, timing = "linear", onEnd = null) {
       this._position.moveTo(v, dur, timing, onEnd);
@@ -1997,20 +2059,22 @@
   var Camera = class extends Entity {
     _scale = new Animator(1);
     _target = null;
-    _followOffset = 4;
+    _t = 4;
     _vel = new Vector();
     _shaker = new Shaker();
     constructor() {
       super();
     }
     get position() {
-      return this._position.position.clone().add(this._shaker.offset);
+      return this._position.position;
     }
     get scale() {
       return this._scale.value;
     }
     set scale(n) {
-      this._scale.value = n;
+      if (n > 0) {
+        this._scale.value = n;
+      }
     }
     get velocity() {
       return this._vel;
@@ -2021,9 +2085,9 @@
     get shaker() {
       return this._shaker;
     }
-    follow(target, offset = 4) {
+    follow(target, t = 4) {
       this._target = target;
-      this._followOffset = offset;
+      this._t = t;
     }
     unfollow() {
       this._target = null;
@@ -2048,8 +2112,8 @@
     _updatePosition(elapsedTimeS) {
       if (this.isMoving()) {
         this._position.update(elapsedTimeS);
-      } else if (this._target !== null) {
-        let t = this._followOffset * elapsedTimeS;
+      } else if (this._target != null) {
+        let t = math.sat(this._t * elapsedTimeS * 60);
         this.position.lerp(this._target.position, t);
       } else {
         const vel = this._vel.clone();
@@ -2066,24 +2130,20 @@
     _entities = [];
     _entitiesMap = new Map();
     _ids = 0;
-    _generateName() {
-      ++this._ids;
-      return "__entity__" + this._ids;
-    }
-    add(e2, n) {
+    add(e, n) {
       if (n === void 0) {
         n = this._generateName();
       }
-      this._entities.push(e2);
-      this._entitiesMap.set(n, e2);
-      e2._parent = this;
-      e2._name = n;
+      this._entities.push(e);
+      this._entitiesMap.set(n, e);
+      e._parent = this;
+      e._name = n;
     }
     get(n) {
       return this._entitiesMap.get(n);
     }
-    remove(e2) {
-      const i = this._entities.indexOf(e2);
+    remove(e) {
+      const i = this._entities.indexOf(e);
       if (i < 0) {
         return;
       }
@@ -2093,8 +2153,31 @@
       return this._entities.filter(cb);
     }
     update(elapsedTimeS) {
-      for (let e2 of this._entities) {
-        e2.update(elapsedTimeS);
+      for (let e of this._entities) {
+        e.update(elapsedTimeS);
+      }
+    }
+    _generateName() {
+      ++this._ids;
+      return "__entity__" + this._ids;
+    }
+  };
+
+  // src/utils/FPSMeter.js
+  var FPSMeter = class {
+    _fps = 60;
+    _frameCounter = 0;
+    _timeCounter = 0;
+    get fps() {
+      return this._fps;
+    }
+    update(elapsedTimeS) {
+      this._timeCounter += elapsedTimeS;
+      ++this._frameCounter;
+      if (this._timeCounter >= 1) {
+        this._timeCounter -= 1;
+        this._fps = this._frameCounter;
+        this._frameCounter = 0;
       }
     }
   };
@@ -2115,7 +2198,10 @@
     _timeout = new TimeoutHandler();
     _camera;
     _interactive = new Interactive();
-    _resources = null;
+    _game = null;
+    debug = false;
+    _fpsMeter = new FPSMeter();
+    _drawCounter = 0;
     constructor(options = {}) {
       this._world = new World(options.physics);
       this._light = new Color(paramParser.parseValue(options.light, "white"));
@@ -2139,7 +2225,10 @@
       return this._world;
     }
     get resources() {
-      return this._resources;
+      return this._game.resources;
+    }
+    get audio() {
+      return this._game.audio;
     }
     get background() {
       return this._background._color;
@@ -2169,20 +2258,20 @@
       return this._entityManager.get(n);
     }
     getEntitiesByGroup(g) {
-      return this._entityManager.filter((e2) => e2.groupList.has(g));
+      return this._entityManager.filter((e) => e.groupList.has(g));
     }
     handleEvent(type, event) {
       let captured = false;
       if (type.startsWith("mouse")) {
         if (type == "mousedown") {
           const entities = this._world.quadtree.findNear([event.x, event.y], [0, 0]).map((c) => c.entity);
-          for (let e2 of entities) {
-            if (!e2.interactive) {
+          for (let e of entities) {
+            if (!e.interactive) {
               continue;
             }
-            if (e2.body.contains(new Vector(event.x, event.y))) {
-              e2.interactive.id = event.id;
-              if (e2.interactive.handleEvent(type, event)) {
+            if (e.body.contains(new Vector(event.x, event.y))) {
+              e.interactive.id = event.id;
+              if (e.interactive.handleEvent(type, event)) {
                 captured = true;
               }
             }
@@ -2206,29 +2295,29 @@
       return captured;
     }
     createEntity(n) {
-      const e2 = new Entity();
-      this.addEntity(e2, n);
-      return e2;
+      const e = new Entity();
+      this.addEntity(e, n);
+      return e;
     }
-    addEntity(e2, n) {
-      e2._scene = this;
-      this._entityManager.add(e2, n);
+    addEntity(e, n) {
+      e._scene = this;
+      this._entityManager.add(e, n);
     }
-    removeEntity(e2) {
-      this._entityManager.remove(e2);
-      e2._components.forEach((c) => {
+    removeEntity(e) {
+      this._entityManager.remove(e);
+      e._components.forEach((c) => {
         switch (c._type) {
           case "drawable":
             this.removeDrawable(c);
             break;
           case "body":
-            this.removeBody(e2, c);
+            this.removeBody(e, c);
             break;
           case "light":
             this.removeLight(c);
             break;
           case "interactive":
-            this._interactiveEntities.splice(this._interactiveEntities.indexOf(e2), 1);
+            this._interactiveEntities.splice(this._interactiveEntities.indexOf(e), 1);
             break;
         }
       });
@@ -2248,11 +2337,11 @@
         this._drawable.splice(i, 1);
       }
     }
-    addBody(e2, b) {
-      this._world.addBody(e2, b);
+    addBody(e, b) {
+      this._world.addBody(e, b);
     }
-    removeBody(e2, b) {
-      this._world.removeBody(e2, b);
+    removeBody(e, b) {
+      this._world.removeBody(e, b);
     }
     addLight(c) {
       this._lights.push(c);
@@ -2277,9 +2366,10 @@
       this._light.fill(ctx);
       ctx.fillRect(0, 0, w, h);
       const cam = this._camera;
+      const camPos = cam.position.clone().add(cam.shaker.offset);
       ctx.globalCompositeOperation = "lighter";
       ctx.save();
-      ctx.translate(-cam.position.x * cam.scale + w / 2, -cam.position.y * cam.scale + h / 2);
+      ctx.translate(-camPos.x * cam.scale + w / 2, -camPos.y * cam.scale + h / 2);
       ctx.scale(cam.scale, cam.scale);
       for (let light of this._lights) {
         light.drawInternal(ctx);
@@ -2289,6 +2379,7 @@
     }
     drawObjects(ctx, w, h) {
       const cam = this._camera;
+      const camPos = cam.position.clone().add(cam.shaker.offset);
       if (!this._buffer) {
         this._buffer = document.createElement("canvas").getContext("2d");
         this._buffer.canvas.width = w;
@@ -2300,29 +2391,63 @@
       this._background.fill(buffer);
       buffer.fillRect(0, 0, w, h);
       buffer.save();
-      buffer.translate(-cam.position.x * cam.scale + w / 2, -cam.position.y * cam.scale + h / 2);
+      buffer.translate(-camPos.x * cam.scale + w / 2, -camPos.y * cam.scale + h / 2);
       buffer.scale(cam.scale, cam.scale);
+      if (this.debug) {
+        this.world.quadtree.draw(buffer);
+        for (let body of this.world._bodies) {
+          body.draw(buffer);
+        }
+      }
+      this._drawCounter = 0;
       for (let elem of this._drawable) {
         const boundingBox = elem.getBoundingBox();
         const pos = new Vector(boundingBox.x, boundingBox.y);
-        pos.sub(cam.position);
+        pos.sub(camPos);
         pos.mult(cam.scale);
         const [width, height] = [boundingBox.width, boundingBox.height].map((_) => _ * cam.scale);
         if (pos.x + width / 2 < -w / 2 || pos.x - width / 2 > w / 2 || pos.y + height / 2 < -h / 2 || pos.y - height / 2 > h / 2) {
           continue;
         }
+        ++this._drawCounter;
         elem.drawInternal(buffer);
       }
       buffer.restore();
+      this._drawDebugInfo(buffer, w, h);
       ctx.drawImage(buffer.canvas, 0, 0);
     }
     update(elapsedTimeS) {
+      this._fpsMeter.update(elapsedTimeS);
       if (this._paused) {
         return;
       }
       this.timeout.update(elapsedTimeS * 1e3);
       this._entityManager.update(elapsedTimeS);
       this._world.update(elapsedTimeS);
+    }
+    _drawDebugInfo(ctx, w, h) {
+      if (!this.debug) {
+        return;
+      }
+      const left = 0, top = 0, minWidth = Math.max(w * 0.4, 200), minHeight = Math.max(w * 0.2, 100), margin = Math.max(w * 0.01, 4), fontSize = Math.max(w * 0.025, 12), padding = Math.max(w * 5e-3, 2), color = "white", background = "rgba(128,128,128,0.5)";
+      let info = [
+        `Paused: ${this._paused}`,
+        `FPS: ${this._fpsMeter.fps}`,
+        `Keys pressed: ${Array.from(this._keys).join(",")}`,
+        `Entities: ${this._entityManager._entities.length}`,
+        `Bodies: ${this._world._bodies.length}`,
+        `${this._drawCounter} objects drawn of total ${this._drawable.length}`,
+        `Camera: x = ${this.camera.position.x.toFixed(2)}, y = ${this.camera.position.y.toFixed(2)}, z = ${this.camera.scale.toFixed(2)}`
+      ];
+      ctx.beginPath();
+      ctx.font = fontSize + "px Arial";
+      ctx.fillStyle = background;
+      ctx.fillRect(left, top, Math.max(Math.max(...info.map((e) => ctx.measureText(e).width)) + margin * 2, minWidth), Math.max(info.length * (fontSize + padding) + margin * 2, minHeight));
+      ctx.textBaseline = "top";
+      ctx.fillStyle = color;
+      for (let i = 0; i < info.length; ++i) {
+        ctx.fillText(info[i], left + margin, top + margin + i * (fontSize + padding));
+      }
     }
   };
 
@@ -2509,7 +2634,7 @@
     }
     createScene(name, zIndex, options) {
       const scene = new Scene(options);
-      scene._resources = this._resources;
+      scene._game = this;
       this._sceneManager.add(scene, name, zIndex);
       return scene;
     }
@@ -2524,40 +2649,40 @@
       const isTouchDevice = "ontouchstart" in document;
       const cnv = this._renderer.canvas;
       if (isTouchDevice) {
-        cnv.addEventListener("touchstart", (e2) => this._handleTouchEvent(e2));
-        cnv.addEventListener("touchmove", (e2) => this._handleTouchEvent(e2));
-        cnv.addEventListener("touchend", (e2) => this._handleTouchEvent(e2));
+        cnv.addEventListener("touchstart", (e) => this._handleTouchEvent(e));
+        cnv.addEventListener("touchmove", (e) => this._handleTouchEvent(e));
+        cnv.addEventListener("touchend", (e) => this._handleTouchEvent(e));
       } else {
-        cnv.addEventListener("mousedown", (e2) => this._handleMouseEvent(e2));
-        cnv.addEventListener("mousemove", (e2) => this._handleMouseEvent(e2));
-        cnv.addEventListener("mouseup", (e2) => this._handleMouseEvent(e2));
+        cnv.addEventListener("mousedown", (e) => this._handleMouseEvent(e));
+        cnv.addEventListener("mousemove", (e) => this._handleMouseEvent(e));
+        cnv.addEventListener("mouseup", (e) => this._handleMouseEvent(e));
       }
-      addEventListener("keydown", (e2) => this._handleKeyEvent(e2));
-      addEventListener("keyup", (e2) => this._handleKeyEvent(e2));
+      addEventListener("keydown", (e) => this._handleKeyEvent(e));
+      addEventListener("keyup", (e) => this._handleKeyEvent(e));
     }
-    _handleKeyEvent(e2) {
-      e2.preventDefault();
-      this._handleSceneEvent(e2.type, {
-        key: e2.key
+    _handleKeyEvent(e) {
+      e.preventDefault();
+      this._handleSceneEvent(e.type, {
+        key: e.key
       });
     }
-    _handleTouchEvent(e2) {
-      e2.preventDefault();
+    _handleTouchEvent(e) {
+      e.preventDefault();
       const touchToMouseType = {
         "touchstart": "mousedown",
         "touchmove": "mousemove",
         "touchend": "mouseup"
       };
-      this._handleSceneEvent(touchToMouseType[e2.type], {
-        x: e2.changedTouches[0].pageX,
-        y: e2.changedTouches[0].pageY
+      this._handleSceneEvent(touchToMouseType[e.type], {
+        x: e.changedTouches[0].pageX,
+        y: e.changedTouches[0].pageY
       });
     }
-    _handleMouseEvent(e2) {
-      e2.preventDefault();
-      this._handleSceneEvent(e2.type, {
-        x: e2.pageX,
-        y: e2.pageY
+    _handleMouseEvent(e) {
+      e.preventDefault();
+      this._handleSceneEvent(e.type, {
+        x: e.pageX,
+        y: e.pageY
       });
     }
     _handleSceneEvent(type, params) {
@@ -2576,6 +2701,7 @@
     _initControls() {
       const controls = paramParser.parseObject(this._config.controls, {
         active: false,
+        theme: "dark",
         layout: {
           DPad: { left: "ArrowLeft", right: "ArrowRight", up: "ArrowUp", down: "ArrowDown" },
           X_Button: "e",
@@ -2591,9 +2717,18 @@
       if (!controls.active || !("ontouchstart" in document)) {
         return;
       }
+      let color, color2;
+      switch (controls.theme) {
+        case "light":
+          color = "black";
+          color2 = "white";
+          break;
+        default:
+          color = "white";
+          color2 = "black";
+      }
       const layout = controls.layout;
       const applyStyle = (elem, bg = true) => {
-        const color = "rgba(150, 150, 150, 0.6)";
         elem.style.pointerEvents = "auto";
         elem.style.position = "absolute";
         elem.style.border = "2px solid " + color;
@@ -2602,8 +2737,9 @@
         elem.style.display = "flex";
         elem.style.alignItems = "center";
         elem.style.justifyContent = "center";
-        if (bg)
-          elem.style.background = "radial-gradient(circle at center, " + color + " 0, rgba(0, 0, 0, 0.6) 60%)";
+        if (bg) {
+          elem.style.background = color2;
+        }
       };
       const createButton = (right, bottom, text) => {
         const button = document.createElement("div");
@@ -2698,10 +2834,10 @@
         up: { v: new Vector(0, -1), n: "up" },
         down: { v: new Vector(0, 1), n: "down" }
       };
-      const getJoystickDirection = (e2) => {
+      const getJoystickDirection = (e) => {
         const boundingRect = joystick.getBoundingClientRect();
-        const x = e2.changedTouches[0].pageX - (boundingRect.x + boundingRect.width / 2);
-        const y = e2.changedTouches[0].pageY - (boundingRect.y + boundingRect.height / 2);
+        const x = e.changedTouches[0].pageX - (boundingRect.x + boundingRect.width / 2);
+        const y = e.changedTouches[0].pageY - (boundingRect.y + boundingRect.height / 2);
         const pos = new Vector(x, y);
         if (pos.mag() < 20)
           return [];
@@ -2732,37 +2868,37 @@
         const elem = controlsMap[attr];
         const key = layout[attr];
         if (attr == "DPad") {
-          elem.addEventListener("touchstart", (e2) => {
-            e2.preventDefault();
-            const dirs = getJoystickDirection(e2);
+          elem.addEventListener("touchstart", (e) => {
+            e.preventDefault();
+            const dirs = getJoystickDirection(e);
             handleJoystick("keydown", dirs, key);
           });
-          elem.addEventListener("touchmove", (e2) => {
-            e2.preventDefault();
+          elem.addEventListener("touchmove", (e) => {
+            e.preventDefault();
             handleJoystick("keyup", ["left", "right", "up", "down"], key);
-            const dirs = getJoystickDirection(e2);
+            const dirs = getJoystickDirection(e);
             handleJoystick("keydown", dirs, key);
           });
-          elem.addEventListener("touchend", (e2) => {
-            e2.preventDefault();
-            const dirs = getJoystickDirection(e2);
+          elem.addEventListener("touchend", (e) => {
+            e.preventDefault();
+            const dirs = getJoystickDirection(e);
             handleJoystick("keyup", ["left", "right", "up", "down"], key);
           });
           continue;
         }
-        elem.addEventListener("touchstart", (e2) => {
-          e2.preventDefault();
+        elem.addEventListener("touchstart", (e) => {
+          e.preventDefault();
           this._handleSceneEvent("keydown", {
             key
           });
         });
-        elem.addEventListener("touchmove", (e2) => {
-          e2.preventDefault();
+        elem.addEventListener("touchmove", (e) => {
+          e.preventDefault();
           this._handleSceneEvent("keydown", {
             key
           });
         });
-        elem.addEventListener("touchend", () => {
+        elem.addEventListener("touchend", (e) => {
           e.preventDefault();
           this._handleSceneEvent("keyup", {
             key
@@ -2776,6 +2912,7 @@
   var index_exports = {};
   __export(index_exports, {
     Color: () => Color,
+    LevelMaker: () => LevelMaker,
     Loader: () => Loader,
     QuadTree: () => QuadTree,
     Tileset: () => Tileset,
@@ -2995,11 +3132,20 @@
       this.draw(ctx);
       ctx.restore();
     }
-    drawImage(ctx, w = this._imageOptions.width, h = this._imageOptions.height, clip = true, framePos = this._imageOptions.framePosition) {
-      if (clip) {
+    drawImage(ctx, params = {}) {
+      if (this._image == null) {
+        return;
+      }
+      let options = paramParser.parseObject(params, {
+        clip: true,
+        framePosition: this._imageOptions.framePosition,
+        width: this._imageOptions.width,
+        height: this._imageOptions.height
+      });
+      if (options.clip) {
         ctx.clip();
       }
-      ctx.drawImage(this._image, framePos.x * this._imageOptions.frameWidth, framePos.y * this._imageOptions.frameHeight, this._imageOptions.frameWidth, this._imageOptions.frameHeight, -w / 2, -h / 2, w, h);
+      ctx.drawImage(this._image, options.framePosition.x * this._imageOptions.frameWidth, options.framePosition.y * this._imageOptions.frameHeight, this._imageOptions.frameWidth, this._imageOptions.frameHeight, -options.width / 2, -options.height / 2, options.width, options.height);
     }
     update(elapsedTimeS) {
       super.update(elapsedTimeS);
@@ -3027,7 +3173,7 @@
       super();
       this._target = params.target;
     }
-    update(elapsedTimeS) {
+    update(_) {
       const body = this.parent.body;
       this._target.angle = body.angle;
       this._target.offset = body.offset;
@@ -3041,7 +3187,11 @@
     }
     draw(ctx) {
       ctx.globalAlpha = this.opacity;
-      this.drawImage(ctx, this._width, this._height, false);
+      this.drawImage(ctx, {
+        clip: false,
+        width: this._width,
+        height: this._height
+      });
     }
     drawShadow(ctx) {
       this._shadowColor.fill(ctx);
@@ -3126,7 +3276,12 @@
     }
     draw(ctx) {
       ctx.globalAlpha = this.opacity;
-      this.drawImage(ctx, this._width, this._height, false, this._framePos);
+      this.drawImage(ctx, {
+        clip: false,
+        width: this._width,
+        height: this._height,
+        framePosition: this._framePos
+      });
     }
     drawShadow(ctx) {
       this._shadowColor.fill(ctx);
@@ -3143,6 +3298,7 @@
       this._tileWidth = params.tileWidth;
       this._tileHeight = params.tileHeight;
       this._columns = params.columns;
+      this._tileCount = params.tileCount;
       this._tileData = [];
     }
     get image() {
@@ -3157,9 +3313,12 @@
     get columns() {
       return this._columns;
     }
+    get tileCount() {
+      return this._tileCount;
+    }
     createTile(scene, id) {
       let data = this._getData(id);
-      let e2 = scene.createEntity();
+      let e = scene.createEntity();
       let sprite;
       if (data && data.animation) {
         sprite = new Sprite({
@@ -3169,7 +3328,7 @@
             frameHeight: this._tileHeight
           }
         });
-        sprite.addAnim("loop", data.animation.frames.map((e3) => this._getPos(e3)));
+        sprite.addAnim("loop", data.animation.frames.map((e2) => this._getPos(e2)));
         sprite.play("loop", data.animation.frameRate, true);
       } else {
         sprite = new Picture({
@@ -3181,11 +3340,13 @@
           }
         });
       }
-      e2.addComponent(sprite, "TileSprite");
-      e2.addComponent(new TileData({
-        properties: data == null ? [] : data.properties
-      }));
-      return e2;
+      e.addComponent(sprite, "TileSprite");
+      let obj = new Map();
+      for (let prop of data == null ? [] : data.properties) {
+        obj.set(prop.name, prop.value);
+      }
+      e.props.set("tile-data", obj);
+      return e;
     }
     addAnim(id, rate, frames) {
       let data = this._getData(id);
@@ -3197,7 +3358,7 @@
         frames
       };
     }
-    addProperty(id, name, value) {
+    addProp(id, name, value) {
       let data = this._getData(id);
       if (!data) {
         data = this._createData(id);
@@ -3216,19 +3377,141 @@
       return data;
     }
     _getData(id) {
-      return this._tileData.find((e2) => e2.id == id);
+      return this._tileData.find((e) => e.id == id);
+    }
+    static loadFromTiledJSON(obj, image) {
+      let tileset = new Tileset({
+        image,
+        tileWidth: obj.tilewidth,
+        tileHeight: obj.tileheight,
+        columns: obj.columns,
+        tileCount: obj.tilecount
+      });
+      if (obj.tiles) {
+        for (let data of obj.tiles) {
+          const id = data.id;
+          if (data.properties) {
+            for (let prop of data.properties) {
+              tileset.addProp(id, prop.name, prop.value);
+            }
+          }
+          if (data.animation) {
+            let frames = [];
+            for (let frame of data.animation) {
+              frames.push(frame.tileid);
+            }
+            tileset.addAnim(id, data.animation[0].duration, frames);
+          }
+        }
+      }
+      return tileset;
     }
   };
-  var TileData = class extends Component {
-    _properties = new Map();
+
+  // src/utils/LevelMaker.js
+  var LevelMaker = class {
+    _tileWidth;
+    _tileHeight;
+    _onTile = null;
+    _onObject = null;
     constructor(params) {
-      super();
-      for (let p of params.properties) {
-        this._properties.set(p.name, p.value);
-      }
+      this._tileWidth = params.tileWidth;
+      this._tileHeight = params.tileHeight;
     }
-    get properties() {
-      return this._properties;
+    get tileWidth() {
+      return this._tileWidth;
+    }
+    set tileWidth(val) {
+      this._tileWidth = val;
+    }
+    get tileHeight() {
+      return this._tileHeight;
+    }
+    set tileHeight(val) {
+      this._tileHeight = val;
+    }
+    onTile(cb) {
+      this._onTile = cb;
+    }
+    onObject(cb) {
+      this._onObject = cb;
+    }
+    createLevel(scene, tilemap, tilesets) {
+      const createTile = (id) => {
+        let idx = -1;
+        let counter = 0;
+        for (let i = 0; i < tilesets.length; ++i) {
+          if (id < counter + tilesets[i].tileCount) {
+            idx = i;
+            break;
+          }
+          counter += tilesets[i].tileCount;
+        }
+        if (idx == -1) {
+          return null;
+        }
+        return tilesets[idx].createTile(scene, id - counter);
+      };
+      const processTiles = (layer, zIndex) => {
+        for (let i = 0; i < layer.data.length; ++i) {
+          const id = layer.data[i] - 1;
+          const x = i % tilemap.width;
+          const y = Math.floor(i / tilemap.width);
+          if (id == -1) {
+            continue;
+          }
+          ;
+          let e = createTile(id);
+          if (e === null) {
+            return;
+          }
+          e.position.set((x + 0.5) * this._tileWidth, (y + 0.5) * this._tileHeight);
+          const tileSprite = e.getComponent("TileSprite");
+          tileSprite.setSize(this._tileWidth, this._tileHeight);
+          tileSprite.zIndex = zIndex;
+          if (this._onTile) {
+            this._onTile(e);
+          }
+        }
+      };
+      const processObjects = (layer, zIndex) => {
+        for (let obj of layer.objects) {
+          let data = {
+            name: obj.name,
+            type: obj.type,
+            x: obj.x / tilemap.tilewidth * this._tileWidth,
+            y: obj.y / tilemap.tileheight * this._tileHeight,
+            width: obj.width === void 0 ? 0 : obj.width / tilemap.tilewidth * this._tileWidth,
+            height: obj.height === void 0 ? 0 : obj.height / tilemap.tileheight * this._tileHeight
+          };
+          let e;
+          if (obj.gid !== void 0) {
+            e = createTile(obj.gid - 1);
+            e.position.set(data.x + data.width / 2, data.y - data.height / 2);
+            const tileSprite = e.getComponent("TileSprite");
+            tileSprite.setSize(data.width, data.height);
+            tileSprite.zIndex = zIndex;
+          } else {
+            e = scene.createEntity();
+            e.position.set(data.x, data.y);
+          }
+          if (this._onObject) {
+            this._onObject(e, data);
+          }
+        }
+      };
+      for (let i = 0; i < tilemap.layers.length; ++i) {
+        const layer = tilemap.layers[i];
+        const zIndex = i;
+        switch (layer.type) {
+          case "tilelayer":
+            processTiles(layer, zIndex);
+            break;
+          case "objectgroup":
+            processObjects(layer, zIndex);
+            break;
+        }
+      }
     }
   };
 
@@ -3266,9 +3549,7 @@
       if (this._strokeWidth != 0) {
         ctx.stroke();
       }
-      if (this._image) {
-        this.drawImage(ctx);
-      }
+      this.drawImage(ctx);
     }
     drawShadow(ctx) {
       ctx.lineWidth = this.strokeWidth;
@@ -3341,9 +3622,7 @@
       if (this._strokeWidth != 0) {
         ctx.stroke();
       }
-      if (this._image) {
-        this.drawImage(ctx);
-      }
+      this.drawImage(ctx);
     }
     drawShadow(ctx) {
       ctx.lineWidth = this.strokeWidth;
@@ -3536,9 +3815,7 @@
       if (this.strokeWidth != 0) {
         ctx.stroke();
       }
-      if (this._image) {
-        this.drawImage(ctx);
-      }
+      this.drawImage(ctx);
     }
     drawShadow(ctx) {
       ctx.lineWidth = this.strokeWidth;

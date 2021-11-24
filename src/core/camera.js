@@ -1,4 +1,5 @@
 import { Animator } from "../utils/Animator.js";
+import { math } from "../utils/Math.js";
 import { Shaker } from "../utils/Shaker.js";
 import { Vector } from "../utils/Vector.js";
 import { Entity } from "./Entity.js";
@@ -7,7 +8,7 @@ export class Camera extends Entity {
     
     _scale = new Animator(1.0);
     _target = null;
-    _followOffset = 4;
+    _t = 4;
     _vel = new Vector();
     _shaker = new Shaker();
     
@@ -16,7 +17,7 @@ export class Camera extends Entity {
     }
 
     get position() {
-        return this._position.position.clone().add(this._shaker.offset);
+        return this._position.position;
     }
 
     get scale() {
@@ -24,7 +25,9 @@ export class Camera extends Entity {
     }
 
     set scale(n) {
-        this._scale.value = n;
+        if(n > 0) {
+            this._scale.value = n;
+        }
     }
 
     get velocity() {
@@ -39,9 +42,9 @@ export class Camera extends Entity {
         return this._shaker;
     }
 
-    follow(target, offset = 4) {
+    follow(target, t = 4) {
         this._target = target;
-        this._followOffset = offset;
+        this._t = t;
     }
 
     unfollow() {
@@ -74,8 +77,8 @@ export class Camera extends Entity {
 
         if (this.isMoving()) {
             this._position.update(elapsedTimeS);
-        } else if (this._target !== null) {
-            let t = this._followOffset * elapsedTimeS;
+        } else if (this._target != null) {
+            let t = math.sat(this._t * elapsedTimeS * 60);
             this.position.lerp(this._target.position, t);
         } else {
             const vel = this._vel.clone();
@@ -85,5 +88,6 @@ export class Camera extends Entity {
 
         this._scale.update(elapsedTimeS);
         this._shaker.update(elapsedTimeS);
+
     }
 }

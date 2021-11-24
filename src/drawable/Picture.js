@@ -7,7 +7,11 @@ export class Picture extends FixedDrawable {
 
     draw(ctx) {
         ctx.globalAlpha = this.opacity;
-        this.drawImage(ctx, this._width, this._height, false);
+        this.drawImage(ctx, {
+            clip: false,
+            width: this._width,
+            height: this._height
+        });
     }
 
     drawShadow(ctx) {

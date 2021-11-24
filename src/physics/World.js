@@ -38,7 +38,6 @@ export class World {
         const cellLimit = paramParser.parseValue(params.cellLimit, 10);
         
         this._quadtree = new QuadTree(bounds, cellLimit);
-        
     }
 
     get quadtree() {
@@ -47,6 +46,13 @@ export class World {
 
     addJoint(j) {
         this._joints.push(j);
+    }
+
+    removeJoint(j) {
+        const idx = this._joints.indexOf(j);
+        if(idx != -1) {
+            this._joints.splice(idx, 1);
+        }
     }
 
     addBody(e, b) {
@@ -61,6 +67,11 @@ export class World {
     removeBody(e, b) {
         const i = this._bodies.indexOf(b);
         if (i != -1) {
+            for(let j of b._joints) {
+                const other = j._body2;
+                other._joints.splice(other._joints.indexOf(j), 1);
+                this.removeJoint(j);
+            }
             this._bodies.splice(i, 1);
         }
     }
@@ -95,10 +106,10 @@ export class World {
         
     }
 
-    raycast(params) {
+    raycast(groups, params) {
         let result = [];
 
-        const groups = params.groups.split(" ");
+        groups = groups.split(" ");
 
         const ray = new Ray({
             range: params.range
@@ -173,4 +184,5 @@ export class QuadtreeController extends Component {
         }
         this._quadtree.updateClient(this._client);
     }
+
 }

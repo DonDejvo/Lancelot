@@ -38,9 +38,7 @@ export class Circle extends FixedDrawable {
         if(this.strokeWidth != 0) {
             ctx.stroke();
         }
-        if(this._image) {
-            this.drawImage(ctx);
-        }
+        this.drawImage(ctx);
     }
 
     drawShadow(ctx) {

@@ -7,6 +7,7 @@ import { Camera } from "./Camera.js";
 import { Entity } from "./Entity.js";
 import { EntityManager } from "./EntityManager.js";
 import { Vector } from "../utils/Vector.js";
+import { FPSMeter } from "../utils/FPSMeter.js";
 
 export class Scene {
 
@@ -24,7 +25,10 @@ export class Scene {
     _timeout = new TimeoutHandler();
     _camera;
     _interactive = new Interactive();
-    _resources = null;
+    _game = null;
+    debug = false;
+    _fpsMeter = new FPSMeter();
+    _drawCounter = 0;
 
     /**
      * 
@@ -63,7 +67,11 @@ export class Scene {
     }
     
     get resources() {
-        return this._resources;
+        return this._game.resources;
+    }
+
+    get audio() {
+        return this._game.audio;
     }
 
     get background() {
@@ -227,10 +235,11 @@ export class Scene {
         ctx.fillRect(0, 0, w, h);
 
         const cam = this._camera;
+        const camPos = cam.position.clone().add(cam.shaker.offset);
 
         ctx.globalCompositeOperation = "lighter";
         ctx.save();
-        ctx.translate(-cam.position.x * cam.scale + w / 2, -cam.position.y * cam.scale + h / 2);
+        ctx.translate(-camPos.x * cam.scale + w / 2, -camPos.y * cam.scale + h / 2);
         ctx.scale(cam.scale, cam.scale);
 
         for(let light of this._lights) {
@@ -243,6 +252,7 @@ export class Scene {
 
     drawObjects(ctx, w, h) {
         const cam = this._camera;
+        const camPos = cam.position.clone().add(cam.shaker.offset);
 
         if(!this._buffer) {
             this._buffer = document.createElement("canvas").getContext("2d");
@@ -257,13 +267,23 @@ export class Scene {
         buffer.fillRect(0, 0, w, h);
 
         buffer.save();
-        buffer.translate(-cam.position.x * cam.scale + w / 2, -cam.position.y * cam.scale + h / 2);
+        buffer.translate(-camPos.x * cam.scale + w / 2, -camPos.y * cam.scale + h / 2);
         buffer.scale(cam.scale, cam.scale);
+
+        if(this.debug) {
+            this.world.quadtree.draw(buffer);
+
+            for(let body of this.world._bodies) {
+                body.draw(buffer);
+            }
+        }
+
+        this._drawCounter = 0;
 
         for(let elem of this._drawable) {
             const boundingBox = elem.getBoundingBox();
             const pos = new Vector(boundingBox.x, boundingBox.y);
-            pos.sub(cam.position);
+            pos.sub(camPos);
             pos.mult(cam.scale);
             const [width, height] = [boundingBox.width, boundingBox.height].map((_) => _ * cam.scale);
             if(
@@ -274,20 +294,59 @@ export class Scene {
             ) {
                 continue;
             }
+            ++this._drawCounter;
             elem.drawInternal(buffer);
         }
 
         buffer.restore();
 
+        this._drawDebugInfo(buffer, w, h);
+
         ctx.drawImage(buffer.canvas, 0, 0);
     }
 
     update(elapsedTimeS) {
+        this._fpsMeter.update(elapsedTimeS);
         if (this._paused) {
             return;
         }
         this.timeout.update(elapsedTimeS * 1000);
         this._entityManager.update(elapsedTimeS);
         this._world.update(elapsedTimeS);
+    }
+
+    _drawDebugInfo(ctx, w, h) {
+        if(!this.debug) {
+            return;
+        }
+        const left = 0,
+        top = 0,
+        minWidth = Math.max(w * 0.4, 200),
+        minHeight = Math.max(w * 0.2, 100),
+        margin = Math.max(w * 0.01, 4),
+        fontSize = Math.max(w * 0.025, 12),
+        padding = Math.max(w * 0.005, 2),
+        color = "white",
+        background = "rgba(128,128,128,0.5)";
+        let info = [
+            `Paused: ${this._paused}`,
+            `FPS: ${this._fpsMeter.fps}`,
+            `Keys pressed: ${Array.from(this._keys).join(",")}`,
+            `Entities: ${this._entityManager._entities.length}`,
+            `Bodies: ${this._world._bodies.length}`,
+            `${this._drawCounter} objects drawn of total ${this._drawable.length}`,
+            `Camera: x = ${this.camera.position.x.toFixed(2)}, y = ${this.camera.position.y.toFixed(2)}, z = ${this.camera.scale.toFixed(2)}`
+        ];
+
+        ctx.beginPath();
+        ctx.font = fontSize + "px Arial";
+        ctx.fillStyle = background;
+        ctx.fillRect(left, top, Math.max(Math.max(...info.map((e) => ctx.measureText(e).width)) + margin * 2, minWidth), Math.max(info.length * (fontSize + padding) + margin * 2, minHeight));
+        ctx.textBaseline = "top";
+        ctx.fillStyle = color;
+        for(let i = 0; i < info.length; ++i) {
+            ctx.fillText(info[i], left + margin, top + margin + i * (fontSize + padding));
+        }
+        
     }
 }

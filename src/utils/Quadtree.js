@@ -96,10 +96,10 @@ export class QuadTree {
         const bounds = this._bounds;
         const w = bounds[1][0] - bounds[0][0];
         const h = bounds[1][1] - bounds[0][1];
-        this._topLeft = new QuadTree([[bounds[0][0], bounds[0][1]], [bounds[0][0] + w / 2, bounds[0][1] + h / 2]], this.limit);
-        this._topRight = new QuadTree([[bounds[0][0] + w / 2, bounds[0][1]], [bounds[0][0] + w, bounds[0][1] + h / 2]], this.limit);
-        this._bottomLeft = new QuadTree([[bounds[0][0], bounds[0][1] + h / 2], [bounds[0][0] + w / 2, bounds[0][1] + h]], this.limit);
-        this._bottomRight = new QuadTree([[bounds[0][0] + w / 2, bounds[0][1] + h / 2], [bounds[0][0] + w, bounds[0][1] + h]], this.limit);
+        this._topLeft = new QuadTree([[bounds[0][0], bounds[0][1]], [bounds[0][0] + w / 2, bounds[0][1] + h / 2]], this._limit);
+        this._topRight = new QuadTree([[bounds[0][0] + w / 2, bounds[0][1]], [bounds[0][0] + w, bounds[0][1] + h / 2]], this._limit);
+        this._bottomLeft = new QuadTree([[bounds[0][0], bounds[0][1] + h / 2], [bounds[0][0] + w / 2, bounds[0][1] + h]], this._limit);
+        this._bottomRight = new QuadTree([[bounds[0][0] + w / 2, bounds[0][1] + h / 2], [bounds[0][0] + w, bounds[0][1] + h]], this._limit);
         
         for(let data of this._data){
             this._topLeft._insert(data);
@@ -107,7 +107,7 @@ export class QuadTree {
             this._bottomLeft._insert(data);
             this._bottomRight._insert(data);
         }
-        this.divided = true;
+        this._divided = true;
     }
 
     _search(aabb, res){

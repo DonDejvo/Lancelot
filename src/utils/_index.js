@@ -6,6 +6,7 @@ import { QuadTree } from "./Quadtree.js";
 import { Loader } from "./Loader.js";
 import { TimeoutHandler } from "./TimeoutHandler.js";
 import { Tileset } from "./Tileset.js";
+import { LevelMaker } from "./LevelMaker.js";
 
 export {
     Vector,
@@ -15,5 +16,6 @@ export {
     QuadTree,
     Loader,
     TimeoutHandler,
-    Tileset
+    Tileset,
+    LevelMaker
 };

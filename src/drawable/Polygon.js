@@ -61,9 +61,7 @@ export class Polygon extends FixedDrawable {
         if(this._strokeWidth != 0) {
             ctx.stroke();
         }
-        if(this._image) {
-            this.drawImage(ctx);
-        }
+        this.drawImage(ctx);
     }
 
     drawShadow(ctx) {
