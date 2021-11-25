@@ -170,27 +170,21 @@ var paramParser = function() {
   };
 }();
 
-// src/utils/TimeoutHandler.js
-var TimeoutHandler = class {
-  _timeouts = [];
-  set(f, dur) {
-    const t = { action: f, dur, counter: 0 };
-    this._timeouts.push(t);
-    return t;
+// src/utils/FPSMeter.js
+var FPSMeter = class {
+  _fps = 60;
+  _frameCounter = 0;
+  _timeCounter = 0;
+  get fps() {
+    return this._fps;
   }
-  clear(t) {
-    let idx = this._timeouts.indexOf(t);
-    if (idx != -1) {
-      this._timeouts.splice(idx, 1);
-    }
-  }
-  update(elapsedTime) {
-    for (let i = 0; i < this._timeouts.length; ++i) {
-      const timeout = this._timeouts[i];
-      if ((timeout.counter += elapsedTime) >= timeout.dur) {
-        timeout.action();
-        this._timeouts.splice(i--, 1);
-      }
+  update(elapsedTimeS) {
+    this._timeCounter += elapsedTimeS;
+    ++this._frameCounter;
+    if (this._timeCounter >= 1) {
+      this._timeCounter -= 1;
+      this._fps = this._frameCounter;
+      this._frameCounter = 0;
     }
   }
 };
@@ -199,6 +193,7 @@ var TimeoutHandler = class {
 var Engine = class {
   _paused = true;
   _step;
+  _fpsMeter = new FPSMeter();
   constructor(step) {
     this._step = step;
   }
@@ -210,7 +205,8 @@ var Engine = class {
       if (!this._paused) {
         this._RAF();
       }
-      const elapsedTime = Math.min(timestamp - this._previousRAF, 1e3 / 30);
+      const elapsedTime = timestamp - this._previousRAF;
+      this._fpsMeter.update(elapsedTime * 1e-3);
       this._step(elapsedTime);
       this._previousRAF = timestamp;
     });
@@ -477,6 +473,31 @@ var ParamVector = class extends Vector {
       this._x = x;
       this._y = y;
       this._onChangeCallback();
+    }
+  }
+};
+
+// src/utils/TimeoutHandler.js
+var TimeoutHandler = class {
+  _timeouts = [];
+  set(f, dur) {
+    const t = { action: f, dur, counter: 0 };
+    this._timeouts.push(t);
+    return t;
+  }
+  clear(t) {
+    let idx = this._timeouts.indexOf(t);
+    if (idx != -1) {
+      this._timeouts.splice(idx, 1);
+    }
+  }
+  update(elapsedTime) {
+    for (let i = 0; i < this._timeouts.length; ++i) {
+      const timeout = this._timeouts[i];
+      if ((timeout.counter += elapsedTime) >= timeout.dur) {
+        timeout.action();
+        this._timeouts.splice(i--, 1);
+      }
     }
   }
 };
@@ -2162,25 +2183,6 @@ var EntityManager = class {
   }
 };
 
-// src/utils/FPSMeter.js
-var FPSMeter = class {
-  _fps = 60;
-  _frameCounter = 0;
-  _timeCounter = 0;
-  get fps() {
-    return this._fps;
-  }
-  update(elapsedTimeS) {
-    this._timeCounter += elapsedTimeS;
-    ++this._frameCounter;
-    if (this._timeCounter >= 1) {
-      this._timeCounter -= 1;
-      this._fps = this._frameCounter;
-      this._frameCounter = 0;
-    }
-  }
-};
-
 // src/core/Scene.js
 var Scene = class {
   _paused = true;
@@ -2199,7 +2201,6 @@ var Scene = class {
   _interactive = new Interactive();
   _game = null;
   debug = false;
-  _fpsMeter = new FPSMeter();
   _drawCounter = 0;
   constructor(options = {}) {
     this._world = new World(options.physics);
@@ -2416,7 +2417,6 @@ var Scene = class {
     ctx.drawImage(buffer.canvas, 0, 0);
   }
   update(elapsedTimeS) {
-    this._fpsMeter.update(elapsedTimeS);
     if (this._paused) {
       return;
     }
@@ -2431,7 +2431,7 @@ var Scene = class {
     const left = 0, top = 0, minWidth = Math.max(w * 0.4, 200), minHeight = Math.max(w * 0.2, 100), margin = Math.max(w * 0.01, 4), fontSize = Math.max(w * 0.025, 12), padding = Math.max(w * 5e-3, 2), color = "white", background = "rgba(128,128,128,0.5)";
     let info = [
       `Paused: ${this._paused}`,
-      `FPS: ${this._fpsMeter.fps}`,
+      `FPS: ${this._game._engine._fpsMeter.fps}`,
       `Keys pressed: ${Array.from(this._keys).join(",")}`,
       `Entities: ${this._entityManager._entities.length}`,
       `Bodies: ${this._world._bodies.length}`,

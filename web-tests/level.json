@@ -21,39 +21,39 @@
          "objects":[
                 {
                  "gid":64,
-                 "height":256,
+                 "height":64,
                  "id":7,
                  "name":"",
                  "rotation":0,
                  "type":"",
                  "visible":true,
-                 "width":256,
-                 "x":1013.66666666667,
-                 "y":3444.66666666667
+                 "width":64,
+                 "x":253.41666666667,
+                 "y":861.16666666667
                 }, 
                 {
                  "gid":64,
-                 "height":256,
+                 "height":64,
                  "id":8,
                  "name":"",
                  "rotation":0,
                  "type":"",
                  "visible":true,
-                 "width":256,
-                 "x":3330.33333333333,
-                 "y":2936.33333333333
+                 "width":64,
+                 "x":832.58333333333,
+                 "y":734.08333333333
                 }, 
                 {
                  "gid":64,
-                 "height":256,
+                 "height":64,
                  "id":10,
                  "name":"",
                  "rotation":0,
                  "type":"",
                  "visible":true,
-                 "width":256,
-                 "x":5622,
-                 "y":2169.66666666667
+                 "width":64,
+                 "x":1405.5,
+                 "y":542.41666666667
                 }],
          "opacity":1,
          "type":"objectgroup",
@@ -126,7 +126,7 @@
  "orientation":"orthogonal",
  "renderorder":"right-down",
  "tiledversion":"2019.07.31",
- "tileheight":256,
+ "tileheight":64,
  "tilesets":[
         {
          "columns":8,
@@ -138,8 +138,8 @@
          "name":"Tiles",
          "spacing":0,
          "tilecount":56,
-         "tileheight":256,
-         "tilewidth":256,
+         "tileheight":64,
+         "tilewidth":64,
          "transparentcolor":"#ff00ff"
         }, 
         {
@@ -152,8 +152,8 @@
          "name":"Background",
          "spacing":0,
          "tilecount":4,
-         "tileheight":256,
-         "tilewidth":256,
+         "tileheight":64,
+         "tilewidth":64,
          "transparentcolor":"#ff00ff"
         }, 
         {
@@ -166,11 +166,11 @@
          "name":"Objects",
          "spacing":0,
          "tilecount":12,
-         "tileheight":256,
-         "tilewidth":256,
+         "tileheight":64,
+         "tilewidth":64,
          "transparentcolor":"#ff00ff"
         }],
- "tilewidth":256,
+ "tilewidth":64,
  "type":"map",
  "version":1.2,
  "width":30

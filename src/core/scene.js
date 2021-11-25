@@ -7,7 +7,6 @@ import { Camera } from "./Camera.js";
 import { Entity } from "./Entity.js";
 import { EntityManager } from "./EntityManager.js";
 import { Vector } from "../utils/Vector.js";
-import { FPSMeter } from "../utils/FPSMeter.js";
 
 export class Scene {
 
@@ -27,7 +26,6 @@ export class Scene {
     _interactive = new Interactive();
     _game = null;
     debug = false;
-    _fpsMeter = new FPSMeter();
     _drawCounter = 0;
 
     /**
@@ -306,7 +304,6 @@ export class Scene {
     }
 
     update(elapsedTimeS) {
-        this._fpsMeter.update(elapsedTimeS);
         if (this._paused) {
             return;
         }
@@ -330,7 +327,7 @@ export class Scene {
         background = "rgba(128,128,128,0.5)";
         let info = [
             `Paused: ${this._paused}`,
-            `FPS: ${this._fpsMeter.fps}`,
+            `FPS: ${this._game._engine._fpsMeter.fps}`,
             `Keys pressed: ${Array.from(this._keys).join(",")}`,
             `Entities: ${this._entityManager._entities.length}`,
             `Bodies: ${this._world._bodies.length}`,

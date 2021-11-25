@@ -19,7 +19,7 @@
     <script type="module">
 import defaultExport from "../src/Lancelot.js";
 
-const WIDTH = 960, HEIGHT = 640;
+const WIDTH = 720, HEIGHT = 480;
 const { Vector, Tileset, LevelMaker } = Lancelot.utils;
 
 let game;
@@ -54,8 +54,8 @@ function init() {
     ];
 
     const levelMaker = new LevelMaker({
-        tileWidth: 128,
-        tileHeight: 128
+        tileWidth: 64,
+        tileHeight: 64
     });
 
     const scene = this.createScene("main", 0, {
