@@ -3475,29 +3475,41 @@
         }
       };
       const processObjects = (layer, zIndex) => {
+        const getPosition = (x, y, angle, cx, cy) => {
+          const center = new Vector(cx, cy);
+          center.rot(angle);
+          return new Vector(x, y).sub(center);
+        };
         for (let obj of layer.objects) {
           let data = {
             name: obj.name,
             type: obj.type,
             x: obj.x / tilemap.tilewidth * this._tileWidth,
             y: obj.y / tilemap.tileheight * this._tileHeight,
+            angle: obj.rotation === void 0 ? 0 : obj.rotation / 180 * Math.PI,
             width: obj.width === void 0 ? 0 : obj.width / tilemap.tilewidth * this._tileWidth,
             height: obj.height === void 0 ? 0 : obj.height / tilemap.tileheight * this._tileHeight
           };
           let e;
           if (obj.gid !== void 0) {
             e = createTile(obj.gid - 1);
-            e.position.set(data.x + data.width / 2, data.y - data.height / 2);
+            e.position = getPosition(data.x, data.y, data.angle, -data.width / 2, data.height / 2);
             const tileSprite = e.getComponent("TileSprite");
             tileSprite.setSize(data.width, data.height);
+            tileSprite.angle = data.angle;
             tileSprite.zIndex = zIndex;
           } else {
             e = scene.createEntity();
-            e.position.set(data.x, data.y);
+            e.position = getPosition(data.x, data.y, data.angle, -data.width / 2, -data.height / 2);
           }
           if (this._onObject) {
             this._onObject(e, data);
           }
+          let props = new Map();
+          for (let prop of obj.properties === void 0 ? [] : obj.properties) {
+            props.set(prop.name, prop.value);
+          }
+          e.props.set("object-data", props);
         }
       };
       for (let i = 0; i < tilemap.layers.length; ++i) {
