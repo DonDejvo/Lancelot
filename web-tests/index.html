@@ -65,8 +65,7 @@ function init() {
             bounds: [[0, 0], [levelMaker.tileWidth * level.width, levelMaker.tileHeight * level.height]]
         }
     });
-    scene.debug = true;
-    // scene.play();
+    scene.play();
 
     levelMaker.createLevel(scene, level, tilesets);
 
@@ -98,32 +97,25 @@ function init() {
 
 
 
-    const scene2 = this.createScene("main", 0, {
-        background: "white"
+    const scene2 = this.createScene("main", 1, {
+        background: "transparent"
     });
     scene2.play();
     
 
     const shape = scene2.createEntity();
-    shape.addComponent(new Lancelot.drawable.Text({
-        text: "Hello World",
-        fontSize: 96,
-        fontStyle: "bold",
-        fillColor: "rgba(255,0,0,0.5)",
+    shape.position.y = HEIGHT * 0.4;
+    shape.addComponent(new Lancelot.drawable.Circle({
+        width: WIDTH,
+        height: HEIGHT * 0.2,
+        radius: 80,
+        fillColor: "rgba(0,0,0,0.5)",
         strokeColor: "darkred",
-        strokeWidth: 4,
-        peaks: 5,
-        edges: 6,
-        outerRadius: 120,
-        innerRadius: 60,
-        radius: 120,
-        points: [[-60, -40], [60, -40], [120, 80, 20, 80]],
-        shadowColor: "grey",
-        shadow: { x: 3, y: 3 }
+        strokeWidth: 4
     }), "Shape");
     shape.onUpdate((dt) => {
         const comp = shape.getComponent("Shape");
-        comp.angle += dt;
+        //comp.angle += dt;
     });
 }
     </script>

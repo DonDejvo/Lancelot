@@ -3867,12 +3867,20 @@
     constructor(params) {
       super(params);
       this._radius = params.radius;
+      this._angleRange = paramParser.parseValue(params.angleRange, 2 * Math.PI);
+      this._centered = paramParser.parseValue(params.centered, false);
     }
     get radius() {
       return this._radius;
     }
     set radius(val) {
       this._radius = val;
+    }
+    get angleRange() {
+      return this._angleRange;
+    }
+    set angleRange(val) {
+      this._angleRange = val;
     }
     getBoundingBox() {
       return {
@@ -3889,7 +3897,11 @@
       this._fillColor.fill(ctx);
       this._strokeColor.stroke(ctx);
       ctx.beginPath();
-      ctx.arc(0, 0, this._radius, 0, 2 * Math.PI);
+      ctx.arc(0, 0, this._radius, -this.angleRange / 2, this.angleRange / 2);
+      if (this._centered) {
+        ctx.lineTo(0, 0);
+      }
+      ctx.closePath();
       ctx.fill();
       if (this.strokeWidth != 0) {
         ctx.stroke();
@@ -3904,13 +3916,21 @@
       if (this.fillColor != "transparent") {
         ctx.globalAlpha = this._fillColor.alpha;
         ctx.beginPath();
-        ctx.arc(0, 0, this._radius, 0, 2 * Math.PI);
+        ctx.arc(0, 0, this._radius, -this.angleRange / 2, this.angleRange / 2);
+        if (this._centered) {
+          ctx.lineTo(0, 0);
+        }
+        ctx.closePath();
         ctx.fill();
       }
       if (this.strokeWidth != 0) {
         ctx.globalAlpha = this._strokeColor.alpha;
         ctx.beginPath();
-        ctx.arc(0, 0, this._radius, 0, 2 * Math.PI);
+        ctx.arc(0, 0, this._radius, -this.angleRange / 2, this.angleRange / 2);
+        if (this._centered) {
+          ctx.lineTo(0, 0);
+        }
+        ctx.closePath();
         ctx.stroke();
       }
     }
