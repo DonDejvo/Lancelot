@@ -9,6 +9,16 @@ export class Color {
         this._color = col;
     }
 
+    get alpha() {
+        if(this._color == "transparent") {
+            return 0;
+        } else if(this._color.startsWith("rgba")) {
+            return parseFloat(this._color.slice(5, this._color.length - 1).split(",")[3]);
+
+        }
+        return 1;
+    }
+
     /**
      * 
      * @param {string} col 

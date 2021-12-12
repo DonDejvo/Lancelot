@@ -13,11 +13,12 @@ export class Picture extends FixedDrawable {
             height: this._height
         });
     }
-
+    
     drawShadow(ctx) {
         this._shadowColor.fill(ctx);
         ctx.beginPath();
         ctx.rect(-this._width / 2, -this._height / 2, this._width, this._height);
         ctx.fill();
     }
+    
 }

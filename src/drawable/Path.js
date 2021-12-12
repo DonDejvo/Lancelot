@@ -1,4 +1,5 @@
 import { Drawable } from "./Drawable.js";
+import { polygon } from "./Primitives.js";
 
 export class Path extends Drawable {
 
@@ -43,22 +44,7 @@ export class Path extends Drawable {
         this._fillColor.fill(ctx);
         this._strokeColor.stroke(ctx);
         ctx.beginPath();
-        for(let i = 0; i <= this._points.length; ++i) {
-            const v = this._points[i % this._points.length];
-            if(i == 0) {
-                const len = v.length;
-                ctx.moveTo(v[len - 2], v[len - 1]);
-            }
-            else {
-                if(v.length == 6) {
-                    ctx.bezierCurveTo(...v);
-                } else if(v.length == 4) {
-                    ctx.quadraticCurveTo(...v);
-                } else {
-                    ctx.lineTo(...v);
-                }
-            }
-        }
+        polygon(ctx, ...this._points);
         ctx.closePath();
         ctx.fill();
         if(this._strokeWidth != 0) {
@@ -68,35 +54,26 @@ export class Path extends Drawable {
             this.drawImage(ctx);
         }
     }
-
+    
     drawShadow(ctx) {
         ctx.lineWidth = this.strokeWidth;
         ctx.lineCap = this.strokeCap;
         this._shadowColor.fill(ctx);
         this._shadowColor.stroke(ctx);
-        ctx.beginPath();
-        for(let i = 0; i <= this._points.length; ++i) {
-            const v = this._points[i % this._points.length];
-            if(i == 0) {
-                const len = v.length;
-                ctx.moveTo(v[len - 2], v[len - 1]);
-            }
-            else {
-                if(v.length == 6) {
-                    ctx.bezierCurveTo(...v);
-                } else if(v.length == 4) {
-                    ctx.quadraticCurveTo(...v);
-                } else {
-                    ctx.lineTo(...v);
-                }
-            }
-        }
-        ctx.closePath();
         if(this.fillColor != "transparent") {
+            ctx.globalAlpha = this._fillColor.alpha;
+            ctx.beginPath();
+            polygon(ctx, ...this._points);
+            ctx.closePath();
             ctx.fill();
         }
         if(this.strokeWidth != 0) {
+            ctx.globalAlpha = this._strokeColor.alpha;
+            ctx.beginPath();
+            polygon(ctx, ...this._points);
+            ctx.closePath();
             ctx.stroke();
         }
     }
+    
 }

@@ -8,10 +8,12 @@ export class Renderer {
     _container;
     _canvas;
     _context;
+    _quality;
 
-    constructor(width, height, parentElement = document.body) {
+    constructor(width, height, quality = 1, parentElement = document.body) {
         this._width = width;
         this._height = height;
+        this._quality = quality;
         this._parentElement = parentElement;
         this._aspect = this._width / this._height;
         this._scale = 1.0;
@@ -19,8 +21,8 @@ export class Renderer {
 
         for(let i = 0; i < 5; ++i) {
             const b = document.createElement("canvas").getContext("2d");
-            b.canvas.width = this._width;
-            b.canvas.height = this._height;
+            b.canvas.width = this._width * this._quality;
+            b.canvas.height = this._height * this._quality;
             b.imageSmoothingEnabled = false;
             this._buffers[i] = b;
         }
@@ -39,11 +41,25 @@ export class Renderer {
     render(scenes) {
 
         const ctx = this._context;
-
+        
         ctx.beginPath();
         ctx.clearRect(0, 0, this._width, this._height);
 
-        this._draw(ctx, scenes, 0, 0);
+        // this._draw(ctx, scenes, 0, 0);
+
+        const w = this._width * this._quality;
+        const h = this._height * this._quality;
+
+        for(let i = scenes.length - 1; i >= 0; --i) {
+            const scene = scenes[i];
+            if(scene.hidden) {
+                continue;
+            }
+            if(!scene.paused) {
+                scene.render(w, h, this._quality);
+            }
+            scene.draw(ctx, w, h);
+        }
 
     }
 
@@ -58,6 +74,7 @@ export class Renderer {
         };
     }
 
+    /*
     _draw(ctx, scenes, sceneIndex, bufferIndex) {
 
         const scene = scenes[sceneIndex];
@@ -69,10 +86,10 @@ export class Renderer {
             return;
         }
 
-        const w = this._width;
-        const h = this._height;
+        const w = this._width * this._quality;
+        const h = this._height * this._quality;
         
-        scene.drawLights(ctx, w, h);
+        scene.drawLights(ctx, w, h, this._quality);
 
         if(!this._buffers[bufferIndex]) {
             const b = document.createElement("canvas").getContext("2d");
@@ -86,11 +103,12 @@ export class Renderer {
             this._draw(b, scenes, sceneIndex + 1, bufferIndex + 1);
             b.globalCompositeOperation = "source-over";
         }
-        scene.drawObjects(b, w, h);
+        scene.drawObjects(b, w, h, this._quality);
 
         ctx.drawImage(b.canvas, 0, 0);
 
     }
+    */
 
     _initContainer() {
         const con = this._container = document.createElement("div");
@@ -108,14 +126,17 @@ export class Renderer {
     _initCanvas() {
         const cnv = this._canvas = document.createElement("canvas");
 
-        cnv.width = this._width;
-        cnv.height = this._height;
+        cnv.width = this._width * this._quality;
+        cnv.height = this._height * this._quality;
         this._context = cnv.getContext("2d");
 
         cnv.style.position = "absolute";
         cnv.style.left = "0";
         cnv.style.top = "0";
+        cnv.style.width = "100%";
+        cnv.style.height = "100%";
         cnv.style.display = "block";
+        cnv.style.imageRendering = "pixelated";
 
         this._container.appendChild(cnv);
     }

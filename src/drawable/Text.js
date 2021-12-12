@@ -109,7 +109,7 @@ export class Text extends FixedDrawable {
             }
         }
     }
-
+    
     drawShadow(ctx) {
         ctx.lineWidth = this.strokeWidth;
         ctx.lineCap = this.strokeCap;
@@ -122,11 +122,14 @@ export class Text extends FixedDrawable {
         ctx.beginPath();
         for(let i = 0; i < this.linesCount; ++i) {
             if(this.fillColor != "transparent") {
+                ctx.globalAlpha = this._fillColor.alpha;
                 ctx.fillText(this._lines[i], offsetX + this._padding, this.lineHeight * i - (this.linesCount - 1) / 2 * this.lineHeight);
             }
             if(this._strokeWidth) {
+                ctx.globalAlpha = this._strokeColor.alpha;
                 ctx.strokeText(this._lines[i], offsetX + this._padding, this.lineHeight * i - (this.linesCount - 1) / 2 * this.lineHeight);
             }
         }
     }
+    
 }

@@ -19,19 +19,20 @@ export class Rect extends FixedDrawable {
         }
         this.drawImage(ctx);
     }
-
+    
     drawShadow(ctx) {
         ctx.lineWidth = this.strokeWidth;
         ctx.lineCap = this.strokeCap;
         this._shadowColor.fill(ctx);
         this._shadowColor.stroke(ctx);
-        ctx.beginPath();
-        ctx.rect(-this._width / 2, -this._height / 2, this._width, this._height);
         if(this.fillColor != "transparent") {
-            ctx.fill();
+            ctx.globalAlpha = this._fillColor.alpha;
+            ctx.fillRect(-this._width / 2, -this._height / 2, this._width, this._height);
         }
         if(this.strokeWidth != 0) {
-            ctx.stroke();
+            ctx.globalAlpha = this._strokeColor.alpha;
+            ctx.strokeRect(-this._width / 2, -this._height / 2, this._width, this._height);
         }
     }
+    
 }

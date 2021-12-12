@@ -38,14 +38,16 @@ export class Line extends FixedDrawable {
         ctx.lineTo(this._length, 0);
         ctx.stroke();
     }
-
+    
     drawShadow(ctx) {
         ctx.lineWidth = this.strokeWidth;
         ctx.lineCap = this.strokeCap;
         this._shadowColor.stroke(ctx);
+        ctx.globalAlpha = this._strokeColor.alpha;
         ctx.beginPath();
         ctx.moveTo(0, 0);
         ctx.lineTo(this._length, 0);
         ctx.stroke();
     }
+    
 }

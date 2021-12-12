@@ -1,5 +1,6 @@
 import { FixedDrawable } from "./Drawable.js";
 import { paramParser } from "../utils/ParamParser.js";
+import { polygon } from "./Primitives.js";
 
 export class Polygon extends FixedDrawable {
 
@@ -40,22 +41,7 @@ export class Polygon extends FixedDrawable {
         this._fillColor.fill(ctx);
         this._strokeColor.stroke(ctx);
         ctx.beginPath();
-        for(let i = 0; i <= this._points.length; ++i) {
-            const v = this._points[i % this._points.length];
-            if(i == 0) {
-                const len = v.length;
-                ctx.moveTo(v[len - 2], v[len - 1]);
-            }
-            else {
-                if(v.length == 6) {
-                    ctx.bezierCurveTo(...v);
-                } else if(v.length == 4) {
-                    ctx.quadraticCurveTo(...v);
-                } else {
-                    ctx.lineTo(...v);
-                }
-            }
-        }
+        polygon(ctx, ...this._points);
         ctx.closePath();
         ctx.fill();
         if(this._strokeWidth != 0) {
@@ -63,48 +49,40 @@ export class Polygon extends FixedDrawable {
         }
         this.drawImage(ctx);
     }
-
+    
     drawShadow(ctx) {
         ctx.lineWidth = this.strokeWidth;
         ctx.lineCap = this.strokeCap;
         this._shadowColor.fill(ctx);
         this._shadowColor.stroke(ctx);
-        ctx.beginPath();
-        for(let i = 0; i <= this._points.length; ++i) {
-            const v = this._points[i % this._points.length];
-            if(i == 0) {
-                const len = v.length;
-                ctx.moveTo(v[len - 2], v[len - 1]);
-            }
-            else {
-                if(v.length == 6) {
-                    ctx.bezierCurveTo(...v);
-                } else if(v.length == 4) {
-                    ctx.quadraticCurveTo(...v);
-                } else {
-                    ctx.lineTo(...v);
-                }
-            }
-        }
-        ctx.closePath();
+        
         if(this.fillColor != "transparent") {
+            ctx.globalAlpha = this._fillColor.alpha;
+            ctx.beginPath();
+            polygon(ctx, ...this._points);
+            ctx.closePath();
             ctx.fill();
         }
         if(this.strokeWidth != 0) {
+            ctx.globalAlpha = this._strokeColor.alpha;
+            ctx.beginPath();
+            polygon(ctx, ...this._points);
+            ctx.closePath();
             ctx.stroke();
         }
     }
+    
 }
 
 export class RegularPolygon extends Polygon {
 
     _radius;
-    _sides;
+    _edges;
 
     constructor(params) {
         super(params);
         this._radius = params.radius;
-        this._sides = params.sides;
+        this._edges = params.edges;
 
         this._initPoints();
     }
@@ -118,19 +96,19 @@ export class RegularPolygon extends Polygon {
         this._initPoints();
     }
 
-    get sides() {
-        return this._sides;
+    get edges() {
+        return this._edges;
     }
 
-    set sides(val) {
-        this._sides = Math.max(val, 3);
+    set edges(val) {
+        this._edges = Math.max(val, 3);
         this._initPoints();
     }
 
     _initPoints() {
         const points = [];
-        for(let i = 0; i < this.sides; ++i) {
-            const angle = Math.PI * 2 / this.sides * i;
+        for(let i = 0; i < this.edges; ++i) {
+            const angle = 2 * Math.PI * (i / this.edges - 0.25);
             points.push([Math.cos(angle) * this.radius, Math.sin(angle) * this.radius]);
         }
         this._points = points;
@@ -140,6 +118,70 @@ export class RegularPolygon extends Polygon {
         return { 
             width: this._radius * 2 * Math.abs(this.scale.x),
             height: this._radius * 2 * Math.abs(this.scale.y),
+            x: this.position.x - this._center.x * Math.abs(this.scale.x),
+            y: this.position.y - this._center.y * Math.abs(this.scale.y)
+        };
+    }
+
+}
+
+export class Star extends Polygon {
+
+    _innerRadius;
+    _outerRadius;
+    _peaks;
+
+    constructor(params) {
+        super(params);
+        this._innerRadius = params.innerRadius;
+        this._outerRadius = params.outerRadius;
+        this._peaks = params.peaks;
+
+        this._initPoints();
+    }
+
+    get innerRadius() {
+        return this._innerRadius;
+    }
+
+    set innerRadius(val) {
+        this._innerRadius = Math.max(val, 0);
+        this._initPoints();
+    }
+
+    get outerRadius() {
+        return this._innerRadius;
+    }
+
+    set outerRadius(val) {
+        this._outerRadius = Math.max(val, 0);
+        this._initPoints();
+    }
+
+    get peaks() {
+        return this._peaks;
+    }
+
+    set peaks(val) {
+        this._peaks = Math.max(val, 3);
+        this._initPoints();
+    }
+
+    _initPoints() {
+        const count = this._peaks * 2;
+        const points = [];
+        for(let i = 0; i < count; ++i) {
+            const angle = 2 * Math.PI * (i / count - 0.25);
+            const d = i % 2 ? this._innerRadius : this._outerRadius;
+            points.push([Math.cos(angle) * d, Math.sin(angle) * d]);
+        }
+        this._points = points;
+    }
+    
+    getBoundingBox() {
+        return { 
+            width: this._outerRadius * 2 * Math.abs(this.scale.x),
+            height: this._outerRadius * 2 * Math.abs(this.scale.y),
             x: this.position.x - this._center.x * Math.abs(this.scale.x),
             y: this.position.y - this._center.y * Math.abs(this.scale.y)
         };

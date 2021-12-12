@@ -13,13 +13,13 @@ export class Scene {
     _paused = true;
     _hidden = true;
     _world;
-    _lights = [];
+    //_lights = [];
     _drawable = [];
     _interactiveEntities = [];
     _keys = new Set();
     _entityManager = new EntityManager();
     _buffer = null;
-    _light;
+    //_light;
     _background;
     _timeout = new TimeoutHandler();
     _camera;
@@ -38,7 +38,7 @@ export class Scene {
 
     constructor(options = {}) {
         this._world = new World(options.physics);
-        this._light = new Color(paramParser.parseValue(options.light, "white"));
+        //this._light = new Color(paramParser.parseValue(options.light, "white"));
         this._background = new Color(paramParser.parseValue(options.background, options.background));
         this._camera = new Camera();
         this.addEntity(this._camera, "Camera");
@@ -79,7 +79,7 @@ export class Scene {
     set background(col) {
         this._background.set(col);
     }
-
+    /*
     get light() {
         return this._light._color;
     }
@@ -87,7 +87,7 @@ export class Scene {
     set light(col) {
         this._light.set(col);
     }
-
+    */
     get interactive() {
         return this._interactive;
     }
@@ -202,7 +202,7 @@ export class Scene {
     removeBody(e, b) {
         this._world.removeBody(e, b);
     }
-
+    /*
     addLight(c) {
         this._lights.push(c);
     }
@@ -210,7 +210,7 @@ export class Scene {
     removeLight(c) {
         this._lights.splice(this._lights.indexOf(c), 1);
     }
-
+    */
     hide() {
         this._paused = true;
         this._hidden = true;
@@ -225,7 +225,8 @@ export class Scene {
         this._hidden = false;
     }
 
-    drawLights(ctx, w, h) {
+    /*
+    drawLights(ctx, w, h, q) {
 
         ctx.globalCompositeOperation = "source-over";
         ctx.beginPath();
@@ -234,11 +235,12 @@ export class Scene {
 
         const cam = this._camera;
         const camPos = cam.position.clone().add(cam.shaker.offset);
+        const camScale = cam.scale * q / 1;
 
         ctx.globalCompositeOperation = "lighter";
         ctx.save();
-        ctx.translate(-camPos.x * cam.scale + w / 2, -camPos.y * cam.scale + h / 2);
-        ctx.scale(cam.scale, cam.scale);
+        ctx.translate(-camPos.x * camScale + w / 2, -camPos.y * camScale + h / 2);
+        ctx.scale(camScale, camScale);
 
         for(let light of this._lights) {
             light.drawInternal(ctx);
@@ -248,9 +250,11 @@ export class Scene {
         ctx.globalCompositeOperation = "multiply";
     }
 
-    drawObjects(ctx, w, h) {
+    drawObjects(ctx, w, h, q) {
+
         const cam = this._camera;
         const camPos = cam.position.clone().add(cam.shaker.offset);
+        const camScale = cam.scale * q / 1;
 
         if(!this._buffer) {
             this._buffer = document.createElement("canvas").getContext("2d");
@@ -265,8 +269,8 @@ export class Scene {
         buffer.fillRect(0, 0, w, h);
 
         buffer.save();
-        buffer.translate(-camPos.x * cam.scale + w / 2, -camPos.y * cam.scale + h / 2);
-        buffer.scale(cam.scale, cam.scale);
+        buffer.translate(-camPos.x * camScale + w / 2, -camPos.y * camScale + h / 2);
+        buffer.scale(camScale, camScale);
 
         if(this.debug) {
             this.world.quadtree.draw(buffer);
@@ -285,10 +289,10 @@ export class Scene {
             pos.mult(cam.scale);
             const [width, height] = [boundingBox.width, boundingBox.height].map((_) => _ * cam.scale);
             if(
-                pos.x + width / 2 < -w / 2 ||
-                pos.x - width / 2 > w / 2 ||
-                pos.y + height / 2 < -h / 2 ||
-                pos.y - height / 2 > h / 2
+                pos.x + width / 2 < -w / 2 / q ||
+                pos.x - width / 2 > w / 2 / q ||
+                pos.y + height / 2 < -h / 2 / q ||
+                pos.y - height / 2 > h / 2 / q
             ) {
                 continue;
             }
@@ -298,10 +302,11 @@ export class Scene {
 
         buffer.restore();
 
-        this._drawDebugInfo(buffer, w, h);
+        this._drawDebugInfo(buffer, w * q, h * q);
 
         ctx.drawImage(buffer.canvas, 0, 0);
     }
+    */
 
     update(elapsedTimeS) {
         if (this._paused) {
@@ -310,6 +315,64 @@ export class Scene {
         this.timeout.update(elapsedTimeS * 1000);
         this._entityManager.update(elapsedTimeS);
         this._world.update(elapsedTimeS);
+    }
+
+    render(w, h, q) {
+        const cam = this._camera;
+        const camPos = cam.position.clone().add(cam.shaker.offset);
+        const camScale = cam.scale * q / 1;
+
+        if(!this._buffer) {
+            this._buffer = document.createElement("canvas").getContext("2d");
+            this._buffer.canvas.width = w;
+            this._buffer.canvas.height = h;
+            this._buffer.imageSmoothingEnabled = false;
+        }
+        const buffer = this._buffer;
+
+        buffer.beginPath();
+        buffer.clearRect(0, 0, w, h);
+        this._background.fill(buffer);
+        buffer.fillRect(0, 0, w, h);
+
+        buffer.save();
+        buffer.translate(Math.floor(-camPos.x * camScale + w / 2 + 0.5), Math.floor(-camPos.y * camScale + h / 2 + 0.5));
+        buffer.scale(camScale, camScale);
+
+        this._drawCounter = 0;
+
+        for(let elem of this._drawable) {
+            const boundingBox = elem.getBoundingBox();
+            const pos = new Vector(boundingBox.x, boundingBox.y);
+            pos.sub(camPos);
+            pos.mult(cam.scale);
+            const [width, height] = [boundingBox.width, boundingBox.height].map((_) => _ * cam.scale);
+            if(
+                pos.x + width / 2 < -w / 2 / q ||
+                pos.x - width / 2 > w / 2 / q ||
+                pos.y + height / 2 < -h / 2 / q ||
+                pos.y - height / 2 > h / 2 / q
+            ) {
+                continue;
+            }
+            ++this._drawCounter;
+            elem.drawInternal(buffer);
+        }
+
+        if(this.debug) {
+            this.world.quadtree.draw(buffer);
+
+            for(let body of this.world._bodies) {
+                body.draw(buffer);
+            }
+        }
+
+        buffer.restore();
+        this._drawDebugInfo(buffer, w, h);
+    }
+
+    draw(ctx, w, h) {
+        ctx.drawImage(this._buffer.canvas, 0, 0);
     }
 
     _drawDebugInfo(ctx, w, h) {

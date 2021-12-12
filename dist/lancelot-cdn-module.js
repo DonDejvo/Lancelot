@@ -232,17 +232,19 @@ var Renderer = class {
   _container;
   _canvas;
   _context;
-  constructor(width, height, parentElement = document.body) {
+  _quality;
+  constructor(width, height, quality = 1, parentElement = document.body) {
     this._width = width;
     this._height = height;
+    this._quality = quality;
     this._parentElement = parentElement;
     this._aspect = this._width / this._height;
     this._scale = 1;
     this._buffers = [];
     for (let i = 0; i < 5; ++i) {
       const b = document.createElement("canvas").getContext("2d");
-      b.canvas.width = this._width;
-      b.canvas.height = this._height;
+      b.canvas.width = this._width * this._quality;
+      b.canvas.height = this._height * this._quality;
       b.imageSmoothingEnabled = false;
       this._buffers[i] = b;
     }
@@ -258,7 +260,18 @@ var Renderer = class {
     const ctx = this._context;
     ctx.beginPath();
     ctx.clearRect(0, 0, this._width, this._height);
-    this._draw(ctx, scenes, 0, 0);
+    const w = this._width * this._quality;
+    const h = this._height * this._quality;
+    for (let i = scenes.length - 1; i >= 0; --i) {
+      const scene = scenes[i];
+      if (scene.hidden) {
+        continue;
+      }
+      if (!scene.paused) {
+        scene.render(w, h, this._quality);
+      }
+      scene.draw(ctx, w, h);
+    }
   }
   displayToSceneCoords(scene, x, y) {
     const boundingRect = this._canvas.getBoundingClientRect();
@@ -269,32 +282,6 @@ var Renderer = class {
       x: (scaledX - this._width / 2) / cam.scale + cam.position.x,
       y: (scaledY - this._height / 2) / cam.scale + cam.position.y
     };
-  }
-  _draw(ctx, scenes, sceneIndex, bufferIndex) {
-    const scene = scenes[sceneIndex];
-    if (!scene) {
-      return;
-    }
-    if (scene.hidden) {
-      this._draw(ctx, scenes, sceneIndex + 1, bufferIndex);
-      return;
-    }
-    const w = this._width;
-    const h = this._height;
-    scene.drawLights(ctx, w, h);
-    if (!this._buffers[bufferIndex]) {
-      const b2 = document.createElement("canvas").getContext("2d");
-      b2.canvas.width = w;
-      b2.canvas.height = h;
-      this._buffers[bufferIndex] = b2;
-    }
-    const b = this._buffers[bufferIndex];
-    if (sceneIndex < scenes.length - 1) {
-      this._draw(b, scenes, sceneIndex + 1, bufferIndex + 1);
-      b.globalCompositeOperation = "source-over";
-    }
-    scene.drawObjects(b, w, h);
-    ctx.drawImage(b.canvas, 0, 0);
   }
   _initContainer() {
     const con = this._container = document.createElement("div");
@@ -308,13 +295,16 @@ var Renderer = class {
   }
   _initCanvas() {
     const cnv = this._canvas = document.createElement("canvas");
-    cnv.width = this._width;
-    cnv.height = this._height;
+    cnv.width = this._width * this._quality;
+    cnv.height = this._height * this._quality;
     this._context = cnv.getContext("2d");
     cnv.style.position = "absolute";
     cnv.style.left = "0";
     cnv.style.top = "0";
+    cnv.style.width = "100%";
+    cnv.style.height = "100%";
     cnv.style.display = "block";
+    cnv.style.imageRendering = "pixelated";
     this._container.appendChild(cnv);
   }
   _onResize() {
@@ -1912,6 +1902,14 @@ var Color = class {
   constructor(col = "black") {
     this._color = col;
   }
+  get alpha() {
+    if (this._color == "transparent") {
+      return 0;
+    } else if (this._color.startsWith("rgba")) {
+      return parseFloat(this._color.slice(5, this._color.length - 1).split(",")[3]);
+    }
+    return 1;
+  }
   set(col) {
     this._color = col;
     this._parsed = null;
@@ -2188,13 +2186,11 @@ var Scene = class {
   _paused = true;
   _hidden = true;
   _world;
-  _lights = [];
   _drawable = [];
   _interactiveEntities = [];
   _keys = new Set();
   _entityManager = new EntityManager();
   _buffer = null;
-  _light;
   _background;
   _timeout = new TimeoutHandler();
   _camera;
@@ -2204,7 +2200,6 @@ var Scene = class {
   _drawCounter = 0;
   constructor(options = {}) {
     this._world = new World(options.physics);
-    this._light = new Color(paramParser.parseValue(options.light, "white"));
     this._background = new Color(paramParser.parseValue(options.background, options.background));
     this._camera = new Camera();
     this.addEntity(this._camera, "Camera");
@@ -2235,12 +2230,6 @@ var Scene = class {
   }
   set background(col) {
     this._background.set(col);
-  }
-  get light() {
-    return this._light._color;
-  }
-  set light(col) {
-    this._light.set(col);
   }
   get interactive() {
     return this._interactive;
@@ -2343,12 +2332,6 @@ var Scene = class {
   removeBody(e, b) {
     this._world.removeBody(e, b);
   }
-  addLight(c) {
-    this._lights.push(c);
-  }
-  removeLight(c) {
-    this._lights.splice(this._lights.indexOf(c), 1);
-  }
   hide() {
     this._paused = true;
     this._hidden = true;
@@ -2360,26 +2343,18 @@ var Scene = class {
     this._paused = false;
     this._hidden = false;
   }
-  drawLights(ctx, w, h) {
-    ctx.globalCompositeOperation = "source-over";
-    ctx.beginPath();
-    this._light.fill(ctx);
-    ctx.fillRect(0, 0, w, h);
-    const cam = this._camera;
-    const camPos = cam.position.clone().add(cam.shaker.offset);
-    ctx.globalCompositeOperation = "lighter";
-    ctx.save();
-    ctx.translate(-camPos.x * cam.scale + w / 2, -camPos.y * cam.scale + h / 2);
-    ctx.scale(cam.scale, cam.scale);
-    for (let light of this._lights) {
-      light.drawInternal(ctx);
+  update(elapsedTimeS) {
+    if (this._paused) {
+      return;
     }
-    ctx.restore();
-    ctx.globalCompositeOperation = "multiply";
+    this.timeout.update(elapsedTimeS * 1e3);
+    this._entityManager.update(elapsedTimeS);
+    this._world.update(elapsedTimeS);
   }
-  drawObjects(ctx, w, h) {
+  render(w, h, q) {
     const cam = this._camera;
     const camPos = cam.position.clone().add(cam.shaker.offset);
+    const camScale = cam.scale * q / 1;
     if (!this._buffer) {
       this._buffer = document.createElement("canvas").getContext("2d");
       this._buffer.canvas.width = w;
@@ -2388,17 +2363,12 @@ var Scene = class {
     }
     const buffer = this._buffer;
     buffer.beginPath();
+    buffer.clearRect(0, 0, w, h);
     this._background.fill(buffer);
     buffer.fillRect(0, 0, w, h);
     buffer.save();
-    buffer.translate(-camPos.x * cam.scale + w / 2, -camPos.y * cam.scale + h / 2);
-    buffer.scale(cam.scale, cam.scale);
-    if (this.debug) {
-      this.world.quadtree.draw(buffer);
-      for (let body of this.world._bodies) {
-        body.draw(buffer);
-      }
-    }
+    buffer.translate(Math.floor(-camPos.x * camScale + w / 2 + 0.5), Math.floor(-camPos.y * camScale + h / 2 + 0.5));
+    buffer.scale(camScale, camScale);
     this._drawCounter = 0;
     for (let elem of this._drawable) {
       const boundingBox = elem.getBoundingBox();
@@ -2406,23 +2376,23 @@ var Scene = class {
       pos.sub(camPos);
       pos.mult(cam.scale);
       const [width, height] = [boundingBox.width, boundingBox.height].map((_) => _ * cam.scale);
-      if (pos.x + width / 2 < -w / 2 || pos.x - width / 2 > w / 2 || pos.y + height / 2 < -h / 2 || pos.y - height / 2 > h / 2) {
+      if (pos.x + width / 2 < -w / 2 / q || pos.x - width / 2 > w / 2 / q || pos.y + height / 2 < -h / 2 / q || pos.y - height / 2 > h / 2 / q) {
         continue;
       }
       ++this._drawCounter;
       elem.drawInternal(buffer);
     }
+    if (this.debug) {
+      this.world.quadtree.draw(buffer);
+      for (let body of this.world._bodies) {
+        body.draw(buffer);
+      }
+    }
     buffer.restore();
     this._drawDebugInfo(buffer, w, h);
-    ctx.drawImage(buffer.canvas, 0, 0);
   }
-  update(elapsedTimeS) {
-    if (this._paused) {
-      return;
-    }
-    this.timeout.update(elapsedTimeS * 1e3);
-    this._entityManager.update(elapsedTimeS);
-    this._world.update(elapsedTimeS);
+  draw(ctx, w, h) {
+    ctx.drawImage(this._buffer.canvas, 0, 0);
   }
   _drawDebugInfo(ctx, w, h) {
     if (!this.debug) {
@@ -2581,10 +2551,12 @@ var Game = class {
   _engine;
   _timeout = new TimeoutHandler();
   _audio = null;
+  _quality;
   constructor(config) {
     this._config = config;
     this._width = config.width;
     this._height = config.height;
+    this._quality = paramParser.parseValue(config.quality, 1);
     this._init = config.init.bind(this);
     let preload;
     if ((preload = paramParser.parseValue(config.preload, null)) !== null) {
@@ -2595,7 +2567,7 @@ var Game = class {
     elem.style.WebkitUserSelect = "none";
     elem.style.userSelect = "none";
     elem.style.touchAction = "none";
-    this._renderer = new Renderer(this._width, this._height, this._parentElement);
+    this._renderer = new Renderer(this._width, this._height, this._quality, this._parentElement);
     const step = (elapsedTime) => {
       this._timeout.update(elapsedTime);
       const scenes = this._sceneManager.scenes;
@@ -3538,9 +3510,17 @@ __export(index_exports2, {
   Polygon: () => Polygon2,
   Rect: () => Rect,
   RegularPolygon: () => RegularPolygon2,
+  Ring: () => Ring,
   RoundedRect: () => RoundedRect,
   Sprite: () => Sprite,
-  Text: () => Text
+  Star: () => Star,
+  Text: () => Text,
+  fillRing: () => fillRing,
+  polygon: () => polygon,
+  regularPolygon: () => regularPolygon,
+  roundedRect: () => roundedRect,
+  star: () => star,
+  strokeRing: () => strokeRing
 });
 
 // src/drawable/Rect.js
@@ -3567,15 +3547,73 @@ var Rect = class extends FixedDrawable {
     ctx.lineCap = this.strokeCap;
     this._shadowColor.fill(ctx);
     this._shadowColor.stroke(ctx);
-    ctx.beginPath();
-    ctx.rect(-this._width / 2, -this._height / 2, this._width, this._height);
     if (this.fillColor != "transparent") {
-      ctx.fill();
+      ctx.globalAlpha = this._fillColor.alpha;
+      ctx.fillRect(-this._width / 2, -this._height / 2, this._width, this._height);
     }
     if (this.strokeWidth != 0) {
-      ctx.stroke();
+      ctx.globalAlpha = this._strokeColor.alpha;
+      ctx.strokeRect(-this._width / 2, -this._height / 2, this._width, this._height);
     }
   }
+};
+
+// src/drawable/Primitives.js
+var fillRing = function(ctx, x, y, r1, r2) {
+  const strokeStyle = ctx.strokeStyle, lineWidth = ctx.lineWidth;
+  ctx.beginPath();
+  ctx.strokeStyle = ctx.fillStyle;
+  ctx.lineWidth = r2 - r1;
+  ctx.arc(x, y, r1 + (r2 - r1) / 2, 0, 2 * Math.PI);
+  ctx.stroke();
+  ctx.strokeStyle = strokeStyle;
+  ctx.lineWidth = lineWidth;
+};
+var strokeRing = function(ctx, x, y, r1, r2) {
+  ctx.beginPath();
+  ctx.arc(x, y, r1, 0, 2 * Math.PI);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(x, y, r2, 0, 2 * Math.PI);
+  ctx.stroke();
+};
+var polygon = function(ctx, ...points) {
+  for (let i = 0; i <= points.length; ++i) {
+    const v = points[i % points.length];
+    if (i == 0) {
+      const len = v.length;
+      ctx.moveTo(v[len - 2], v[len - 1]);
+    } else {
+      if (v.length == 6) {
+        ctx.bezierCurveTo(...v);
+      } else if (v.length == 4) {
+        ctx.quadraticCurveTo(...v);
+      } else {
+        ctx.lineTo(...v);
+      }
+    }
+  }
+};
+var roundedRect = function(ctx, x, y, w, h, r) {
+  polygon(ctx, [x, y + r], [x, y, x + r, y], [w + x - r, y], [w + x, y, w + x, y + r], [w + x, h + y - r], [w + x, h + y, w + x - r, h + y], [x + r, h + y], [x, h + y, x, h + y - r]);
+};
+var regularPolygon = function(ctx, x, y, r, c) {
+  const points = [];
+  for (let i = 0; i < c; ++i) {
+    const angle = 2 * Math.PI * (i / c - 0.25);
+    points.push([x + Math.cos(angle) * r, y + Math.sin(angle) * r]);
+  }
+  polygon(ctx, ...points);
+};
+var star = function(ctx, x, y, r1, r2, c) {
+  const count = c * 2;
+  const points = [];
+  for (let i = 0; i < count; ++i) {
+    const angle = 2 * Math.PI * (i / count - 0.25);
+    const d = i % 2 ? r1 : r2;
+    points.push([x + Math.cos(angle) * d, y + Math.sin(angle) * d]);
+  }
+  polygon(ctx, ...points);
 };
 
 // src/drawable/Polygon.js
@@ -3613,21 +3651,7 @@ var Polygon2 = class extends FixedDrawable {
     this._fillColor.fill(ctx);
     this._strokeColor.stroke(ctx);
     ctx.beginPath();
-    for (let i = 0; i <= this._points.length; ++i) {
-      const v = this._points[i % this._points.length];
-      if (i == 0) {
-        const len = v.length;
-        ctx.moveTo(v[len - 2], v[len - 1]);
-      } else {
-        if (v.length == 6) {
-          ctx.bezierCurveTo(...v);
-        } else if (v.length == 4) {
-          ctx.quadraticCurveTo(...v);
-        } else {
-          ctx.lineTo(...v);
-        }
-      }
-    }
+    polygon(ctx, ...this._points);
     ctx.closePath();
     ctx.fill();
     if (this._strokeWidth != 0) {
@@ -3640,38 +3664,29 @@ var Polygon2 = class extends FixedDrawable {
     ctx.lineCap = this.strokeCap;
     this._shadowColor.fill(ctx);
     this._shadowColor.stroke(ctx);
-    ctx.beginPath();
-    for (let i = 0; i <= this._points.length; ++i) {
-      const v = this._points[i % this._points.length];
-      if (i == 0) {
-        const len = v.length;
-        ctx.moveTo(v[len - 2], v[len - 1]);
-      } else {
-        if (v.length == 6) {
-          ctx.bezierCurveTo(...v);
-        } else if (v.length == 4) {
-          ctx.quadraticCurveTo(...v);
-        } else {
-          ctx.lineTo(...v);
-        }
-      }
-    }
-    ctx.closePath();
     if (this.fillColor != "transparent") {
+      ctx.globalAlpha = this._fillColor.alpha;
+      ctx.beginPath();
+      polygon(ctx, ...this._points);
+      ctx.closePath();
       ctx.fill();
     }
     if (this.strokeWidth != 0) {
+      ctx.globalAlpha = this._strokeColor.alpha;
+      ctx.beginPath();
+      polygon(ctx, ...this._points);
+      ctx.closePath();
       ctx.stroke();
     }
   }
 };
 var RegularPolygon2 = class extends Polygon2 {
   _radius;
-  _sides;
+  _edges;
   constructor(params) {
     super(params);
     this._radius = params.radius;
-    this._sides = params.sides;
+    this._edges = params.edges;
     this._initPoints();
   }
   get radius() {
@@ -3681,17 +3696,17 @@ var RegularPolygon2 = class extends Polygon2 {
     this._radius = Math.max(val, 0);
     this._initPoints();
   }
-  get sides() {
-    return this._sides;
+  get edges() {
+    return this._edges;
   }
-  set sides(val) {
-    this._sides = Math.max(val, 3);
+  set edges(val) {
+    this._edges = Math.max(val, 3);
     this._initPoints();
   }
   _initPoints() {
     const points = [];
-    for (let i = 0; i < this.sides; ++i) {
-      const angle = Math.PI * 2 / this.sides * i;
+    for (let i = 0; i < this.edges; ++i) {
+      const angle = 2 * Math.PI * (i / this.edges - 0.25);
       points.push([Math.cos(angle) * this.radius, Math.sin(angle) * this.radius]);
     }
     this._points = points;
@@ -3700,6 +3715,57 @@ var RegularPolygon2 = class extends Polygon2 {
     return {
       width: this._radius * 2 * Math.abs(this.scale.x),
       height: this._radius * 2 * Math.abs(this.scale.y),
+      x: this.position.x - this._center.x * Math.abs(this.scale.x),
+      y: this.position.y - this._center.y * Math.abs(this.scale.y)
+    };
+  }
+};
+var Star = class extends Polygon2 {
+  _innerRadius;
+  _outerRadius;
+  _peaks;
+  constructor(params) {
+    super(params);
+    this._innerRadius = params.innerRadius;
+    this._outerRadius = params.outerRadius;
+    this._peaks = params.peaks;
+    this._initPoints();
+  }
+  get innerRadius() {
+    return this._innerRadius;
+  }
+  set innerRadius(val) {
+    this._innerRadius = Math.max(val, 0);
+    this._initPoints();
+  }
+  get outerRadius() {
+    return this._innerRadius;
+  }
+  set outerRadius(val) {
+    this._outerRadius = Math.max(val, 0);
+    this._initPoints();
+  }
+  get peaks() {
+    return this._peaks;
+  }
+  set peaks(val) {
+    this._peaks = Math.max(val, 3);
+    this._initPoints();
+  }
+  _initPoints() {
+    const count = this._peaks * 2;
+    const points = [];
+    for (let i = 0; i < count; ++i) {
+      const angle = 2 * Math.PI * (i / count - 0.25);
+      const d = i % 2 ? this._innerRadius : this._outerRadius;
+      points.push([Math.cos(angle) * d, Math.sin(angle) * d]);
+    }
+    this._points = points;
+  }
+  getBoundingBox() {
+    return {
+      width: this._outerRadius * 2 * Math.abs(this.scale.x),
+      height: this._outerRadius * 2 * Math.abs(this.scale.y),
       x: this.position.x - this._center.x * Math.abs(this.scale.x),
       y: this.position.y - this._center.y * Math.abs(this.scale.y)
     };
@@ -3786,6 +3852,7 @@ var Line = class extends FixedDrawable {
     ctx.lineWidth = this.strokeWidth;
     ctx.lineCap = this.strokeCap;
     this._shadowColor.stroke(ctx);
+    ctx.globalAlpha = this._strokeColor.alpha;
     ctx.beginPath();
     ctx.moveTo(0, 0);
     ctx.lineTo(this._length, 0);
@@ -3833,12 +3900,16 @@ var Circle = class extends FixedDrawable {
     ctx.lineCap = this.strokeCap;
     this._shadowColor.fill(ctx);
     this._shadowColor.stroke(ctx);
-    ctx.beginPath();
-    ctx.arc(0, 0, this._radius, 0, 2 * Math.PI);
     if (this.fillColor != "transparent") {
+      ctx.globalAlpha = this._fillColor.alpha;
+      ctx.beginPath();
+      ctx.arc(0, 0, this._radius, 0, 2 * Math.PI);
       ctx.fill();
     }
     if (this.strokeWidth != 0) {
+      ctx.globalAlpha = this._strokeColor.alpha;
+      ctx.beginPath();
+      ctx.arc(0, 0, this._radius, 0, 2 * Math.PI);
       ctx.stroke();
     }
   }
@@ -3948,9 +4019,11 @@ var Text = class extends FixedDrawable {
     ctx.beginPath();
     for (let i = 0; i < this.linesCount; ++i) {
       if (this.fillColor != "transparent") {
+        ctx.globalAlpha = this._fillColor.alpha;
         ctx.fillText(this._lines[i], offsetX + this._padding, this.lineHeight * i - (this.linesCount - 1) / 2 * this.lineHeight);
       }
       if (this._strokeWidth) {
+        ctx.globalAlpha = this._strokeColor.alpha;
         ctx.strokeText(this._lines[i], offsetX + this._padding, this.lineHeight * i - (this.linesCount - 1) / 2 * this.lineHeight);
       }
     }
@@ -3996,21 +4069,7 @@ var Path = class extends Drawable {
     this._fillColor.fill(ctx);
     this._strokeColor.stroke(ctx);
     ctx.beginPath();
-    for (let i = 0; i <= this._points.length; ++i) {
-      const v = this._points[i % this._points.length];
-      if (i == 0) {
-        const len = v.length;
-        ctx.moveTo(v[len - 2], v[len - 1]);
-      } else {
-        if (v.length == 6) {
-          ctx.bezierCurveTo(...v);
-        } else if (v.length == 4) {
-          ctx.quadraticCurveTo(...v);
-        } else {
-          ctx.lineTo(...v);
-        }
-      }
-    }
+    polygon(ctx, ...this._points);
     ctx.closePath();
     ctx.fill();
     if (this._strokeWidth != 0) {
@@ -4025,28 +4084,75 @@ var Path = class extends Drawable {
     ctx.lineCap = this.strokeCap;
     this._shadowColor.fill(ctx);
     this._shadowColor.stroke(ctx);
-    ctx.beginPath();
-    for (let i = 0; i <= this._points.length; ++i) {
-      const v = this._points[i % this._points.length];
-      if (i == 0) {
-        const len = v.length;
-        ctx.moveTo(v[len - 2], v[len - 1]);
-      } else {
-        if (v.length == 6) {
-          ctx.bezierCurveTo(...v);
-        } else if (v.length == 4) {
-          ctx.quadraticCurveTo(...v);
-        } else {
-          ctx.lineTo(...v);
-        }
-      }
-    }
-    ctx.closePath();
     if (this.fillColor != "transparent") {
+      ctx.globalAlpha = this._fillColor.alpha;
+      ctx.beginPath();
+      polygon(ctx, ...this._points);
+      ctx.closePath();
       ctx.fill();
     }
     if (this.strokeWidth != 0) {
+      ctx.globalAlpha = this._strokeColor.alpha;
+      ctx.beginPath();
+      polygon(ctx, ...this._points);
+      ctx.closePath();
       ctx.stroke();
+    }
+  }
+};
+
+// src/drawable/Ring.js
+var Ring = class extends FixedDrawable {
+  _innerRadius;
+  _outerRadius;
+  constructor(params) {
+    super(params);
+    this._innerRadius = params.innerRadius;
+    this._outerRadius = params.outerRadius;
+  }
+  get innerRadius() {
+    return this._innerRadius;
+  }
+  set innerRadius(val) {
+    this._innerRadius = Math.max(val, 0);
+  }
+  get outerRadius() {
+    return this._innerRadius;
+  }
+  set outerRadius(val) {
+    this._outerRadius = Math.max(val, this._innerRadius);
+  }
+  getBoundingBox() {
+    return {
+      width: this._outerRadius * 2 * Math.abs(this.scale.x),
+      height: this._outerRadius * 2 * Math.abs(this.scale.y),
+      x: this.position.x - this._center.x * Math.abs(this.scale.x),
+      y: this.position.y - this._center.y * Math.abs(this.scale.y)
+    };
+  }
+  draw(ctx) {
+    ctx.globalAlpha = this.opacity;
+    ctx.lineWidth = this.strokeWidth;
+    ctx.lineCap = this.strokeCap;
+    this._fillColor.fill(ctx);
+    this._strokeColor.stroke(ctx);
+    fillRing(ctx, 0, 0, this._innerRadius, this._outerRadius);
+    if (this.strokeWidth != 0) {
+      strokeRing(ctx, 0, 0, this._innerRadius, this._outerRadius);
+    }
+  }
+  drawShadow(ctx) {
+    ctx.lineWidth = this.strokeWidth;
+    ctx.lineCap = this.strokeCap;
+    this._shadowColor.fill(ctx);
+    this._shadowColor.stroke(ctx);
+    if (this.fillColor != "transparent") {
+      ctx.globalAlpha = this._fillColor.alpha;
+      fillRing(ctx, 0, 0, this._innerRadius, this._outerRadius);
+    }
+    if (this.strokeWidth != 0) {
+      ctx.globalAlpha = this._strokeColor.alpha;
+      strokeRing(ctx, 0, 0, this._innerRadius, this._outerRadius);
     }
   }
 };

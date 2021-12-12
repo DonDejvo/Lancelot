@@ -51,12 +51,13 @@ export class Game {
     _engine;
     _timeout = new TimeoutHandler();
     _audio = null;
-
+    _quality;
 
     /**
      * @param {Object} config
      * @param {number} config.width
      * @param {number} config.height
+     * @param {number} config.quality
      * @param {Callback} config.init
      * @param {Callback} [config.preload]
      * @param {Object} config.controls
@@ -68,6 +69,7 @@ export class Game {
         this._config = config;
         this._width = config.width;
         this._height = config.height;
+        this._quality = paramParser.parseValue(config.quality, 1.0);
 
         this._init = config.init.bind(this);
 
@@ -84,7 +86,7 @@ export class Game {
         elem.style.userSelect = "none";
         elem.style.touchAction = "none";
 
-        this._renderer = new Renderer(this._width, this._height, this._parentElement);
+        this._renderer = new Renderer(this._width, this._height, this._quality, this._parentElement);
 
         const step = (elapsedTime) => {
             this._timeout.update(elapsedTime);
