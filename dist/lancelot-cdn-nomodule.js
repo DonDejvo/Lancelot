@@ -241,14 +241,6 @@
       this._parentElement = parentElement;
       this._aspect = this._width / this._height;
       this._scale = 1;
-      this._buffers = [];
-      for (let i = 0; i < 5; ++i) {
-        const b = document.createElement("canvas").getContext("2d");
-        b.canvas.width = this._width * this._quality;
-        b.canvas.height = this._height * this._quality;
-        b.imageSmoothingEnabled = false;
-        this._buffers[i] = b;
-      }
       this._initContainer();
       this._initCanvas();
       this._onResize();
@@ -1202,11 +1194,7 @@
         }
       }
     }
-    draw(ctx) {
-      const rect = this.getBoundingRect();
-      ctx.beginPath();
-      ctx.strokeStyle = "white";
-      ctx.strokeRect(this.position.x - rect.width / 2, this.position.y - rect.height / 2, rect.width, rect.height);
+    draw(_) {
     }
     _generateBehaviorName() {
       ++this._behaviorIds;
@@ -1267,6 +1255,19 @@
         v.add(this.position);
       }
       return verts2;
+    }
+    draw(ctx) {
+      ctx.beginPath();
+      ctx.strokeStyle = "white";
+      const verts2 = this.getComputedVertices();
+      let vert = verts2[0];
+      ctx.moveTo();
+      for (let i = 1; i < verts2.length; ++i0) {
+        vert = verts2[i];
+        ctx.lineTo(verts2[i].x, verts2[i].y);
+      }
+      ctx.closePath();
+      ctx.stroke();
     }
     _getVertices() {
       return this._points.map((v) => new Vector(v[0], v[1]));
@@ -1419,6 +1420,12 @@
     contains(p) {
       return Vector.dist(p, this.position) <= this.radius;
     }
+    draw(ctx) {
+      ctx.beginPath();
+      ctx.strokeStyle = "white";
+      ctx.arc(0, 0, this.radius, 0, 2 * Math.PI);
+      ctx.stroke();
+    }
   };
   var Ray = class extends Body {
     _range;
@@ -1438,6 +1445,14 @@
     }
     getBoundingRect() {
       return { width: 2 * this.range, height: 2 * this.range };
+    }
+    draw(ctx) {
+      const p = this.point;
+      ctx.beginPath();
+      ctx.strokeStyle = "white";
+      ctx.moveTo(0, 0);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
     }
   };
   var detectCollision = (b1, b2) => {
@@ -3579,19 +3594,18 @@
     ctx.stroke();
   };
   var polygon = function(ctx, ...points) {
+    let v = points[0];
+    let len = v.length;
+    ctx.moveTo(v[len - 2], v[len - 1]);
     for (let i = 0; i <= points.length; ++i) {
-      const v = points[i % points.length];
-      if (i == 0) {
-        const len = v.length;
-        ctx.moveTo(v[len - 2], v[len - 1]);
+      v = points[i % points.length];
+      len = v.length;
+      if (v.length == 6) {
+        ctx.bezierCurveTo(...v);
+      } else if (v.length == 4) {
+        ctx.quadraticCurveTo(...v);
       } else {
-        if (v.length == 6) {
-          ctx.bezierCurveTo(...v);
-        } else if (v.length == 4) {
-          ctx.quadraticCurveTo(...v);
-        } else {
-          ctx.lineTo(...v);
-        }
+        ctx.lineTo(...v);
       }
     }
   };

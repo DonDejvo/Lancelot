@@ -17,8 +17,8 @@ export class Renderer {
         this._parentElement = parentElement;
         this._aspect = this._width / this._height;
         this._scale = 1.0;
+        /*
         this._buffers = [];
-
         for(let i = 0; i < 5; ++i) {
             const b = document.createElement("canvas").getContext("2d");
             b.canvas.width = this._width * this._quality;
@@ -26,6 +26,7 @@ export class Renderer {
             b.imageSmoothingEnabled = false;
             this._buffers[i] = b;
         }
+        */
 
         this._initContainer();
         this._initCanvas();

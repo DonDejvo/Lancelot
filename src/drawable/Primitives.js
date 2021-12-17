@@ -20,19 +20,18 @@ export const strokeRing = function(ctx, x, y, r1, r2) {
 }
 
 export const polygon = function(ctx, ...points) {
+    let v = points[0];
+    let len = v.length;
+    ctx.moveTo(v[len - 2], v[len - 1]);
     for(let i = 0; i <= points.length; ++i) {
-        const v = points[i % points.length];
-        if(i == 0) {
-            const len = v.length;
-            ctx.moveTo(v[len - 2], v[len - 1]);
+        v = points[i % points.length];
+        len = v.length;
+        if(v.length == 6) {
+            ctx.bezierCurveTo(...v);
+        } else if(v.length == 4) {
+            ctx.quadraticCurveTo(...v);
         } else {
-            if(v.length == 6) {
-                ctx.bezierCurveTo(...v);
-            } else if(v.length == 4) {
-                ctx.quadraticCurveTo(...v);
-            } else {
-                ctx.lineTo(...v);
-            }
+            ctx.lineTo(...v);
         }
     }
 }

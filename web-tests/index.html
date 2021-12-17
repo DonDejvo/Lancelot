@@ -66,6 +66,7 @@ function init() {
         }
     });
     scene.play();
+    scene.debug = true;
 
     levelMaker.createLevel(scene, level, tilesets);
 
@@ -105,10 +106,12 @@ function init() {
 
     const shape = scene2.createEntity();
     shape.position.y = HEIGHT * 0.4;
-    shape.addComponent(new Lancelot.drawable.Circle({
+    shape.addComponent(new Lancelot.drawable.Star({
         width: WIDTH,
         height: HEIGHT * 0.2,
-        radius: 80,
+        outerRadius: 80,
+        innerRadius: 40,
+        peaks: 5,
         fillColor: "rgba(0,0,0,0.5)",
         strokeColor: "darkred",
         strokeWidth: 4

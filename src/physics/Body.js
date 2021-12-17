@@ -236,12 +236,7 @@ export class Body extends Component {
         }
     }
 
-    draw(ctx) {
-        const rect = this.getBoundingRect();
-        ctx.beginPath();
-        ctx.strokeStyle = "white";
-        ctx.strokeRect(this.position.x - rect.width / 2, this.position.y - rect.height / 2, rect.width, rect.height);
-    }
+    draw(_) {}
 
     _generateBehaviorName() {
         ++this._behaviorIds;
@@ -311,6 +306,20 @@ export class Polygon extends Body {
             v.add(this.position);
         }
         return verts;
+    }
+
+    draw(ctx) {
+        ctx.beginPath();
+        ctx.strokeStyle = "white";
+        const verts = this.getComputedVertices();
+        let vert = verts[0];
+        ctx.moveTo();
+        for(let i = 1; i < verts.length; ++i0) {
+            vert = verts[i];
+            ctx.lineTo(verts[i].x, verts[i].y);
+        }
+        ctx.closePath();
+        ctx.stroke();
     }
 
     _getVertices() {
@@ -497,6 +506,13 @@ export class Ball extends Body {
     contains(p) {
         return Vector.dist(p, this.position) <= this.radius;
     }
+
+    draw(ctx) {
+        ctx.beginPath();
+        ctx.strokeStyle = "white";
+        ctx.arc(0, 0, this.radius, 0, 2 * Math.PI);
+        ctx.stroke();
+    }
 }
 
 export class Ray extends Body {
@@ -523,6 +539,15 @@ export class Ray extends Body {
 
     getBoundingRect() {
         return { width : 2 * this.range, height : 2 * this.range };
+    }
+
+    draw(ctx) {
+        const p = this.point;
+        ctx.beginPath();
+        ctx.strokeStyle = "white";
+        ctx.moveTo(0, 0);
+        ctx.lineTo(p.x, p.y)
+        ctx.stroke();
     }
 }
 
