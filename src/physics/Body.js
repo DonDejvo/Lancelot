@@ -313,10 +313,10 @@ export class Polygon extends Body {
         ctx.strokeStyle = "white";
         const verts = this.getComputedVertices();
         let vert = verts[0];
-        ctx.moveTo();
-        for(let i = 1; i < verts.length; ++i0) {
+        ctx.moveTo(vert.x, vert.y);
+        for(let i = 1; i < verts.length; ++i) {
             vert = verts[i];
-            ctx.lineTo(verts[i].x, verts[i].y);
+            ctx.lineTo(vert.x, vert.y);
         }
         ctx.closePath();
         ctx.stroke();

@@ -1260,10 +1260,10 @@ var Polygon = class extends Body {
     ctx.strokeStyle = "white";
     const verts2 = this.getComputedVertices();
     let vert = verts2[0];
-    ctx.moveTo();
-    for (let i = 1; i < verts2.length; ++i0) {
+    ctx.moveTo(vert.x, vert.y);
+    for (let i = 1; i < verts2.length; ++i) {
       vert = verts2[i];
-      ctx.lineTo(verts2[i].x, verts2[i].y);
+      ctx.lineTo(vert.x, vert.y);
     }
     ctx.closePath();
     ctx.stroke();
