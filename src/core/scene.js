@@ -27,6 +27,7 @@ export class Scene {
     _game = null;
     debug = false;
     _drawCounter = 0;
+    _onUpdate = null;
 
     /**
      * 
@@ -319,12 +320,19 @@ export class Scene {
     }
     */
 
+    onUpdate(cb) {
+        this._onUpdate = cb;
+    }
+
     update(elapsedTimeS) {
         if (this._paused) {
             return;
         }
         this.timeout.update(elapsedTimeS * 1000);
         this._entityManager.update(elapsedTimeS);
+        if(this._onUpdate) {
+            this._onUpdate(elapsedTimeS);
+        }
         this._world.update(elapsedTimeS);
     }
 

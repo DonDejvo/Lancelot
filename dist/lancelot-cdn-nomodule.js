@@ -2231,6 +2231,7 @@
     _game = null;
     debug = false;
     _drawCounter = 0;
+    _onUpdate = null;
     constructor(options = {}) {
       this._world = new World(options.physics);
       this._background = new Color(paramParser.parseValue(options.background, options.background));
@@ -2387,12 +2388,18 @@
       this._paused = false;
       this._hidden = false;
     }
+    onUpdate(cb) {
+      this._onUpdate = cb;
+    }
     update(elapsedTimeS) {
       if (this._paused) {
         return;
       }
       this.timeout.update(elapsedTimeS * 1e3);
       this._entityManager.update(elapsedTimeS);
+      if (this._onUpdate) {
+        this._onUpdate(elapsedTimeS);
+      }
       this._world.update(elapsedTimeS);
     }
     render(w, h, q) {
