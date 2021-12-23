@@ -71,7 +71,7 @@ export class LevelMaker {
                 tileSprite.setSize(this._tileWidth, this._tileHeight);
                 tileSprite.zIndex = zIndex;
                 if(this._onTile) {
-                    this._onTile(e);
+                    this._onTile(e, zIndex);
                 }
             }
         }
@@ -106,12 +106,14 @@ export class LevelMaker {
                     e.position = getPosition(data.x, data.y, data.angle, -data.width / 2, -data.height / 2);
                 }
                 if(this._onObject) {
-                    this._onObject(e, data);
+                    this._onObject(e, data, zIndex);
                 }
 
                 let props = new Map();
-                for(let prop of (obj.properties === undefined ? [] : obj.properties)) {
-                    props.set(prop.name, prop.value);
+                if(obj.properties !== undefined) {
+                    for(let prop of obj.properties) {
+                        props.set(prop.name, prop.value);
+                    }
                 }
                 e.props.set("object-data", props);
 

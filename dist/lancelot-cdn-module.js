@@ -262,7 +262,7 @@ var Renderer = class {
       if (!scene.paused) {
         scene.render(w, h, this._quality);
       }
-      scene.draw(ctx, w, h);
+      scene.draw(ctx, w, h, this._quality);
     }
   }
   displayToSceneCoords(scene, x, y) {
@@ -505,15 +505,6 @@ var math = function() {
     sat(x) {
       return this.clamp(x, 0, 1);
     },
-    ease(x, t) {
-      return this.sat(x ** t);
-    },
-    easeIn(x) {
-      return this.ease(x, 2.4);
-    },
-    easeOut(x) {
-      return this.ease(x, 0.4);
-    },
     choice(arr) {
       const len = arr.length;
       return arr[this.randint(0, len - 1)];
@@ -524,6 +515,15 @@ var math = function() {
         const j = this.randint(0, len - 1);
         [arr[i], arr[j]] = [arr[j], arr[i]];
       }
+    },
+    easeIn(x) {
+      return Math.cos(Math.PI * (1 + 0.5 * x)) + 1;
+    },
+    easeOut(x) {
+      return Math.sin(Math.PI * 0.5 * x);
+    },
+    easeInOut(x) {
+      return Math.cos(Math.PI * (1 + x)) / 2 + 0.5;
     }
   };
 }();
@@ -573,6 +573,11 @@ var Animator = class {
         case "ease-out":
           value = math.easeOut(progress);
           break;
+        case "ease-in-out":
+          value = math.easeInOut(progress);
+          break;
+        default:
+          value = progress;
       }
       this._value = math.lerp(value, anim.from, anim.to);
       if (progress == 1) {
@@ -632,6 +637,9 @@ var PositionManager = class {
       onEnd
     };
   }
+  moveBy(v, dur, timing = "linear", onEnd = null) {
+    this.moveTo(this.position.clone().add(v), dur, timing, onEnd);
+  }
   stopMoving() {
     this._anim = null;
   }
@@ -654,6 +662,11 @@ var PositionManager = class {
         case "ease-out":
           value = math.easeOut(progress);
           break;
+        case "ease-in-out":
+          value = math.easeInOut(progress);
+          break;
+        default:
+          value = progress;
       }
       this._pos.copy(anim.from.clone().lerp(anim.to, value));
       if (progress == 1) {
@@ -731,6 +744,7 @@ var Component = class {
 // src/interactive/Interactive.js
 var Interactive = class extends Component {
   _eventHandlers = new Map();
+  _id = -1;
   constructor() {
     super();
     this._type = "interactive";
@@ -2052,6 +2066,9 @@ var Entity = class {
   moveTo(v, dur, timing = "linear", onEnd = null) {
     this._position.moveTo(v, dur, timing, onEnd);
   }
+  moveBy(v, dur, timing = "linear", onEnd = null) {
+    this._position.moveBy(v, dur, timing, onEnd);
+  }
   stopMoving() {
     this._position.stopMoving();
   }
@@ -2274,9 +2291,20 @@ var Scene = class {
             continue;
           }
           if (e.body.contains(new Vector(event.x, event.y))) {
-            e.interactive.id = event.id;
+            e.interactive._id = event.id;
             if (e.interactive.handleEvent(type, event)) {
               captured = true;
+            }
+          }
+        }
+      } else {
+        for (let e of this._interactiveEntities) {
+          if (e.interactive._id == event.id) {
+            if (e.interactive.handleEvent(type, event)) {
+              captured = true;
+            }
+            if (type == "mouseup") {
+              e.interactive._id = -1;
             }
           }
         }
@@ -2406,8 +2434,11 @@ var Scene = class {
     buffer.restore();
     this._drawDebugInfo(buffer, w, h);
   }
-  draw(ctx, w, h) {
-    ctx.drawImage(this._buffer.canvas, 0, 0);
+  draw(ctx, w, h, q) {
+    if (!this._buffer) {
+      this.render(w, h, q);
+    }
+    ctx.drawImage(this._buffer.canvas, 0, 0, w, h);
   }
   _drawDebugInfo(ctx, w, h) {
     if (!this.debug) {
@@ -2618,6 +2649,17 @@ var Game = class {
   get audio() {
     return this._audio;
   }
+  get quality() {
+    return this._quality;
+  }
+  set quality(val) {
+    this._quality = val;
+    this._renderer._quality = this._quality;
+    this._renderer._initCanvas();
+    for (let scene of this._sceneManager.scenes) {
+      scene._buffer = null;
+    }
+  }
   createScene(name, zIndex, options) {
     const scene = new Scene(options);
     scene._game = this;
@@ -2661,14 +2703,16 @@ var Game = class {
     };
     this._handleSceneEvent(touchToMouseType[e.type], {
       x: e.changedTouches[0].pageX,
-      y: e.changedTouches[0].pageY
+      y: e.changedTouches[0].pageY,
+      id: 0
     });
   }
   _handleMouseEvent(e) {
     e.preventDefault();
     this._handleSceneEvent(e.type, {
       x: e.pageX,
-      y: e.pageY
+      y: e.pageY,
+      id: 0
     });
   }
   _handleSceneEvent(type, params) {
@@ -3162,7 +3206,6 @@ var BodyFollower = class extends Component {
   update(_) {
     const body = this.parent.body;
     this._target.angle = body.angle;
-    this._target.offset = body.offset;
   }
 };
 
@@ -3456,7 +3499,7 @@ var LevelMaker = class {
         tileSprite.setSize(this._tileWidth, this._tileHeight);
         tileSprite.zIndex = zIndex;
         if (this._onTile) {
-          this._onTile(e);
+          this._onTile(e, zIndex);
         }
       }
     };
@@ -3489,11 +3532,13 @@ var LevelMaker = class {
           e.position = getPosition(data.x, data.y, data.angle, -data.width / 2, -data.height / 2);
         }
         if (this._onObject) {
-          this._onObject(e, data);
+          this._onObject(e, data, zIndex);
         }
         let props = new Map();
-        for (let prop of obj.properties === void 0 ? [] : obj.properties) {
-          props.set(prop.name, prop.value);
+        if (obj.properties !== void 0) {
+          for (let prop of obj.properties) {
+            props.set(prop.name, prop.value);
+          }
         }
         e.props.set("object-data", props);
       }

@@ -57,6 +57,10 @@ export class PositionManager {
         };
     }
 
+    moveBy(v, dur, timing = "linear", onEnd = null) {
+        this.moveTo(this.position.clone().add(v), dur, timing, onEnd);
+    }
+
     stopMoving() {
         this._anim = null;
     }
@@ -81,6 +85,11 @@ export class PositionManager {
                 case "ease-out":
                     value = math.easeOut(progress);
                     break;
+                case "ease-in-out":
+                    value = math.easeInOut(progress);
+                    break;
+                default:
+                    value = progress;
             }
             this._pos.copy(anim.from.clone().lerp(anim.to, value));
             if (progress == 1) {

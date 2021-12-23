@@ -18,15 +18,6 @@ export const math = (function () {
         sat(x) {
             return this.clamp(x, 0, 1);
         },
-        ease(x, t) {
-            return this.sat(x ** t);
-        },
-        easeIn(x) {
-            return this.ease(x, 2.4);
-        },
-        easeOut(x) {
-            return this.ease(x, 0.4);
-        },
         choice(arr) {
             const len = arr.length;
             return arr[this.randint(0, len - 1)];
@@ -37,6 +28,15 @@ export const math = (function () {
                 const j = this.randint(0, len - 1);
                 [arr[i], arr[j]] = [arr[j], arr[i]];
             }
+        },
+        easeIn(x) {
+            return Math.cos(Math.PI * (1 + 0.5 * x)) + 1;
+        },
+        easeOut(x) {
+            return Math.sin(Math.PI * 0.5 * x);
+        },
+        easeInOut(x) {
+            return Math.cos(Math.PI * (1 + x)) / 2 + 0.5;
         }
     };
 })();

@@ -122,9 +122,20 @@ export class Scene {
                         continue;
                     }
                     if(e.body.contains(new Vector(event.x, event.y))) {
-                        e.interactive.id = event.id;
+                        e.interactive._id = event.id;
                         if(e.interactive.handleEvent(type, event)) {
                             captured = true;
+                        }
+                    }
+                }
+            } else {
+                for(let e of this._interactiveEntities) {
+                    if(e.interactive._id == event.id) {
+                        if(e.interactive.handleEvent(type, event)) {
+                            captured = true;
+                        }
+                        if(type == "mouseup") {
+                            e.interactive._id = -1;
                         }
                     }
                 }
@@ -371,8 +382,11 @@ export class Scene {
         this._drawDebugInfo(buffer, w, h);
     }
 
-    draw(ctx, w, h) {
-        ctx.drawImage(this._buffer.canvas, 0, 0);
+    draw(ctx, w, h, q) {
+        if(!this._buffer) {
+            this.render(w, h, q);
+        }
+        ctx.drawImage(this._buffer.canvas, 0, 0, w, h);
     }
 
     _drawDebugInfo(ctx, w, h) {

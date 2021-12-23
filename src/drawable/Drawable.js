@@ -325,6 +325,6 @@ class BodyFollower extends Component {
     update(_) {
         const body = this.parent.body;
         this._target.angle = body.angle;
-        this._target.offset = body.offset;
+        // this._target.offset = body.offset;
     }
 }

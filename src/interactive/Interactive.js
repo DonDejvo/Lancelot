@@ -3,6 +3,7 @@ import { Component } from "../core/Component.js";
 export class Interactive extends Component {
 
     _eventHandlers = new Map();
+    _id = -1;
 
     constructor() {
         super();

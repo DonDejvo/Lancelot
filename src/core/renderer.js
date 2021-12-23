@@ -59,7 +59,7 @@ export class Renderer {
             if(!scene.paused) {
                 scene.render(w, h, this._quality);
             }
-            scene.draw(ctx, w, h);
+            scene.draw(ctx, w, h, this._quality);
         }
 
     }

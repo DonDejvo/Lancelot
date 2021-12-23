@@ -27,7 +27,7 @@ addEventListener("DOMContentLoaded", () => {
     game = new Lancelot.Game({
         width: WIDTH,
         height: HEIGHT,
-        quality: 1,
+        quality: 0.2,
         init: init,
         preload: preload,
         controls: {
@@ -66,7 +66,7 @@ function init() {
         }
     });
     scene.play();
-    scene.debug = true;
+    // scene.debug = true;
 
     levelMaker.createLevel(scene, level, tilesets);
 
@@ -105,7 +105,7 @@ function init() {
     
 
     const shape = scene2.createEntity();
-    shape.position.y = HEIGHT * 0.4;
+    shape.position.y = HEIGHT * 0;
     shape.addComponent(new Lancelot.drawable.Star({
         width: WIDTH,
         height: HEIGHT * 0.2,
@@ -120,6 +120,23 @@ function init() {
         const comp = shape.getComponent("Shape");
         //comp.angle += dt;
     });
+    shape.moveBy(new Vector(300, 0), 2000, "ease-in");
+
+    const shape2 = scene2.createEntity();
+    shape2.position.y = HEIGHT * 0.3;
+    shape2.addComponent(new Lancelot.drawable.Star({
+        width: WIDTH,
+        height: HEIGHT * 0.2,
+        outerRadius: 80,
+        innerRadius: 40,
+        peaks: 5,
+        fillColor: "rgba(0,0,0,0.5)",
+        strokeColor: "darkred",
+        strokeWidth: 4
+    }), "Shape");
+    shape2.moveBy(new Vector(300, 0), 2000, "linear");
+
+    this.timeout.set(() => this.quality = 1.0, 2000);
 }
     </script>
 </body>

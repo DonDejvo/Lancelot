@@ -57,6 +57,10 @@ export class Entity {
         this._position.moveTo(v, dur, timing, onEnd);
     }
 
+    moveBy(v, dur, timing = "linear", onEnd = null) {
+        this._position.moveBy(v, dur, timing, onEnd);
+    }
+
     stopMoving() {
         this._position.stopMoving();
     }

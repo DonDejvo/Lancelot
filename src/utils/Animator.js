@@ -52,6 +52,11 @@ export class Animator {
                 case "ease-out":
                     value = math.easeOut(progress);
                     break;
+                case "ease-in-out":
+                    value = math.easeInOut(progress);
+                    break;
+                default:
+                    value = progress;
             }
             this._value = math.lerp(value, anim.from, anim.to);
             if (progress == 1) {

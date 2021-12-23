@@ -132,6 +132,19 @@ export class Game {
         return this._audio;
     }
 
+    get quality() {
+        return this._quality;
+    }
+
+    set quality(val) {
+        this._quality = val;
+        this._renderer._quality = this._quality;
+        this._renderer._initCanvas();
+        for(let scene of this._sceneManager.scenes) {
+            scene._buffer = null;
+        }
+    }
+
     createScene(name, zIndex, options) {
         const scene = new Scene(options);
         scene._game = this;
@@ -183,13 +196,13 @@ export class Game {
             "touchend": "mouseup"
         };
         this._handleSceneEvent(touchToMouseType[e.type], {
-            x: e.changedTouches[0].pageX, y: e.changedTouches[0].pageY
+            x: e.changedTouches[0].pageX, y: e.changedTouches[0].pageY, id: 0
         });
     }
     _handleMouseEvent(e) {
         e.preventDefault();
         this._handleSceneEvent(e.type, {
-            x: e.pageX, y: e.pageY
+            x: e.pageX, y: e.pageY, id: 0
         });
     }
     _handleSceneEvent(type, params) {
