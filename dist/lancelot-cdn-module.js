@@ -1817,7 +1817,7 @@ var World = class {
     const treeController = new QuadtreeController({
       quadtree: this._quadtree
     });
-    e.addComponent(treeController);
+    e.add(treeController);
     this._bodies.push(b);
   }
   removeBody(e, b) {
@@ -2057,6 +2057,9 @@ var Entity = class {
   get props() {
     return this._properties;
   }
+  constructor(scene, n) {
+    scene.addEntity(this, n);
+  }
   clip(e, fixed = false) {
     this._position.clip(e._position, fixed);
   }
@@ -2075,7 +2078,7 @@ var Entity = class {
   isMoving() {
     return this._position.isMoving();
   }
-  addComponent(c, n) {
+  add(c, n) {
     if (n === void 0) {
       n = c.constructor.name;
     }
@@ -2085,11 +2088,14 @@ var Entity = class {
     this.clip(c, true);
     c.initComponent();
   }
-  getComponent(n) {
+  get(n) {
     return this._components.get(n);
   }
   _updatePosition(elapsedTimeS) {
     this._position.update(elapsedTimeS);
+  }
+  remove() {
+    this._scene.remove(this);
   }
   update(elapsedTimeS) {
     this._updatePosition(elapsedTimeS);
@@ -2112,8 +2118,8 @@ var Camera = class extends Entity {
   _t = 4;
   _vel = new Vector();
   _shaker = new Shaker();
-  constructor() {
-    super();
+  constructor(scene, n) {
+    super(scene, n);
   }
   get position() {
     return this._position.position;
@@ -2230,12 +2236,12 @@ var Scene = class {
   _game = null;
   debug = false;
   _drawCounter = 0;
-  _onUpdate = null;
-  constructor(options = {}) {
+  constructor(game, name, zIndex, options = {}) {
+    this._game = game;
+    this._game._sceneManager.add(this, name, zIndex);
     this._world = new World(options.physics);
     this._background = new Color(paramParser.parseValue(options.background, options.background));
-    this._camera = new Camera();
-    this.addEntity(this._camera, "Camera");
+    this._camera = new Camera(this, "Camera");
   }
   get paused() {
     return this._paused;
@@ -2327,9 +2333,8 @@ var Scene = class {
     }
     return captured;
   }
-  createEntity(n) {
-    const e = new Entity();
-    this.addEntity(e, n);
+  create(n) {
+    const e = new Entity(this, n);
     return e;
   }
   addEntity(e, n) {
@@ -2387,18 +2392,15 @@ var Scene = class {
     this._paused = false;
     this._hidden = false;
   }
-  onUpdate(cb) {
-    this._onUpdate = cb;
+  update(_) {
   }
-  update(elapsedTimeS) {
+  _update(elapsedTimeS) {
     if (this._paused) {
       return;
     }
     this.timeout.update(elapsedTimeS * 1e3);
     this._entityManager.update(elapsedTimeS);
-    if (this._onUpdate) {
-      this._onUpdate(elapsedTimeS);
-    }
+    this.update(elapsedTimeS);
     this._world.update(elapsedTimeS);
   }
   render(w, h, q) {
@@ -2481,16 +2483,16 @@ var AudioManager = class {
   constructor(resources) {
     this._resources = resources;
     this._effects = new Effects(this._resources);
-    this._bgmusic = new BgMusic(this._resources);
+    this._music = new Music(this._resources);
   }
-  get bgmusic() {
-    return this._bgmusic;
+  get music() {
+    return this._music;
   }
   get effects() {
     return this._effects;
   }
 };
-var BgMusic = class {
+var Music = class {
   _resources;
   _audio = null;
   _volume = 1;
@@ -2625,7 +2627,7 @@ var Game = class {
       this._timeout.update(elapsedTime);
       const scenes = this._sceneManager.scenes;
       for (let scene of scenes) {
-        scene.update(elapsedTime * 1e-3);
+        scene._update(elapsedTime * 1e-3);
       }
       this._renderer.render(scenes);
     };
@@ -2666,12 +2668,6 @@ var Game = class {
     for (let scene of this._sceneManager.scenes) {
       scene._buffer = null;
     }
-  }
-  createScene(name, zIndex, options) {
-    const scene = new Scene(options);
-    scene._game = this;
-    this._sceneManager.add(scene, name, zIndex);
-    return scene;
   }
   requestFullScreen() {
     const elem = this._parentElement;
@@ -3354,7 +3350,7 @@ var Tileset = class {
   }
   createTile(scene, id) {
     let data = this._getData(id);
-    let e = scene.createEntity();
+    let e = new Entity(scene);
     let sprite;
     if (data && data.animation) {
       sprite = new Sprite({
@@ -3376,7 +3372,7 @@ var Tileset = class {
         }
       });
     }
-    e.addComponent(sprite, "TileSprite");
+    e.add(sprite, "TileSprite");
     let obj = new Map();
     for (let prop of data == null ? [] : data.properties) {
       obj.set(prop.name, prop.value);
@@ -3502,7 +3498,7 @@ var LevelMaker = class {
           return;
         }
         e.position.set((x + 0.5) * this._tileWidth, (y + 0.5) * this._tileHeight);
-        const tileSprite = e.getComponent("TileSprite");
+        const tileSprite = e.get("TileSprite");
         tileSprite.setSize(this._tileWidth, this._tileHeight);
         tileSprite.zIndex = zIndex;
         if (this._onTile) {
@@ -3530,12 +3526,12 @@ var LevelMaker = class {
         if (obj.gid !== void 0) {
           e = createTile(obj.gid - 1);
           e.position = getPosition(data.x, data.y, data.angle, -data.width / 2, data.height / 2);
-          const tileSprite = e.getComponent("TileSprite");
+          const tileSprite = e.get("TileSprite");
           tileSprite.setSize(data.width, data.height);
           tileSprite.angle = data.angle;
           tileSprite.zIndex = zIndex;
         } else {
-          e = scene.createEntity();
+          e = new Entity(scene);
           e.position = getPosition(data.x, data.y, data.angle, -data.width / 2, -data.height / 2);
         }
         if (this._onObject) {
@@ -4338,6 +4334,7 @@ var RadialLight = class extends Light {
 var __name = "Lancelot";
 var __export2 = {
   Game,
+  Scene,
   Component,
   utils: index_exports,
   drawable: index_exports2,

@@ -92,7 +92,7 @@ export class Game {
             this._timeout.update(elapsedTime);
             const scenes = this._sceneManager.scenes;
             for(let scene of scenes) {
-                scene.update(elapsedTime * 0.001);
+                scene._update(elapsedTime * 0.001);
             }
             this._renderer.render(scenes);
         }
@@ -145,12 +145,14 @@ export class Game {
         }
     }
 
+    /*
     createScene(name, zIndex, options) {
         const scene = new Scene(options);
         scene._game = this;
         this._sceneManager.add(scene, name, zIndex);
         return scene;
     }
+    */
 
     requestFullScreen() {
         const elem = this._parentElement;

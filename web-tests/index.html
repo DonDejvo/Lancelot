@@ -59,7 +59,7 @@ function init() {
         tileHeight: 64
     });
 
-    const scene = this.createScene("main", 0, {
+    const scene = new Lancelot.Scene(this, "main", 0, {
         background: "rgb(25,25,25)",
         physics: {
             bounds: [[0, 0], [levelMaker.tileWidth * level.width, levelMaker.tileHeight * level.height]]
@@ -98,15 +98,15 @@ function init() {
 
 
 
-    const scene2 = this.createScene("main", 1, {
+    const scene2 = new Lancelot.Scene(this, "ui", 1, {
         background: "transparent"
     });
     scene2.play();
     
 
-    const shape = scene2.createEntity();
+    const shape = scene2.create();
     shape.position.y = HEIGHT * 0;
-    shape.addComponent(new Lancelot.drawable.Star({
+    shape.add(new Lancelot.drawable.Star({
         width: WIDTH,
         height: HEIGHT * 0.2,
         outerRadius: 80,
@@ -117,14 +117,14 @@ function init() {
         strokeWidth: 4
     }), "Shape");
     shape.onUpdate((dt) => {
-        const comp = shape.getComponent("Shape");
+        const comp = shape.get("Shape");
         //comp.angle += dt;
     });
-    shape.moveBy(new Vector(300, 0), 2000, "ease-in");
+    shape.moveBy(new Vector(300, 0), 2000, "linear");
 
-    const shape2 = scene2.createEntity();
+    const shape2 = scene2.create();
     shape2.position.y = HEIGHT * 0.3;
-    shape2.addComponent(new Lancelot.drawable.Star({
+    shape2.add(new Lancelot.drawable.Star({
         width: WIDTH,
         height: HEIGHT * 0.2,
         outerRadius: 80,
@@ -134,7 +134,7 @@ function init() {
         strokeColor: "darkred",
         strokeWidth: 4
     }), "Shape");
-    shape2.moveBy(new Vector(300, 0), 2000, "linear");
+    shape2.moveBy(new Vector(300, 0), 2000, "ease-in-out");
 
     this.timeout.set(() => this.quality = 1.0, 2000);
 }

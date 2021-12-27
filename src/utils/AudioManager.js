@@ -10,11 +10,11 @@ export class AudioManager {
     constructor(resources) {
         this._resources = resources;
         this._effects = new Effects(this._resources);
-        this._bgmusic = new BgMusic(this._resources);
+        this._music = new Music(this._resources);
     }
 
-    get bgmusic() {
-        return this._bgmusic;
+    get music() {
+        return this._music;
     }
 
     get effects() {
@@ -23,7 +23,7 @@ export class AudioManager {
 
 }
 
-class BgMusic {
+class Music {
 
     _resources;
     _audio = null;

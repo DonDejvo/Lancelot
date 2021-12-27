@@ -1,4 +1,5 @@
 import { Component } from "../core/Component.js";
+import { Entity } from "../core/Entity.js";
 import { Picture } from "../drawable/Picture.js";
 import { Sprite } from "../drawable/Sprite.js";
 
@@ -35,7 +36,7 @@ export class Tileset {
     createTile(scene, id) {
         let data = this._getData(id);
 
-        let e = scene.createEntity();
+        let e = new Entity(scene);
         
         let sprite;
         if(data && data.animation) {
@@ -58,7 +59,7 @@ export class Tileset {
                 }
             });
         }
-        e.addComponent(sprite, "TileSprite");
+        e.add(sprite, "TileSprite");
         let obj = new Map();
         for(let prop of (data == null ? [] : data.properties)) {
             obj.set(prop.name, prop.value);

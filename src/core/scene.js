@@ -27,8 +27,7 @@ export class Scene {
     _game = null;
     debug = false;
     _drawCounter = 0;
-    _onUpdate = null;
-
+    
     /**
      * 
      * @param {Object} options
@@ -37,12 +36,14 @@ export class Scene {
      * @param {import("../physics/World.js").WorldParams} options.physics
      */
 
-    constructor(options = {}) {
+    constructor(game, name, zIndex, options = {}) {
+        this._game = game;
+        this._game._sceneManager.add(this, name, zIndex);
         this._world = new World(options.physics);
         //this._light = new Color(paramParser.parseValue(options.light, "white"));
         this._background = new Color(paramParser.parseValue(options.background, options.background));
-        this._camera = new Camera();
-        this.addEntity(this._camera, "Camera");
+        this._camera = new Camera(this, "Camera");
+        //this.addEntity(this._camera, "Camera");
     }
 
     get paused() {
@@ -159,9 +160,9 @@ export class Scene {
         return captured;
     }
 
-    createEntity(n) {
-        const e = new Entity();
-        this.addEntity(e, n);
+    
+    create(n) {
+        const e = new Entity(this, n);
         return e;
     }
 
@@ -169,6 +170,7 @@ export class Scene {
         e._scene = this;
         this._entityManager.add(e, n);
     }
+    
 
     removeEntity(e) {
         this._entityManager.remove(e);
@@ -320,19 +322,21 @@ export class Scene {
     }
     */
 
+    /*
     onUpdate(cb) {
         this._onUpdate = cb;
     }
+    */
 
-    update(elapsedTimeS) {
+    update(_) {}
+
+    _update(elapsedTimeS) {
         if (this._paused) {
             return;
         }
         this.timeout.update(elapsedTimeS * 1000);
         this._entityManager.update(elapsedTimeS);
-        if(this._onUpdate) {
-            this._onUpdate(elapsedTimeS);
-        }
+        this.update(elapsedTimeS);
         this._world.update(elapsedTimeS);
     }
 

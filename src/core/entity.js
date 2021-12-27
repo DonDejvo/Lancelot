@@ -45,6 +45,10 @@ export class Entity {
         return this._properties;
     }
 
+    constructor(scene, n) {
+        scene.addEntity(this, n);
+    }
+
     clip(e, fixed = false) {
         this._position.clip(e._position, fixed);
     }
@@ -69,7 +73,7 @@ export class Entity {
         return this._position.isMoving();
     }
 
-    addComponent(c, n) {
+    add(c, n) {
         if (n === undefined) {
             n = c.constructor.name;
         }
@@ -80,12 +84,16 @@ export class Entity {
         c.initComponent();
     }
 
-    getComponent(n) {
+    get(n) {
         return this._components.get(n);
     }
-
+    
     _updatePosition(elapsedTimeS) {
         this._position.update(elapsedTimeS);
+    }
+
+    remove() {
+        this._scene.remove(this);
     }
 
     update(elapsedTimeS) {
@@ -97,8 +105,9 @@ export class Entity {
             c.update(elapsedTimeS);
         });
     }
-
+    
     onUpdate(callback) {
         this._onUpdate = callback;
     }
+    
 }

@@ -1,4 +1,5 @@
 import { Vector } from "./Vector.js";
+import { Entity } from "./../core/Entity.js";
 
 export class LevelMaker {
 
@@ -67,7 +68,7 @@ export class LevelMaker {
                     return;
                 }
                 e.position.set((x + 0.5) * this._tileWidth, (y + 0.5) * this._tileHeight);
-                const tileSprite = e.getComponent("TileSprite");
+                const tileSprite = e.get("TileSprite");
                 tileSprite.setSize(this._tileWidth, this._tileHeight);
                 tileSprite.zIndex = zIndex;
                 if(this._onTile) {
@@ -97,12 +98,12 @@ export class LevelMaker {
                 if(obj.gid !== undefined) {
                     e = createTile(obj.gid - 1);
                     e.position = getPosition(data.x, data.y, data.angle, -data.width / 2, data.height / 2);
-                    const tileSprite = e.getComponent("TileSprite");
+                    const tileSprite = e.get("TileSprite");
                     tileSprite.setSize(data.width, data.height);
                     tileSprite.angle = data.angle;
                     tileSprite.zIndex = zIndex;
                 } else {
-                    e = scene.createEntity();
+                    e = new Entity(scene);
                     e.position = getPosition(data.x, data.y, data.angle, -data.width / 2, -data.height / 2);
                 }
                 if(this._onObject) {

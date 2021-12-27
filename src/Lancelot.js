@@ -1,4 +1,5 @@
 import { Game } from "./core/Game.js";
+import { Scene } from "./core/Scene.js";
 import { Component } from "./core/Component.js";
 import * as utils from "./utils/_index.js";
 import * as drawable from "./drawable/_index.js";
@@ -9,6 +10,7 @@ const __name = 'Lancelot';
 
 let __export = {
     Game,
+    Scene,
     Component,
     utils,
     drawable,

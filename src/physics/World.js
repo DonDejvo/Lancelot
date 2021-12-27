@@ -60,7 +60,7 @@ export class World {
         const treeController = new QuadtreeController({
             quadtree: this._quadtree
         });
-        e.addComponent(treeController);
+        e.add(treeController);
         this._bodies.push(b);
     }
 

@@ -12,8 +12,8 @@ export class Camera extends Entity {
     _vel = new Vector();
     _shaker = new Shaker();
     
-    constructor() {
-        super();
+    constructor(scene, n) {
+        super(scene, n);
     }
 
     get position() {
