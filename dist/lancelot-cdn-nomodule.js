@@ -922,9 +922,9 @@
       this._offset1 = new Vector(offset1.x, offset1.y);
       const offset2 = paramParser.parseObject(params.offset2, { x: 0, y: 0 });
       this._offset2 = new Vector(offset2.x, offset2.y);
-      const start = this._body1.position.clone().add(this._offset1.clone().rot(this._body1.angle));
+      const start2 = this._body1.position.clone().add(this._offset1.clone().rot(this._body1.angle));
       const end = this._body2.position.clone().add(this._offset2.clone().rot(this._body2.angle));
-      this._length = paramParser.parseValue(params.length, Math.max(Vector.dist(start, end), 1));
+      this._length = paramParser.parseValue(params.length, Math.max(Vector.dist(start2, end), 1));
       this._strength = paramParser.parseValue(params.strength, 1);
     }
     get offset1() {
@@ -963,9 +963,9 @@
         return;
       const offset1 = this.offset1.clone().rot(this._body1.angle);
       const offset2 = this.offset2.clone().rot(this._body2.angle);
-      const start = this._body1.position.clone().add(offset1);
+      const start2 = this._body1.position.clone().add(offset1);
       const end = this._body2.position.clone().add(offset2);
-      const vec = start.clone().sub(end);
+      const vec = start2.clone().sub(end);
       const n = vec.clone().unit();
       const dist = vec.mag();
       const relLenDiff = (dist - this.length) / this.length;
@@ -987,9 +987,9 @@
         return;
       const offset1 = this.offset1.clone().rot(this._body1.angle);
       const offset2 = this.offset2.clone().rot(this._body2.angle);
-      const start = this._body1.position.clone().add(offset1);
+      const start2 = this._body1.position.clone().add(offset1);
       const end = this._body2.position.clone().add(offset2);
-      const vec = start.clone().sub(end);
+      const vec = start2.clone().sub(end);
       const n = vec.clone().unit();
       const dist = vec.mag();
       const repos = 16;
@@ -4332,9 +4332,12 @@
   };
 
   // src/Lancelot.js
+  var start = (config) => {
+    addEventListener("DOMContentLoaded", () => new Game(config));
+  };
   var __name = "Lancelot";
   var __export2 = {
-    Game,
+    start,
     Scene,
     Component,
     utils: index_exports,

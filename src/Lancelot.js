@@ -6,10 +6,14 @@ import * as drawable from "./drawable/_index.js";
 import * as physics from "./physics/_index.js";
 import * as light from "./light/_index.js";
 
+const start = (config) => {
+    addEventListener("DOMContentLoaded", () => new Game(config));
+}
+
 const __name = 'Lancelot';
 
 let __export = {
-    Game,
+    start,
     Scene,
     Component,
     utils,
