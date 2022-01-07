@@ -32,7 +32,7 @@ export class Line extends FixedDrawable {
         ctx.globalAlpha = this.opacity;
         ctx.lineWidth = this.strokeWidth;
         ctx.lineCap = this.strokeCap;
-        this._strokeColor.stroke(ctx);
+        ctx.strokeStyle = this.strokeColor.value;
         ctx.beginPath();
         ctx.moveTo(0, 0);
         ctx.lineTo(this._length, 0);
@@ -42,7 +42,7 @@ export class Line extends FixedDrawable {
     drawShadow(ctx) {
         ctx.lineWidth = this.strokeWidth;
         ctx.lineCap = this.strokeCap;
-        this._shadowColor.stroke(ctx);
+        ctx.strokeStyle = this.shadowColor.value;
         ctx.globalAlpha = this._strokeColor.alpha;
         ctx.beginPath();
         ctx.moveTo(0, 0);

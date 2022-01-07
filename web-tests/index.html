@@ -7,7 +7,7 @@
     <title>Document</title>
     <style>
         body {
-    background: black;
+    background: white;
     margin: 0;
     position: fixed;
     width: 100%;
@@ -22,9 +22,7 @@ import defaultExport from "../src/Lancelot.js";
 const WIDTH = 720, HEIGHT = 480;
 const { Vector, Tileset, LevelMaker, math } = Lancelot.utils;
 
-let game;
-addEventListener("DOMContentLoaded", () => {
-    game = new Lancelot.Game({
+Lancelot.start({
         width: WIDTH,
         height: HEIGHT,
         quality: 0.2,
@@ -32,10 +30,10 @@ addEventListener("DOMContentLoaded", () => {
         preload: preload,
         controls: {
             active: true,
-            theme: "dark"
+            theme: "light",
+            joystick: true
         }
     });
-});
 
 function preload() {
     this.load.image("background", "background.png");
@@ -106,7 +104,7 @@ function init() {
 
     const shape = scene2.create();
     shape.position.y = HEIGHT * 0;
-    shape.add(new Lancelot.drawable.Star({
+    shape.addComponent(new Lancelot.drawable.Star({
         width: WIDTH,
         height: HEIGHT * 0.2,
         outerRadius: 80,
@@ -117,14 +115,14 @@ function init() {
         strokeWidth: 4
     }), "Shape");
     shape.onUpdate((dt) => {
-        const comp = shape.get("Shape");
-        //comp.angle += dt;
+        const comp = shape.getComponent("Shape");
+        comp.angle += dt;
     });
     shape.moveBy(new Vector(300, 0), 2000, "linear");
 
     const shape2 = scene2.create();
     shape2.position.y = HEIGHT * 0.3;
-    shape2.add(new Lancelot.drawable.Star({
+    shape2.addComponent(new Lancelot.drawable.Star({
         width: WIDTH,
         height: HEIGHT * 0.2,
         outerRadius: 80,
@@ -137,6 +135,8 @@ function init() {
     shape2.moveBy(new Vector(300, 0), 2000, "ease-in-out");
 
     this.timeout.set(() => this.quality = 1.0, 2000);
+
+    scene.interactive.on("mousedown", (e) => console.log(e));
 }
     </script>
 </body>

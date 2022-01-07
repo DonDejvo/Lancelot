@@ -1,73 +1,48 @@
 export class Color {
 
-    /** @type {string} */
-    _color;
-    /** @type {(CanvasGradient | string)} */
-    _parsed = null;
+    _value;
+    _str;
 
-    constructor(col = "black") {
-        this._color = col;
+    constructor(str = "black") {
+        this.set(str);
+    }
+
+    get value() {
+        return this._value;
     }
 
     get alpha() {
-        if(this._color == "transparent") {
-            return 0;
-        } else if(this._color.startsWith("rgba")) {
-            return parseFloat(this._color.slice(5, this._color.length - 1).split(",")[3]);
+        if(this._str == "transparent") {
+            return 0.0;
+        } else if(this._str.startsWith("rgba")) {
+            return parseFloat(this._str.slice(5, this._str.length - 1).split(",")[3]);
 
         }
-        return 1;
+        return 1.0;
     }
 
-    /**
-     * 
-     * @param {string} col 
-     */
-    set(col) {
-        this._color = col;
-        this._parsed = null;
+    set(str) {
+        this._str = str;
+        this._value = Color.parse(str);
     }
 
-    /**
-     * 
-     * @param {CanvasRenderingContext2D} ctx 
-     */
-    fill(ctx) {
-        ctx.fillStyle = this.get(ctx);
+    copy(col) {
+        this._str = col._str;
+        this._value = col._value;
     }
 
-    /**
-     * 
-     * @param {CanvasRenderingContext2D} ctx 
-     */
-    stroke(ctx) {
-        ctx.strokeStyle = this.get(ctx);
-    }
-
-    get(ctx) {
-        if(this._parsed == null) {
-            this._parsed = Color.parse(ctx, this._color);
-        }
-        return this._parsed;
-    }
-
-    /**
-     * 
-     * @param {CanvasRenderingContext2D} ctx 
-     * @param {string} s 
-     * @returns {(CanvasGradient | string)}
-     */
-    static parse(ctx, s) {
-        if(typeof s != "string") {
+    static parse(str) {
+        const ctx = Color._buffer;
+        if(typeof str != "string") {
             return "black";
         }
-        const params = s.split(";");
+        const params = str.split(";");
         const len = params.length;
         if(len === 1) {
-            return s;
+            return str;
         }
         let grd;
-        const values = params[1].split(",").map((s) => parseFloat(s));
+        const values = params[1].split(",").map((val) => parseFloat(val));
         switch(params[0]) {
             case "linear-gradient":
                 grd = ctx.createLinearGradient(...values);
@@ -84,4 +59,6 @@ export class Color {
         }
         return grd;
     }
+
+    static _buffer = document.createElement("canvas").getContext("2d");
 }

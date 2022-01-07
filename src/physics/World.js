@@ -30,7 +30,7 @@ export class World {
      */    
     constructor(params = {}) {
 
-        this._relaxationCount = paramParser.parseValue(params.relaxationCount, 3);
+        this._relaxationCount = paramParser.parseValue(params.relaxationCount, 1);
         this._gravity = paramParser.parseValue(params.gravity, 0);
 
         const bounds = paramParser.parseValue(params.bounds, [[-1000, -1000], [1000, 1000]]);
@@ -42,6 +42,10 @@ export class World {
 
     get quadtree() {
         return this._quadtree;
+    }
+
+    findNear(position, bounds) {
+        return this.quadtree.findNear(position, bounds).map(c => c.entity);
     }
 
     addJoint(j) {
@@ -60,7 +64,7 @@ export class World {
         const treeController = new QuadtreeController({
             quadtree: this._quadtree
         });
-        e.add(treeController);
+        e.addComponent(treeController);
         this._bodies.push(b);
     }
 
@@ -106,6 +110,7 @@ export class World {
         
     }
 
+    /*
     raycast(groups, params) {
         let result = [];
 
@@ -139,6 +144,7 @@ export class World {
         }
         return result;
     }
+    */
     
 }
 

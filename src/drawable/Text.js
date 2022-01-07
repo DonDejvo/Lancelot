@@ -96,8 +96,8 @@ export class Text extends FixedDrawable {
         ctx.globalAlpha = this.opacity;
         ctx.lineWidth = this.strokeWidth;
         ctx.lineCap = this.strokeCap;
-        this._fillColor.fill(ctx);
-        this._strokeColor.stroke(ctx);
+        ctx.fillStyle = this.fillColor.value;
+        ctx.strokeStyle = this.strokeColor.value;
         ctx.font = `${this._fontStyle} ${this._fontSize}px '${this._fontFamily}'`;
         ctx.textAlign = this._align;
         ctx.textBaseline = "middle";
@@ -113,8 +113,8 @@ export class Text extends FixedDrawable {
     drawShadow(ctx) {
         ctx.lineWidth = this.strokeWidth;
         ctx.lineCap = this.strokeCap;
-        this._shadowColor.fill(ctx);
-        this._shadowColor.stroke(ctx);
+        ctx.fillStyle = this.shadowColor.value;
+        ctx.strokeStyle = this.shadowColor.value;
         let offsetX = this._align == "left" ? -this._width / 2 : this._align == "right" ? this._width / 2 : 0;
         ctx.font = `${this._fontStyle} ${this._fontSize}px '${this._fontFamily}'`;
         ctx.textAlign = this._align;

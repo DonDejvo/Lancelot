@@ -66,13 +66,14 @@ export class Sprite extends FixedDrawable {
             currentAnim.counter = 0;
             ++currentAnim.frame;
             if(currentAnim.frame >= frames.length) {
-                currentAnim.frame = 0;
                 if(currentAnim.OnEnd) {
                     currentAnim.onEnd();
                 }
                 if(!currentAnim.repeat) {
                     this._currentAnim = null;
                     this._paused = true;
+                } else {
+                    currentAnim.frame = 0;
                 }
             }
             this._framePos = frames[currentAnim.frame];
@@ -90,7 +91,7 @@ export class Sprite extends FixedDrawable {
     }
     
     drawShadow(ctx) {
-        this._shadowColor.fill(ctx);
+        ctx.fillStyle = this.shadowColor.value;
         ctx.beginPath();
         ctx.rect(-this._width / 2, -this._height / 2, this._width, this._height);
         ctx.fill();

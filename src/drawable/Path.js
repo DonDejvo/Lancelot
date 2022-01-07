@@ -41,17 +41,14 @@ export class Path extends Drawable {
         ctx.globalAlpha = this.opacity;
         ctx.lineWidth = this.strokeWidth;
         ctx.lineCap = this.strokeCap;
-        this._fillColor.fill(ctx);
-        this._strokeColor.stroke(ctx);
+        ctx.fillStyle = this.fillColor.value;
+        ctx.strokeStyle = this.strokeColor.value;
         ctx.beginPath();
         polygon(ctx, ...this._points);
         ctx.closePath();
         ctx.fill();
         if(this._strokeWidth != 0) {
             ctx.stroke();
-        }
-        if(this._image) {
-            this.drawImage(ctx);
         }
     }
     

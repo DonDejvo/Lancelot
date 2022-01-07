@@ -85,6 +85,7 @@ export class Game {
         elem.style.WebkitUserSelect = "none";
         elem.style.userSelect = "none";
         elem.style.touchAction = "none";
+        elem.style.overflow = "hidden";
 
         this._renderer = new Renderer(this._width, this._height, this._quality, this._parentElement);
 
@@ -116,6 +117,14 @@ export class Game {
         }
     }
 
+    get width() {
+        return this._width;
+    }
+
+    get height() {
+        return this._height;
+    }
+
     get load() {
         return this._load;
     }
@@ -139,6 +148,7 @@ export class Game {
     set quality(val) {
         this._quality = val;
         this._renderer._quality = this._quality;
+        this._renderer._canvas.remove();
         this._renderer._initCanvas();
         for(let scene of this._sceneManager.scenes) {
             scene._buffer = null;
@@ -154,29 +164,41 @@ export class Game {
     }
     */
 
+    get(n) {
+        const scene = this._sceneManager.get(n);
+        if(!scene) {
+            return null;
+        }
+        return scene;
+    }
+
     requestFullScreen() {
-        const elem = this._parentElement;
-        let requestMethod = (elem.requestFullScreen || elem.webkitRequestFullScreen);
-        if(requestMethod) {
-            requestMethod.call(elem);
+        try {
+            const elem = this._parentElement;
+            let requestMethod = (elem.requestFullScreen || elem.webkitRequestFullScreen || elem.mozRequestFullScreen);
+            if(requestMethod) {
+                requestMethod.call(elem);
+            }
+        } catch(e) {
+            console.log(e);
         }
     }
 
     _initEventListeners() {
         const isTouchDevice = "ontouchstart" in document;
-        const cnv = this._renderer.canvas;
+        const con = this._renderer._container;
 
         if(isTouchDevice) {
 
-            cnv.addEventListener("touchstart", (e) => this._handleTouchEvent(e));
-            cnv.addEventListener("touchmove", (e) => this._handleTouchEvent(e));
-            cnv.addEventListener("touchend", (e) => this._handleTouchEvent(e));
+            con.addEventListener("touchstart", (e) => this._handleTouchEvent(e));
+            con.addEventListener("touchmove", (e) => this._handleTouchEvent(e));
+            con.addEventListener("touchend", (e) => this._handleTouchEvent(e));
 
         } else {
 
-            cnv.addEventListener("mousedown", (e) => this._handleMouseEvent(e));
-            cnv.addEventListener("mousemove", (e) => this._handleMouseEvent(e));
-            cnv.addEventListener("mouseup", (e) => this._handleMouseEvent(e));
+            con.addEventListener("mousedown", (e) => this._handleMouseEvent(e));
+            con.addEventListener("mousemove", (e) => this._handleMouseEvent(e));
+            con.addEventListener("mouseup", (e) => this._handleMouseEvent(e));
 
         }
 
@@ -197,9 +219,11 @@ export class Game {
             "touchmove": "mousemove",
             "touchend": "mouseup"
         };
-        this._handleSceneEvent(touchToMouseType[e.type], {
-            x: e.changedTouches[0].pageX, y: e.changedTouches[0].pageY, id: 0
-        });
+        for(let i = 0; i < e.changedTouches.length; ++i) {
+            this._handleSceneEvent(touchToMouseType[e.type], {
+                x: e.changedTouches[i].pageX, y: e.changedTouches[i].pageY, id: e.changedTouches[i].identifier
+            });
+        }
     }
     _handleMouseEvent(e) {
         e.preventDefault();
@@ -228,6 +252,7 @@ export class Game {
     _initControls() {
         const controls = paramParser.parseObject(this._config.controls, {
             active: false,
+            joystick: false,
             theme: "dark",
             layout: {
                 DPad: { left: "ArrowLeft", right: "ArrowRight", up: "ArrowUp", down: "ArrowDown" },
@@ -332,20 +357,20 @@ export class Game {
         controlsContainer.style.left = "0";
         controlsContainer.style.top = "0";
         controlsContainer.style.zIndex = "999";
-        controlsContainer.style.position = "absolute";
+        controlsContainer.style.position = "fixed";
         controlsContainer.style.pointerEvents = "none";
 
         const controlsMap = {};
 
-        const joystick = document.createElement("div");
-        joystick.style.width = "120px";
-        joystick.style.height = "120px";
-        joystick.style.left = "10px";
-        joystick.style.bottom = "50px";
-        joystick.style.borderRadius = "50%";
-        joystick.style.overflow = "hidden";
-        applyStyle(joystick);
-        controlsContainer.appendChild(joystick);
+        const dpad = document.createElement("div");
+        dpad.style.width = "120px";
+        dpad.style.height = "120px";
+        dpad.style.left = "15px";
+        dpad.style.bottom = "50px";
+        dpad.style.borderRadius = "50%";
+        dpad.style.overflow = "hidden";
+        applyStyle(dpad);
+        controlsContainer.appendChild(dpad);
 
         for(let i = 0; i < 4; ++i) {
             const box = document.createElement("div");
@@ -354,10 +379,73 @@ export class Game {
             box.style.left = (-75 + 150 * (i % 2)) + "px";
             box.style.top = (-75 + 150 * Math.floor(i / 2)) + "px";
             applyStyle(box, false);
-            joystick.appendChild(box);
+            dpad.appendChild(box);
         }
 
-        controlsMap.DPad = joystick;
+        const joystick = document.createElement("div");
+        joystick.style.width = "120px";
+        joystick.style.height = "120px";
+        joystick.style.right = "15px";
+        joystick.style.bottom = "50px";
+        joystick.style.borderRadius = "50%";
+        applyStyle(joystick);
+        controlsContainer.appendChild(joystick);
+
+        let joystickId = -1, dpadId = -1;
+
+        const joystickPad = document.createElement("div");
+        joystickPad.style.width = "60px";
+        joystickPad.style.height = "60px";
+        joystickPad.style.left = "0";
+        joystickPad.style.top = "0";
+        joystickPad.style.borderRadius = "50%";
+        applyStyle(joystickPad);
+        joystick.appendChild(joystickPad);
+        joystickPad.style.display = "none";
+
+        const handleJoystick = (type, x, y) => {
+            const boundingRect = joystick.getBoundingClientRect();
+            x = x - (boundingRect.x + boundingRect.width / 2);
+            y = y - (boundingRect.y + boundingRect.height / 2);
+            const v = new Vector(x, y);
+            if(v.mag() > 60) {
+                v.unit().mult(60);
+            }
+            joystickPad.style.left = (v.x + boundingRect.width / 4) + "px";
+            joystickPad.style.top = (v.y + boundingRect.height / 4) + "px";
+            const con = this._renderer._container.getBoundingClientRect();
+            this._handleSceneEvent(type, {x: x + con.x + con.width/2, y: y + con.y + con.height/2, id: -1});
+        };
+
+        joystick.addEventListener("touchstart", (e) => {
+            e.preventDefault();
+            handleJoystick("mousedown", e.changedTouches[0].pageX, e.changedTouches[0].pageY);
+            joystickId = e.changedTouches[0].identifier;
+            joystickPad.style.display = "block";
+        });
+        joystick.addEventListener("touchmove", (e) => {
+            e.preventDefault();
+            for(let i = 0; i < e.changedTouches.length; ++i) {
+                if(e.changedTouches[i].identifier == joystickId) {
+                    handleJoystick("mousemove", e.changedTouches[i].pageX, e.changedTouches[i].pageY);
+                    break;
+                }
+            }
+            
+        });
+        joystick.addEventListener("touchend", (e) => {
+            e.preventDefault();
+            for(let i = 0; i < e.changedTouches.length; ++i) {
+                if(e.changedTouches[i].identifier == joystickId) {
+                    handleJoystick("mouseup", e.changedTouches[i].pageX, e.changedTouches[i].pageY);
+                    joystickId = -1;
+                    joystickPad.style.display = "none";
+                    break;
+                }
+            }
+        });
+
+        controlsMap.DPad = dpad;
         controlsMap.A_Button = createButton(10, 63, "A");
         controlsMap.B_Button = createButton(63, 10, "B");
         controlsMap.X_Button = createButton(63, 116, "X");
@@ -378,11 +466,11 @@ export class Game {
             down: { v: new Vector(0, 1), n: "down" },
         };
 
-        const getJoystickDirection = (e) => {
+        const getDPadDirection = (x, y) => {
             
-            const boundingRect = joystick.getBoundingClientRect();
-            const x = e.changedTouches[0].pageX - (boundingRect.x + boundingRect.width / 2);
-            const y = e.changedTouches[0].pageY - (boundingRect.y + boundingRect.height / 2);
+            const boundingRect = dpad.getBoundingClientRect();
+            x = x - (boundingRect.x + boundingRect.width / 2);
+            y = y - (boundingRect.y + boundingRect.height / 2);
             const pos = new Vector(x, y);
             if(pos.mag() < 20) return [];
             const n = pos.clone().unit();
@@ -402,7 +490,7 @@ export class Game {
             return res;
         }
 
-        const handleJoystick = (ev, dirs, keys) => {
+        const handleDPad = (ev, dirs, keys) => {
             for(let dir of dirs) {
                 this._handleSceneEvent(ev, {
                     key: keys[dir]
@@ -417,19 +505,29 @@ export class Game {
             if(attr == "DPad") {
                 elem.addEventListener("touchstart", (e) => {
                     e.preventDefault();
-                    const dirs = getJoystickDirection(e);
-                    handleJoystick("keydown", dirs, key);
+                    const dirs = getDPadDirection(e.changedTouches[0].pageX, e.changedTouches[0].pageY);
+                    dpadId = e.changedTouches[0].identifier;
+                    handleDPad("keydown", dirs, key);
                 });
                 elem.addEventListener("touchmove", (e) => {
                     e.preventDefault();
-                    handleJoystick("keyup", ["left", "right", "up", "down"], key);
-                    const dirs = getJoystickDirection(e);
-                    handleJoystick("keydown", dirs, key);
+                    for(let i = 0; i < e.changedTouches.length; ++i) {
+                        if(e.changedTouches[i].identifier == dpadId) {
+                            handleDPad("keyup", ["left", "right", "up", "down"], key);
+                            const dirs = getDPadDirection(e.changedTouches[i].pageX, e.changedTouches[i].pageY);
+                            handleDPad("keydown", dirs, key);
+                        }
+                    }
                 });
                 elem.addEventListener("touchend", (e) => {
                     e.preventDefault();
-                    const dirs = getJoystickDirection(e);
-                    handleJoystick("keyup", ["left", "right", "up", "down"], key);
+                    for(let i = 0; i < e.changedTouches.length; ++i) {
+                        if(e.changedTouches[i].identifier == dpadId) {
+                            dpadId = -1;
+                            handleDPad("keyup", ["left", "right", "up", "down"], key);
+                        }
+                    }
+                    
                 });
                 continue;
             }
@@ -451,6 +549,15 @@ export class Game {
                     key: key
                 });
             });
+        }
+
+        if(controls.joystick) {
+            controlsMap.X_Button.style.display = "none";
+            controlsMap.Y_Button.style.display = "none";
+            controlsMap.A_Button.style.display = "none";
+            controlsMap.B_Button.style.display = "none";
+        } else {
+            joystick.style.display = "none";
         }
     }
 }

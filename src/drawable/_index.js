@@ -7,8 +7,10 @@ import { Text } from "./Text.js";
 import { Picture } from "./Picture.js";
 import { Sprite } from "./Sprite.js";
 import { Path } from "./Path.js";
+import { Buffer } from "./Buffer.js";
 import { Ring } from "./Ring.js";
-import { polygon, star, roundedRect, regularPolygon, fillRing, strokeRing } from "./Primitives.js";
+import { Heart } from "./Heart.js";
+import { polygon, star, roundedRect, regularPolygon, fillRing, strokeRing, heart } from "./Primitives.js";
 
 export {
     Drawable,
@@ -25,5 +27,7 @@ export {
     Path,
     Star,
     Ring,
-    polygon, star, roundedRect, regularPolygon, fillRing, strokeRing
+    Heart,
+    Buffer,
+    polygon, star, roundedRect, regularPolygon, fillRing, strokeRing, heart
 };

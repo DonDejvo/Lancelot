@@ -1,9 +1,14 @@
 var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
 var __markAsModule = (target) => __defProp(target, "__esModule", { value: true });
 var __export = (target, all) => {
   __markAsModule(target);
   for (var name in all)
     __defProp(target, name, { get: all[name], enumerable: true });
+};
+var __publicField = (obj, key, value) => {
+  __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+  return value;
 };
 
 // src/utils/Loader.js
@@ -194,6 +199,7 @@ var Engine = class {
   _paused = true;
   _step;
   _fpsMeter = new FPSMeter();
+  _minFps = 20;
   constructor(step) {
     this._step = step;
   }
@@ -207,7 +213,7 @@ var Engine = class {
       }
       const elapsedTime = timestamp - this._previousRAF;
       this._fpsMeter.update(elapsedTime * 1e-3);
-      this._step(elapsedTime);
+      this._step(Math.min(elapsedTime, 1e3 / this._minFps));
       this._previousRAF = timestamp;
     });
   }
@@ -1793,7 +1799,7 @@ var World = class {
   _bodies = [];
   _joints = [];
   constructor(params = {}) {
-    this._relaxationCount = paramParser.parseValue(params.relaxationCount, 3);
+    this._relaxationCount = paramParser.parseValue(params.relaxationCount, 1);
     this._gravity = paramParser.parseValue(params.gravity, 0);
     const bounds = paramParser.parseValue(params.bounds, [[-1e3, -1e3], [1e3, 1e3]]);
     const cellDimension = paramParser.parseObject(params.cellDimension, { width: 100, height: 100 });
@@ -1802,6 +1808,9 @@ var World = class {
   }
   get quadtree() {
     return this._quadtree;
+  }
+  findNear(position, bounds) {
+    return this.quadtree.findNear(position, bounds).map((c) => c.entity);
   }
   addJoint(j) {
     this._joints.push(j);
@@ -1817,7 +1826,7 @@ var World = class {
     const treeController = new QuadtreeController({
       quadtree: this._quadtree
     });
-    e.add(treeController);
+    e.addComponent(treeController);
     this._bodies.push(b);
   }
   removeBody(e, b) {
@@ -1859,33 +1868,6 @@ var World = class {
       treeController.updateClient();
     }
   }
-  raycast(groups, params) {
-    let result = [];
-    groups = groups.split(" ");
-    const ray = new Ray({
-      range: params.range
-    });
-    ray.position = params.position;
-    ray.angle = params.angle;
-    const rayBox = ray.getBoundingRect();
-    const bodies = this._bodies.filter((b) => {
-      if (!groups.map((g) => b.parent.groupList.has(g)).some((_) => _)) {
-        return false;
-      }
-      const bodyBox = b.getBoundingRect();
-      return (ray.position.x + rayBox.width / 2 - (b.position.x - bodyBox.width / 2)) * (ray.position.x - rayBox.width / 2 - (b.position.x + bodyBox.width / 2)) < 0 || (ray.position.y + rayBox.height / 2 - (b.position.y - bodyBox.height / 2)) * (ray.position.y - rayBox.height / 2 - (b.position.y + bodyBox.height / 2)) < 0;
-    });
-    for (let b of bodies) {
-      let info = detectCollision(ray, b);
-      if (info.collide) {
-        result.push({
-          body: b,
-          point: info.point
-        });
-      }
-    }
-    return result;
-  }
 };
 var QuadtreeController = class extends Component {
   _quadtree;
@@ -1925,47 +1907,43 @@ var QuadtreeController = class extends Component {
 };
 
 // src/utils/Color.js
-var Color = class {
-  _color;
-  _parsed = null;
-  constructor(col = "black") {
-    this._color = col;
+var _Color = class {
+  _value;
+  _str;
+  constructor(str = "black") {
+    this.set(str);
+  }
+  get value() {
+    return this._value;
   }
   get alpha() {
-    if (this._color == "transparent") {
+    if (this._str == "transparent") {
       return 0;
-    } else if (this._color.startsWith("rgba")) {
-      return parseFloat(this._color.slice(5, this._color.length - 1).split(",")[3]);
+    } else if (this._str.startsWith("rgba")) {
+      return parseFloat(this._str.slice(5, this._str.length - 1).split(",")[3]);
     }
     return 1;
   }
-  set(col) {
-    this._color = col;
-    this._parsed = null;
+  set(str) {
+    this._str = str;
+    this._value = _Color.parse(str);
   }
-  fill(ctx) {
-    ctx.fillStyle = this.get(ctx);
+  copy(col) {
+    this._str = col._str;
+    this._value = col._value;
   }
-  stroke(ctx) {
-    ctx.strokeStyle = this.get(ctx);
-  }
-  get(ctx) {
-    if (this._parsed == null) {
-      this._parsed = Color.parse(ctx, this._color);
-    }
-    return this._parsed;
-  }
-  static parse(ctx, s) {
-    if (typeof s != "string") {
+  static parse(str) {
+    const ctx = _Color._buffer;
+    if (typeof str != "string") {
       return "black";
     }
-    const params = s.split(";");
+    const params = str.split(";");
     const len = params.length;
     if (len === 1) {
-      return s;
+      return str;
     }
     let grd;
-    const values = params[1].split(",").map((s2) => parseFloat(s2));
+    const values = params[1].split(",").map((val) => parseFloat(val));
     switch (params[0]) {
       case "linear-gradient":
         grd = ctx.createLinearGradient(...values);
@@ -1983,6 +1961,8 @@ var Color = class {
     return grd;
   }
 };
+var Color = _Color;
+__publicField(Color, "_buffer", document.createElement("canvas").getContext("2d"));
 
 // src/utils/Shaker.js
 var Shaker = class {
@@ -2032,7 +2012,6 @@ var Entity = class {
   _interactive = null;
   _body = null;
   _onUpdate = null;
-  _properties = new Map();
   get name() {
     return this._name;
   }
@@ -2053,9 +2032,6 @@ var Entity = class {
   }
   get groupList() {
     return this._groupList;
-  }
-  get props() {
-    return this._properties;
   }
   constructor(scene, n) {
     scene.addEntity(this, n);
@@ -2078,7 +2054,7 @@ var Entity = class {
   isMoving() {
     return this._position.isMoving();
   }
-  add(c, n) {
+  addComponent(c, n) {
     if (n === void 0) {
       n = c.constructor.name;
     }
@@ -2088,14 +2064,14 @@ var Entity = class {
     this.clip(c, true);
     c.initComponent();
   }
-  get(n) {
+  getComponent(n) {
     return this._components.get(n);
   }
   _updatePosition(elapsedTimeS) {
     this._position.update(elapsedTimeS);
   }
   remove() {
-    this._scene.remove(this);
+    this._scene.removeEntity(this);
   }
   update(elapsedTimeS) {
     this._updatePosition(elapsedTimeS);
@@ -2239,7 +2215,7 @@ var Scene = class {
   constructor(game, name, zIndex, options = {}) {
     this._game = game;
     this._game._sceneManager.add(this, name, zIndex);
-    this._world = new World(options.physics);
+    this._world = new World(options.world);
     this._background = new Color(paramParser.parseValue(options.background, options.background));
     this._camera = new Camera(this, "Camera");
   }
@@ -2265,10 +2241,13 @@ var Scene = class {
     return this._game.audio;
   }
   get background() {
-    return this._background._color;
+    return this._background;
   }
   set background(col) {
-    this._background.set(col);
+    this._background.copy(col);
+  }
+  get game() {
+    return this._game;
   }
   get interactive() {
     return this._interactive;
@@ -2289,10 +2268,13 @@ var Scene = class {
     return this._entityManager.filter((e) => e.groupList.has(g));
   }
   handleEvent(type, event) {
+    if (this.paused) {
+      return false;
+    }
     let captured = false;
     if (type.startsWith("mouse")) {
       if (type == "mousedown") {
-        const entities = this._world.quadtree.findNear([event.x, event.y], [0, 0]).map((c) => c.entity);
+        const entities = this.world.findNear([event.x, event.y], [0, 0]);
         for (let e of entities) {
           if (!e.interactive) {
             continue;
@@ -2306,7 +2288,7 @@ var Scene = class {
         }
       } else {
         for (let e of this._interactiveEntities) {
-          if (e.interactive._id == event.id) {
+          if (event.id != -1 && e.interactive._id == event.id) {
             if (e.interactive.handleEvent(type, event)) {
               captured = true;
             }
@@ -2385,6 +2367,9 @@ var Scene = class {
     this._paused = true;
     this._hidden = true;
   }
+  show() {
+    this._hidden = false;
+  }
   pause() {
     this._paused = true;
   }
@@ -2416,7 +2401,7 @@ var Scene = class {
     const buffer = this._buffer;
     buffer.beginPath();
     buffer.clearRect(0, 0, w, h);
-    this._background.fill(buffer);
+    buffer.fillStyle = this.background.value;
     buffer.fillRect(0, 0, w, h);
     buffer.save();
     buffer.translate(Math.floor(-camPos.x * camScale + w / 2 + 0.5), Math.floor(-camPos.y * camScale + h / 2 + 0.5));
@@ -2494,6 +2479,7 @@ var AudioManager = class {
 };
 var Music = class {
   _resources;
+  _paused = true;
   _audio = null;
   _volume = 1;
   _speed = 1;
@@ -2505,8 +2491,7 @@ var Music = class {
     return this._volume;
   }
   set volume(val) {
-    const volume = math.sat(val);
-    this._volume = volume;
+    this._volume = math.sat(val);
     this._set();
   }
   get speed() {
@@ -2534,20 +2519,36 @@ var Music = class {
     }
   }
   get paused() {
-    return this._audio ? this._audio.paused : true;
+    return this._paused;
   }
   set(name) {
+    if (!this._paused) {
+      this._audio.pause();
+    }
     this._audio = this._resources.get(name).cloneNode(true);
     this._set();
+    if (!this._paused) {
+      this.play();
+    }
   }
   play() {
+    this._paused = false;
     if (this._audio) {
-      this._audio.play();
+      const promise = this._audio.play();
+      if (promise) {
+        promise.then((_) => {
+        }).catch((err) => console.log("fuck"));
+      }
     }
   }
   pause() {
+    this._paused = true;
     if (this._audio) {
-      this._audio.pause();
+      try {
+        this._audio.pause();
+      } catch (e) {
+        console.log(e);
+      }
     }
   }
   _set() {
@@ -2569,13 +2570,12 @@ var Effects = class {
     return this._volume;
   }
   set volume(val) {
-    const volume = math.sat(val);
-    this._volume = val;
+    this._volume = math.sat(val);
     for (let audio of this._arr) {
       audio.volume = this._volume;
     }
   }
-  play(name, params) {
+  play(name, params = {}) {
     const speed = paramParser.parseValue(params.speed, 1);
     const audioElem = this._resources.get(name).cloneNode(true);
     audioElem.addEventListener("ended", () => {
@@ -2587,7 +2587,11 @@ var Effects = class {
     audioElem.volume = this._volume;
     audioElem.playbackRate = speed;
     this._arr.push(audioElem);
-    audioElem.play();
+    const promise = audioElem.play();
+    if (promise) {
+      promise.then((_) => {
+      }).catch((err) => console.log("fuck"));
+    }
   }
 };
 
@@ -2622,6 +2626,7 @@ var Game = class {
     elem.style.WebkitUserSelect = "none";
     elem.style.userSelect = "none";
     elem.style.touchAction = "none";
+    elem.style.overflow = "hidden";
     this._renderer = new Renderer(this._width, this._height, this._quality, this._parentElement);
     const step = (elapsedTime) => {
       this._timeout.update(elapsedTime);
@@ -2646,6 +2651,12 @@ var Game = class {
       this._init();
     }
   }
+  get width() {
+    return this._width;
+  }
+  get height() {
+    return this._height;
+  }
   get load() {
     return this._load;
   }
@@ -2664,29 +2675,41 @@ var Game = class {
   set quality(val) {
     this._quality = val;
     this._renderer._quality = this._quality;
+    this._renderer._canvas.remove();
     this._renderer._initCanvas();
     for (let scene of this._sceneManager.scenes) {
       scene._buffer = null;
     }
   }
+  get(n) {
+    const scene = this._sceneManager.get(n);
+    if (!scene) {
+      return null;
+    }
+    return scene;
+  }
   requestFullScreen() {
-    const elem = this._parentElement;
-    let requestMethod = elem.requestFullScreen || elem.webkitRequestFullScreen;
-    if (requestMethod) {
-      requestMethod.call(elem);
+    try {
+      const elem = this._parentElement;
+      let requestMethod = elem.requestFullScreen || elem.webkitRequestFullScreen || elem.mozRequestFullScreen;
+      if (requestMethod) {
+        requestMethod.call(elem);
+      }
+    } catch (e) {
+      console.log(e);
     }
   }
   _initEventListeners() {
     const isTouchDevice = "ontouchstart" in document;
-    const cnv = this._renderer.canvas;
+    const con = this._renderer._container;
     if (isTouchDevice) {
-      cnv.addEventListener("touchstart", (e) => this._handleTouchEvent(e));
-      cnv.addEventListener("touchmove", (e) => this._handleTouchEvent(e));
-      cnv.addEventListener("touchend", (e) => this._handleTouchEvent(e));
+      con.addEventListener("touchstart", (e) => this._handleTouchEvent(e));
+      con.addEventListener("touchmove", (e) => this._handleTouchEvent(e));
+      con.addEventListener("touchend", (e) => this._handleTouchEvent(e));
     } else {
-      cnv.addEventListener("mousedown", (e) => this._handleMouseEvent(e));
-      cnv.addEventListener("mousemove", (e) => this._handleMouseEvent(e));
-      cnv.addEventListener("mouseup", (e) => this._handleMouseEvent(e));
+      con.addEventListener("mousedown", (e) => this._handleMouseEvent(e));
+      con.addEventListener("mousemove", (e) => this._handleMouseEvent(e));
+      con.addEventListener("mouseup", (e) => this._handleMouseEvent(e));
     }
     addEventListener("keydown", (e) => this._handleKeyEvent(e));
     addEventListener("keyup", (e) => this._handleKeyEvent(e));
@@ -2704,11 +2727,13 @@ var Game = class {
       "touchmove": "mousemove",
       "touchend": "mouseup"
     };
-    this._handleSceneEvent(touchToMouseType[e.type], {
-      x: e.changedTouches[0].pageX,
-      y: e.changedTouches[0].pageY,
-      id: 0
-    });
+    for (let i = 0; i < e.changedTouches.length; ++i) {
+      this._handleSceneEvent(touchToMouseType[e.type], {
+        x: e.changedTouches[i].pageX,
+        y: e.changedTouches[i].pageY,
+        id: e.changedTouches[i].identifier
+      });
+    }
   }
   _handleMouseEvent(e) {
     e.preventDefault();
@@ -2734,6 +2759,7 @@ var Game = class {
   _initControls() {
     const controls = paramParser.parseObject(this._config.controls, {
       active: false,
+      joystick: false,
       theme: "dark",
       layout: {
         DPad: { left: "ArrowLeft", right: "ArrowRight", up: "ArrowUp", down: "ArrowDown" },
@@ -2830,18 +2856,18 @@ var Game = class {
     controlsContainer.style.left = "0";
     controlsContainer.style.top = "0";
     controlsContainer.style.zIndex = "999";
-    controlsContainer.style.position = "absolute";
+    controlsContainer.style.position = "fixed";
     controlsContainer.style.pointerEvents = "none";
     const controlsMap = {};
-    const joystick = document.createElement("div");
-    joystick.style.width = "120px";
-    joystick.style.height = "120px";
-    joystick.style.left = "10px";
-    joystick.style.bottom = "50px";
-    joystick.style.borderRadius = "50%";
-    joystick.style.overflow = "hidden";
-    applyStyle(joystick);
-    controlsContainer.appendChild(joystick);
+    const dpad = document.createElement("div");
+    dpad.style.width = "120px";
+    dpad.style.height = "120px";
+    dpad.style.left = "15px";
+    dpad.style.bottom = "50px";
+    dpad.style.borderRadius = "50%";
+    dpad.style.overflow = "hidden";
+    applyStyle(dpad);
+    controlsContainer.appendChild(dpad);
     for (let i = 0; i < 4; ++i) {
       const box = document.createElement("div");
       box.style.width = "120px";
@@ -2849,9 +2875,66 @@ var Game = class {
       box.style.left = -75 + 150 * (i % 2) + "px";
       box.style.top = -75 + 150 * Math.floor(i / 2) + "px";
       applyStyle(box, false);
-      joystick.appendChild(box);
+      dpad.appendChild(box);
     }
-    controlsMap.DPad = joystick;
+    const joystick = document.createElement("div");
+    joystick.style.width = "120px";
+    joystick.style.height = "120px";
+    joystick.style.right = "15px";
+    joystick.style.bottom = "50px";
+    joystick.style.borderRadius = "50%";
+    applyStyle(joystick);
+    controlsContainer.appendChild(joystick);
+    let joystickId = -1, dpadId = -1;
+    const joystickPad = document.createElement("div");
+    joystickPad.style.width = "60px";
+    joystickPad.style.height = "60px";
+    joystickPad.style.left = "0";
+    joystickPad.style.top = "0";
+    joystickPad.style.borderRadius = "50%";
+    applyStyle(joystickPad);
+    joystick.appendChild(joystickPad);
+    joystickPad.style.display = "none";
+    const handleJoystick = (type, x, y) => {
+      const boundingRect = joystick.getBoundingClientRect();
+      x = x - (boundingRect.x + boundingRect.width / 2);
+      y = y - (boundingRect.y + boundingRect.height / 2);
+      const v = new Vector(x, y);
+      if (v.mag() > 60) {
+        v.unit().mult(60);
+      }
+      joystickPad.style.left = v.x + boundingRect.width / 4 + "px";
+      joystickPad.style.top = v.y + boundingRect.height / 4 + "px";
+      const con = this._renderer._container.getBoundingClientRect();
+      this._handleSceneEvent(type, { x: x + con.x + con.width / 2, y: y + con.y + con.height / 2, id: -1 });
+    };
+    joystick.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      handleJoystick("mousedown", e.changedTouches[0].pageX, e.changedTouches[0].pageY);
+      joystickId = e.changedTouches[0].identifier;
+      joystickPad.style.display = "block";
+    });
+    joystick.addEventListener("touchmove", (e) => {
+      e.preventDefault();
+      for (let i = 0; i < e.changedTouches.length; ++i) {
+        if (e.changedTouches[i].identifier == joystickId) {
+          handleJoystick("mousemove", e.changedTouches[i].pageX, e.changedTouches[i].pageY);
+          break;
+        }
+      }
+    });
+    joystick.addEventListener("touchend", (e) => {
+      e.preventDefault();
+      for (let i = 0; i < e.changedTouches.length; ++i) {
+        if (e.changedTouches[i].identifier == joystickId) {
+          handleJoystick("mouseup", e.changedTouches[i].pageX, e.changedTouches[i].pageY);
+          joystickId = -1;
+          joystickPad.style.display = "none";
+          break;
+        }
+      }
+    });
+    controlsMap.DPad = dpad;
     controlsMap.A_Button = createButton(10, 63, "A");
     controlsMap.B_Button = createButton(63, 10, "B");
     controlsMap.X_Button = createButton(63, 116, "X");
@@ -2867,10 +2950,10 @@ var Game = class {
       up: { v: new Vector(0, -1), n: "up" },
       down: { v: new Vector(0, 1), n: "down" }
     };
-    const getJoystickDirection = (e) => {
-      const boundingRect = joystick.getBoundingClientRect();
-      const x = e.changedTouches[0].pageX - (boundingRect.x + boundingRect.width / 2);
-      const y = e.changedTouches[0].pageY - (boundingRect.y + boundingRect.height / 2);
+    const getDPadDirection = (x, y) => {
+      const boundingRect = dpad.getBoundingClientRect();
+      x = x - (boundingRect.x + boundingRect.width / 2);
+      y = y - (boundingRect.y + boundingRect.height / 2);
       const pos = new Vector(x, y);
       if (pos.mag() < 20)
         return [];
@@ -2890,7 +2973,7 @@ var Game = class {
       }
       return res;
     };
-    const handleJoystick = (ev, dirs, keys) => {
+    const handleDPad = (ev, dirs, keys) => {
       for (let dir of dirs) {
         this._handleSceneEvent(ev, {
           key: keys[dir]
@@ -2903,19 +2986,28 @@ var Game = class {
       if (attr == "DPad") {
         elem.addEventListener("touchstart", (e) => {
           e.preventDefault();
-          const dirs = getJoystickDirection(e);
-          handleJoystick("keydown", dirs, key);
+          const dirs = getDPadDirection(e.changedTouches[0].pageX, e.changedTouches[0].pageY);
+          dpadId = e.changedTouches[0].identifier;
+          handleDPad("keydown", dirs, key);
         });
         elem.addEventListener("touchmove", (e) => {
           e.preventDefault();
-          handleJoystick("keyup", ["left", "right", "up", "down"], key);
-          const dirs = getJoystickDirection(e);
-          handleJoystick("keydown", dirs, key);
+          for (let i = 0; i < e.changedTouches.length; ++i) {
+            if (e.changedTouches[i].identifier == dpadId) {
+              handleDPad("keyup", ["left", "right", "up", "down"], key);
+              const dirs = getDPadDirection(e.changedTouches[i].pageX, e.changedTouches[i].pageY);
+              handleDPad("keydown", dirs, key);
+            }
+          }
         });
         elem.addEventListener("touchend", (e) => {
           e.preventDefault();
-          const dirs = getJoystickDirection(e);
-          handleJoystick("keyup", ["left", "right", "up", "down"], key);
+          for (let i = 0; i < e.changedTouches.length; ++i) {
+            if (e.changedTouches[i].identifier == dpadId) {
+              dpadId = -1;
+              handleDPad("keyup", ["left", "right", "up", "down"], key);
+            }
+          }
         });
         continue;
       }
@@ -2937,6 +3029,14 @@ var Game = class {
           key
         });
       });
+    }
+    if (controls.joystick) {
+      controlsMap.X_Button.style.display = "none";
+      controlsMap.Y_Button.style.display = "none";
+      controlsMap.A_Button.style.display = "none";
+      controlsMap.B_Button.style.display = "none";
+    } else {
+      joystick.style.display = "none";
     }
   }
 };
@@ -3007,25 +3107,25 @@ var Drawable = class extends Component {
     this._strokeWidth = Math.max(val, 0);
   }
   get fillColor() {
-    return this._fillColor._color;
+    return this._fillColor;
   }
   set fillColor(col) {
-    this._fillColor.set(col);
+    this._fillColor.copy(col);
   }
   get shadowColor() {
-    return this._shadowColor._color;
+    return this._shadowColor;
   }
   set shadowColor(col) {
-    this._shadowColor.set(col);
+    this._shadowColor.copy(col);
   }
   get shadow() {
     return this._shadow;
   }
   get strokeColor() {
-    return this._strokeColor._color;
+    return this._strokeColor;
   }
   set strokeColor(col) {
-    this._strokeColor.set(col);
+    this._strokeColor.copy(col);
   }
   fade(val, dur, timing = "linear", onEnd = null) {
     this._opacity.animate(val, dur, timing, onEnd);
@@ -3098,6 +3198,9 @@ var FixedDrawable = class extends Drawable {
       x: this._scale.x.value,
       y: this._scale.y.value
     };
+  }
+  get image() {
+    return this._imageOptions;
   }
   set scale(param) {
     const obj = paramParser.parseObject(param, { x: this._scale.x.value, y: this._scale.y.value });
@@ -3226,7 +3329,7 @@ var Picture = class extends FixedDrawable {
     });
   }
   drawShadow(ctx) {
-    this._shadowColor.fill(ctx);
+    ctx.fillStyle = this.shadowColor.value;
     ctx.beginPath();
     ctx.rect(-this._width / 2, -this._height / 2, this._width, this._height);
     ctx.fill();
@@ -3294,13 +3397,14 @@ var Sprite = class extends FixedDrawable {
       currentAnim.counter = 0;
       ++currentAnim.frame;
       if (currentAnim.frame >= frames.length) {
-        currentAnim.frame = 0;
         if (currentAnim.OnEnd) {
           currentAnim.onEnd();
         }
         if (!currentAnim.repeat) {
           this._currentAnim = null;
           this._paused = true;
+        } else {
+          currentAnim.frame = 0;
         }
       }
       this._framePos = frames[currentAnim.frame];
@@ -3316,7 +3420,7 @@ var Sprite = class extends FixedDrawable {
     });
   }
   drawShadow(ctx) {
-    this._shadowColor.fill(ctx);
+    ctx.fillStyle = this.shadowColor.value;
     ctx.beginPath();
     ctx.rect(-this._width / 2, -this._height / 2, this._width, this._height);
     ctx.fill();
@@ -3372,13 +3476,17 @@ var Tileset = class {
         }
       });
     }
-    e.add(sprite, "TileSprite");
-    let obj = new Map();
-    for (let prop of data == null ? [] : data.properties) {
-      obj.set(prop.name, prop.value);
+    e.addComponent(sprite, "TileSprite");
+    let obj = {};
+    if (data != null) {
+      for (let prop of data.properties) {
+        obj[prop.name] = prop.value;
+      }
     }
-    e.props.set("tile-data", obj);
-    return e;
+    return {
+      tile: e,
+      data: obj
+    };
   }
   addAnim(id, rate, frames) {
     let data = this._getData(id);
@@ -3493,16 +3601,17 @@ var LevelMaker = class {
           continue;
         }
         ;
-        let e = createTile(id);
-        if (e === null) {
+        const obj = createTile(id);
+        if (obj === null) {
           return;
         }
+        let e = obj.tile;
         e.position.set((x + 0.5) * this._tileWidth, (y + 0.5) * this._tileHeight);
-        const tileSprite = e.get("TileSprite");
+        const tileSprite = e.getComponent("TileSprite");
         tileSprite.setSize(this._tileWidth, this._tileHeight);
         tileSprite.zIndex = zIndex;
         if (this._onTile) {
-          this._onTile(e, zIndex);
+          this._onTile(e, obj.data, zIndex);
         }
       }
     };
@@ -3524,9 +3633,9 @@ var LevelMaker = class {
         };
         let e;
         if (obj.gid !== void 0) {
-          e = createTile(obj.gid - 1);
+          e = createTile(obj.gid - 1).tile;
           e.position = getPosition(data.x, data.y, data.angle, -data.width / 2, data.height / 2);
-          const tileSprite = e.get("TileSprite");
+          const tileSprite = e.getComponent("TileSprite");
           tileSprite.setSize(data.width, data.height);
           tileSprite.angle = data.angle;
           tileSprite.zIndex = zIndex;
@@ -3543,7 +3652,6 @@ var LevelMaker = class {
             props.set(prop.name, prop.value);
           }
         }
-        e.props.set("object-data", props);
       }
     };
     for (let i = 0; i < tilemap.layers.length; ++i) {
@@ -3564,9 +3672,11 @@ var LevelMaker = class {
 // src/drawable/_index.js
 var index_exports2 = {};
 __export(index_exports2, {
+  Buffer: () => Buffer2,
   Circle: () => Circle,
   Drawable: () => Drawable,
   FixedDrawable: () => FixedDrawable,
+  Heart: () => Heart,
   Line: () => Line,
   Path: () => Path,
   Picture: () => Picture,
@@ -3579,6 +3689,7 @@ __export(index_exports2, {
   Star: () => Star,
   Text: () => Text,
   fillRing: () => fillRing,
+  heart: () => heart,
   polygon: () => polygon,
   regularPolygon: () => regularPolygon,
   roundedRect: () => roundedRect,
@@ -3595,8 +3706,8 @@ var Rect = class extends FixedDrawable {
     ctx.globalAlpha = this.opacity;
     ctx.lineWidth = this.strokeWidth;
     ctx.lineCap = this.strokeCap;
-    this._fillColor.fill(ctx);
-    this._strokeColor.stroke(ctx);
+    ctx.fillStyle = this.fillColor.value;
+    ctx.strokeStyle = this.strokeColor.value;
     ctx.beginPath();
     ctx.rect(-this._width / 2, -this._height / 2, this._width, this._height);
     ctx.fill();
@@ -3608,8 +3719,8 @@ var Rect = class extends FixedDrawable {
   drawShadow(ctx) {
     ctx.lineWidth = this.strokeWidth;
     ctx.lineCap = this.strokeCap;
-    this._shadowColor.fill(ctx);
-    this._shadowColor.stroke(ctx);
+    ctx.fillStyle = this.shadowColor.value;
+    ctx.strokeStyle = this.shadowColor.value;
     if (this.fillColor != "transparent") {
       ctx.globalAlpha = this._fillColor.alpha;
       ctx.fillRect(-this._width / 2, -this._height / 2, this._width, this._height);
@@ -3677,6 +3788,17 @@ var star = function(ctx, x, y, r1, r2, c) {
   }
   polygon(ctx, ...points);
 };
+var heart = function(ctx, x, y, w, h) {
+  ctx.moveTo(x, y + h / 4);
+  ctx.quadraticCurveTo(x, y, x + w / 4, y);
+  ctx.quadraticCurveTo(x + w / 2, y, x + w / 2, y + h / 4);
+  ctx.quadraticCurveTo(x + w / 2, y, x + w * 3 / 4, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + h / 4);
+  ctx.quadraticCurveTo(x + w, y + h / 2, x + w * 3 / 4, y + h * 3 / 4);
+  ctx.lineTo(x + w / 2, y + h);
+  ctx.lineTo(x + w / 4, y + h * 3 / 4);
+  ctx.quadraticCurveTo(x, y + h / 2, x, y + h / 4);
+};
 
 // src/drawable/Polygon.js
 var Polygon2 = class extends FixedDrawable {
@@ -3710,8 +3832,8 @@ var Polygon2 = class extends FixedDrawable {
     ctx.globalAlpha = this.opacity;
     ctx.lineWidth = this.strokeWidth;
     ctx.lineCap = this.strokeCap;
-    this._fillColor.fill(ctx);
-    this._strokeColor.stroke(ctx);
+    ctx.fillStyle = this.fillColor.value;
+    ctx.strokeStyle = this.strokeColor.value;
     ctx.beginPath();
     polygon(ctx, ...this._points);
     ctx.closePath();
@@ -3724,8 +3846,8 @@ var Polygon2 = class extends FixedDrawable {
   drawShadow(ctx) {
     ctx.lineWidth = this.strokeWidth;
     ctx.lineCap = this.strokeCap;
-    this._shadowColor.fill(ctx);
-    this._shadowColor.stroke(ctx);
+    ctx.fillStyle = this.shadowColor.value;
+    ctx.strokeStyle = this.shadowColor.value;
     if (this.fillColor != "transparent") {
       ctx.globalAlpha = this._fillColor.alpha;
       ctx.beginPath();
@@ -3904,7 +4026,7 @@ var Line = class extends FixedDrawable {
     ctx.globalAlpha = this.opacity;
     ctx.lineWidth = this.strokeWidth;
     ctx.lineCap = this.strokeCap;
-    this._strokeColor.stroke(ctx);
+    ctx.strokeStyle = this.strokeColor.value;
     ctx.beginPath();
     ctx.moveTo(0, 0);
     ctx.lineTo(this._length, 0);
@@ -3913,7 +4035,7 @@ var Line = class extends FixedDrawable {
   drawShadow(ctx) {
     ctx.lineWidth = this.strokeWidth;
     ctx.lineCap = this.strokeCap;
-    this._shadowColor.stroke(ctx);
+    ctx.strokeStyle = this.shadowColor.value;
     ctx.globalAlpha = this._strokeColor.alpha;
     ctx.beginPath();
     ctx.moveTo(0, 0);
@@ -3955,8 +4077,8 @@ var Circle = class extends FixedDrawable {
     ctx.globalAlpha = this.opacity;
     ctx.lineWidth = this.strokeWidth;
     ctx.lineCap = this.strokeCap;
-    this._fillColor.fill(ctx);
-    this._strokeColor.stroke(ctx);
+    ctx.fillStyle = this.fillColor.value;
+    ctx.strokeStyle = this.strokeColor.value;
     ctx.beginPath();
     ctx.arc(0, 0, this._radius, -this.angleRange / 2, this.angleRange / 2);
     if (this._centered) {
@@ -3972,8 +4094,8 @@ var Circle = class extends FixedDrawable {
   drawShadow(ctx) {
     ctx.lineWidth = this.strokeWidth;
     ctx.lineCap = this.strokeCap;
-    this._shadowColor.fill(ctx);
-    this._shadowColor.stroke(ctx);
+    ctx.fillStyle = this.shadowColor.value;
+    ctx.strokeStyle = this.shadowColor.value;
     if (this.fillColor != "transparent") {
       ctx.globalAlpha = this._fillColor.alpha;
       ctx.beginPath();
@@ -4076,8 +4198,8 @@ var Text = class extends FixedDrawable {
     ctx.globalAlpha = this.opacity;
     ctx.lineWidth = this.strokeWidth;
     ctx.lineCap = this.strokeCap;
-    this._fillColor.fill(ctx);
-    this._strokeColor.stroke(ctx);
+    ctx.fillStyle = this.fillColor.value;
+    ctx.strokeStyle = this.strokeColor.value;
     ctx.font = `${this._fontStyle} ${this._fontSize}px '${this._fontFamily}'`;
     ctx.textAlign = this._align;
     ctx.textBaseline = "middle";
@@ -4092,8 +4214,8 @@ var Text = class extends FixedDrawable {
   drawShadow(ctx) {
     ctx.lineWidth = this.strokeWidth;
     ctx.lineCap = this.strokeCap;
-    this._shadowColor.fill(ctx);
-    this._shadowColor.stroke(ctx);
+    ctx.fillStyle = this.shadowColor.value;
+    ctx.strokeStyle = this.shadowColor.value;
     let offsetX = this._align == "left" ? -this._width / 2 : this._align == "right" ? this._width / 2 : 0;
     ctx.font = `${this._fontStyle} ${this._fontSize}px '${this._fontFamily}'`;
     ctx.textAlign = this._align;
@@ -4148,17 +4270,14 @@ var Path = class extends Drawable {
     ctx.globalAlpha = this.opacity;
     ctx.lineWidth = this.strokeWidth;
     ctx.lineCap = this.strokeCap;
-    this._fillColor.fill(ctx);
-    this._strokeColor.stroke(ctx);
+    ctx.fillStyle = this.fillColor.value;
+    ctx.strokeStyle = this.strokeColor.value;
     ctx.beginPath();
     polygon(ctx, ...this._points);
     ctx.closePath();
     ctx.fill();
     if (this._strokeWidth != 0) {
       ctx.stroke();
-    }
-    if (this._image) {
-      this.drawImage(ctx);
     }
   }
   drawShadow(ctx) {
@@ -4180,6 +4299,46 @@ var Path = class extends Drawable {
       ctx.closePath();
       ctx.stroke();
     }
+  }
+};
+
+// src/drawable/Buffer.js
+var Buffer2 = class extends Drawable {
+  _buffer = document.createElement("canvas").getContext("2d");
+  constructor(params) {
+    super(params);
+    this._bounds = params.bounds;
+    this._initBuffer();
+  }
+  _initBuffer() {
+    this._buffer.canvas.width = this._bounds[1][0] - this._bounds[0][0];
+    this._buffer.canvas.height = this._bounds[1][1] - this._bounds[0][1];
+  }
+  add(elem) {
+    const ctx = this._buffer;
+    ctx.save();
+    ctx.translate(-this._bounds[0][0], -this._bounds[0][1]);
+    elem.drawInternal(ctx);
+    ctx.restore();
+  }
+  clear() {
+    const ctx = this._buffer;
+    ctx.beginPath();
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  }
+  getBoundingBox() {
+    const w = this._bounds[1][0] - this._bounds[0][0], h = this._bounds[1][1] - this._bounds[0][1];
+    return {
+      width: w,
+      height: h,
+      x: this._bounds[0][0] + w / 2,
+      y: this._bounds[0][1] + h / 2
+    };
+  }
+  draw(ctx) {
+    ctx.globalAlpha = this.opacity;
+    ctx.beginPath();
+    ctx.drawImage(this._buffer.canvas, this._bounds[0][0], this._bounds[0][1]);
   }
 };
 
@@ -4216,8 +4375,8 @@ var Ring = class extends FixedDrawable {
     ctx.globalAlpha = this.opacity;
     ctx.lineWidth = this.strokeWidth;
     ctx.lineCap = this.strokeCap;
-    this._fillColor.fill(ctx);
-    this._strokeColor.stroke(ctx);
+    ctx.fillStyle = this.fillColor.value;
+    ctx.strokeStyle = this.strokeColor.value;
     fillRing(ctx, 0, 0, this._innerRadius, this._outerRadius);
     if (this.strokeWidth != 0) {
       strokeRing(ctx, 0, 0, this._innerRadius, this._outerRadius);
@@ -4226,8 +4385,8 @@ var Ring = class extends FixedDrawable {
   drawShadow(ctx) {
     ctx.lineWidth = this.strokeWidth;
     ctx.lineCap = this.strokeCap;
-    this._shadowColor.fill(ctx);
-    this._shadowColor.stroke(ctx);
+    ctx.fillStyle = this.shadowColor.value;
+    ctx.strokeStyle = this.shadowColor.value;
     if (this.fillColor != "transparent") {
       ctx.globalAlpha = this._fillColor.alpha;
       fillRing(ctx, 0, 0, this._innerRadius, this._outerRadius);
@@ -4235,6 +4394,48 @@ var Ring = class extends FixedDrawable {
     if (this.strokeWidth != 0) {
       ctx.globalAlpha = this._strokeColor.alpha;
       strokeRing(ctx, 0, 0, this._innerRadius, this._outerRadius);
+    }
+  }
+};
+
+// src/drawable/Heart.js
+var Heart = class extends FixedDrawable {
+  constructor(params) {
+    super(params);
+  }
+  draw(ctx) {
+    ctx.globalAlpha = this.opacity;
+    ctx.lineWidth = this.strokeWidth;
+    ctx.lineCap = this.strokeCap;
+    ctx.fillStyle = this.fillColor.value;
+    ctx.strokeStyle = this.strokeColor.value;
+    ctx.beginPath();
+    heart(ctx, -this._width / 2, -this._height / 2, this._width, this._height);
+    ctx.closePath();
+    ctx.fill();
+    if (this._strokeWidth != 0) {
+      ctx.stroke();
+    }
+    this.drawImage(ctx);
+  }
+  drawShadow(ctx) {
+    ctx.lineWidth = this.strokeWidth;
+    ctx.lineCap = this.strokeCap;
+    ctx.fillStyle = this.shadowColor.value;
+    ctx.strokeStyle = this.shadowColor.value;
+    if (this.fillColor != "transparent") {
+      ctx.globalAlpha = this._fillColor.alpha;
+      ctx.beginPath();
+      heart(ctx, -this._width / 2, -this._height / 2, this._width, this._height);
+      ctx.closePath();
+      ctx.fill();
+    }
+    if (this.strokeWidth != 0) {
+      ctx.globalAlpha = this._strokeColor.alpha;
+      ctx.beginPath();
+      heart(ctx, -this._width / 2, -this._height / 2, this._width, this._height);
+      ctx.closePath();
+      ctx.stroke();
     }
   }
 };
@@ -4249,87 +4450,6 @@ __export(index_exports3, {
   RegularPolygon: () => RegularPolygon
 });
 
-// src/light/_index.js
-var index_exports4 = {};
-__export(index_exports4, {
-  RadialLight: () => RadialLight
-});
-
-// src/light/Light.js
-var Light = class extends Component {
-  _color;
-  _scale;
-  constructor(params) {
-    super();
-    this._type = "light";
-    this._color = new Color(params.color);
-    this._scale = new Animator(paramParser.parseValue(params.scale, 1));
-  }
-  get color() {
-    return this._color._color;
-  }
-  set color(col) {
-    this._color.set(col);
-  }
-  get scale() {
-    return this._scale.value;
-  }
-  set scale(val) {
-    this._scale.value = val;
-  }
-  scaleTo(val, dur, timing = "linear", onEnd = null) {
-    this._scale.animate(val, dur, timing, onEnd);
-  }
-  initComponent() {
-    this.scene.addLight(this);
-  }
-  drawInternal(ctx) {
-    ctx.save();
-    ctx.translate(this.position.x, this.position.y);
-    ctx.scale(this.scale, this.scale);
-    ctx.rotate(this.angle);
-    this.draw(ctx);
-    ctx.restore();
-  }
-  draw(_) {
-  }
-  update(elapsedTimeS) {
-    this._scale.update(elapsedTimeS);
-    this._angle.update(elapsedTimeS);
-  }
-};
-
-// src/light/RadialLight.js
-var RadialLight = class extends Light {
-  _radius;
-  _angleRange;
-  constructor(params) {
-    super(params);
-    this._radius = params.radius;
-    this._angleRange = paramParser.parseValue(params.angleRange, Math.PI * 2);
-  }
-  get radius() {
-    return this._radius;
-  }
-  set radius(val) {
-    this._radius = Math.max(val, 0);
-  }
-  get angleRange() {
-    return this._angleRange;
-  }
-  set angleRange(val) {
-    this._angleRange = math.clamp(val, 0, Math.PI * 2);
-  }
-  draw(ctx) {
-    this._color.fill(ctx);
-    ctx.beginPath();
-    ctx.arc(0, 0, this.radius, -this.angleRange / 2, this.angleRange / 2);
-    ctx.lineTo(0, 0);
-    ctx.closePath();
-    ctx.fill();
-  }
-};
-
 // src/Lancelot.js
 var start = (config) => {
   addEventListener("DOMContentLoaded", () => new Game(config));
@@ -4342,7 +4462,7 @@ var __export2 = {
   utils: index_exports,
   drawable: index_exports2,
   physics: index_exports3,
-  light: index_exports4
+  light
 };
 if (typeof module === "object" && typeof module.exports === "object") {
   module.exports = __export2;

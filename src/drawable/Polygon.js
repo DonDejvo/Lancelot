@@ -38,8 +38,8 @@ export class Polygon extends FixedDrawable {
         ctx.globalAlpha = this.opacity;
         ctx.lineWidth = this.strokeWidth;
         ctx.lineCap = this.strokeCap;
-        this._fillColor.fill(ctx);
-        this._strokeColor.stroke(ctx);
+        ctx.fillStyle = this.fillColor.value;
+        ctx.strokeStyle = this.strokeColor.value;
         ctx.beginPath();
         polygon(ctx, ...this._points);
         ctx.closePath();
@@ -53,8 +53,8 @@ export class Polygon extends FixedDrawable {
     drawShadow(ctx) {
         ctx.lineWidth = this.strokeWidth;
         ctx.lineCap = this.strokeCap;
-        this._shadowColor.fill(ctx);
-        this._shadowColor.stroke(ctx);
+        ctx.fillStyle = this.shadowColor.value;
+        ctx.strokeStyle = this.shadowColor.value;
         
         if(this.fillColor != "transparent") {
             ctx.globalAlpha = this._fillColor.alpha;

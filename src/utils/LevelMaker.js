@@ -63,16 +63,17 @@ export class LevelMaker {
                 if(id == -1) {
                     continue;
                 };
-                let e = createTile(id);
-                if(e === null) {
+                const obj = createTile(id);
+                if(obj === null) {
                     return;
                 }
+                let e = obj.tile;
                 e.position.set((x + 0.5) * this._tileWidth, (y + 0.5) * this._tileHeight);
-                const tileSprite = e.get("TileSprite");
+                const tileSprite = e.getComponent("TileSprite");
                 tileSprite.setSize(this._tileWidth, this._tileHeight);
                 tileSprite.zIndex = zIndex;
                 if(this._onTile) {
-                    this._onTile(e, zIndex);
+                    this._onTile(e, obj.data, zIndex);
                 }
             }
         }
@@ -96,9 +97,9 @@ export class LevelMaker {
 
                 let e;
                 if(obj.gid !== undefined) {
-                    e = createTile(obj.gid - 1);
+                    e = createTile(obj.gid - 1).tile;
                     e.position = getPosition(data.x, data.y, data.angle, -data.width / 2, data.height / 2);
-                    const tileSprite = e.get("TileSprite");
+                    const tileSprite = e.getComponent("TileSprite");
                     tileSprite.setSize(data.width, data.height);
                     tileSprite.angle = data.angle;
                     tileSprite.zIndex = zIndex;
@@ -116,7 +117,7 @@ export class LevelMaker {
                         props.set(prop.name, prop.value);
                     }
                 }
-                e.props.set("object-data", props);
+                //e.props.set("object-data", props);
 
             }
         }

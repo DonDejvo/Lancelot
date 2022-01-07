@@ -81,19 +81,19 @@ export class Drawable extends Component {
     }
 
     get fillColor() {
-        return this._fillColor._color;
+        return this._fillColor;
     }
 
     set fillColor(col) {
-        this._fillColor.set(col);
+        this._fillColor.copy(col);
     }
 
     get shadowColor() {
-        return this._shadowColor._color;
+        return this._shadowColor;
     }
 
     set shadowColor(col) {
-        this._shadowColor.set(col);
+        this._shadowColor.copy(col);
     }
 
     get shadow() {
@@ -101,11 +101,11 @@ export class Drawable extends Component {
     }
 
     get strokeColor() {
-        return this._strokeColor._color;
+        return this._strokeColor;
     }
 
     set strokeColor(col) {
-        this._strokeColor.set(col);
+        this._strokeColor.copy(col);
     }
 
     fade(val, dur, timing = "linear", onEnd = null) {
@@ -201,6 +201,10 @@ export class FixedDrawable extends Drawable {
             x: this._scale.x.value,
             y: this._scale.y.value
         };
+    }
+
+    get image() {
+        return this._imageOptions;
     }
 
     set scale(param) {

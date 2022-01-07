@@ -59,14 +59,19 @@ export class Tileset {
                 }
             });
         }
-        e.add(sprite, "TileSprite");
-        let obj = new Map();
-        for(let prop of (data == null ? [] : data.properties)) {
-            obj.set(prop.name, prop.value);
+        e.addComponent(sprite, "TileSprite");
+        let obj = {};
+        if(data != null) {
+            for(let prop of data.properties) {
+                obj[prop.name] = prop.value;
+            }
         }
-        e.props.set("tile-data", obj);
+        //e.props.set("tile-data", obj);
 
-        return e;
+        return {
+            tile: e,
+            data: obj
+        };
     }
 
     addAnim(id, rate, frames) {

@@ -5,6 +5,7 @@ export class Engine {
     _paused = true;
     _step;
     _fpsMeter = new FPSMeter();
+    _minFps = 20;
 
     constructor(step) {
 
@@ -26,7 +27,7 @@ export class Engine {
 
             this._fpsMeter.update(elapsedTime * 0.001);
 
-            this._step(elapsedTime);
+            this._step(Math.min(elapsedTime, 1000 / this._minFps));
             this._previousRAF = timestamp;
         });
     }

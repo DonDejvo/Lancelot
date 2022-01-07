@@ -33,13 +33,13 @@ export class Scene {
      * @param {Object} options
      * @param {string} options.light
      * @param {string} options.background
-     * @param {import("../physics/World.js").WorldParams} options.physics
+     * @param {import("../physics/World.js").WorldParams} options.world
      */
 
     constructor(game, name, zIndex, options = {}) {
         this._game = game;
         this._game._sceneManager.add(this, name, zIndex);
-        this._world = new World(options.physics);
+        this._world = new World(options.world);
         //this._light = new Color(paramParser.parseValue(options.light, "white"));
         this._background = new Color(paramParser.parseValue(options.background, options.background));
         this._camera = new Camera(this, "Camera");
@@ -75,11 +75,15 @@ export class Scene {
     }
 
     get background() {
-        return this._background._color;
+        return this._background;
     }
 
     set background(col) {
-        this._background.set(col);
+        this._background.copy(col);
+    }
+
+    get game() {
+        return this._game;
     }
     /*
     get light() {
@@ -114,11 +118,14 @@ export class Scene {
     }
 
     handleEvent(type, event) {
+        if(this.paused) {
+            return false;
+        }
         let captured = false;
         if(type.startsWith("mouse")) {
             
             if(type == "mousedown") {
-                const entities = this._world.quadtree.findNear([event.x, event.y], [0, 0]).map(c => c.entity);
+                const entities = this.world.findNear([event.x, event.y], [0, 0]);
                 for(let e of entities) {
                     if(!e.interactive) {
                         continue;
@@ -132,7 +139,7 @@ export class Scene {
                 }
             } else {
                 for(let e of this._interactiveEntities) {
-                    if(e.interactive._id == event.id) {
+                    if(event.id != -1 && e.interactive._id == event.id) {
                         if(e.interactive.handleEvent(type, event)) {
                             captured = true;
                         }
@@ -228,6 +235,10 @@ export class Scene {
     hide() {
         this._paused = true;
         this._hidden = true;
+    }
+
+    show() {
+        this._hidden = false;
     }
 
     pause() {
@@ -355,7 +366,7 @@ export class Scene {
 
         buffer.beginPath();
         buffer.clearRect(0, 0, w, h);
-        this._background.fill(buffer);
+        buffer.fillStyle = this.background.value;
         buffer.fillRect(0, 0, w, h);
 
         buffer.save();

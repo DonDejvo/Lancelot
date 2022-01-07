@@ -4,7 +4,6 @@ import { Component } from "./core/Component.js";
 import * as utils from "./utils/_index.js";
 import * as drawable from "./drawable/_index.js";
 import * as physics from "./physics/_index.js";
-import * as light from "./light/_index.js";
 
 const start = (config) => {
     addEventListener("DOMContentLoaded", () => new Game(config));

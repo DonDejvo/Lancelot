@@ -41,8 +41,8 @@ export class Ring extends FixedDrawable {
         ctx.globalAlpha = this.opacity;
         ctx.lineWidth = this.strokeWidth;
         ctx.lineCap = this.strokeCap;
-        this._fillColor.fill(ctx);
-        this._strokeColor.stroke(ctx);
+        ctx.fillStyle = this.fillColor.value;
+        ctx.strokeStyle = this.strokeColor.value;
         fillRing(ctx, 0, 0, this._innerRadius, this._outerRadius);
         if(this.strokeWidth != 0) {
             strokeRing(ctx, 0, 0, this._innerRadius, this._outerRadius);
@@ -52,8 +52,8 @@ export class Ring extends FixedDrawable {
     drawShadow(ctx) {
         ctx.lineWidth = this.strokeWidth;
         ctx.lineCap = this.strokeCap;
-        this._shadowColor.fill(ctx);
-        this._shadowColor.stroke(ctx);
+        ctx.fillStyle = this.shadowColor.value;
+        ctx.strokeStyle = this.shadowColor.value;
         if(this.fillColor != "transparent") {
             ctx.globalAlpha = this._fillColor.alpha;
             fillRing(ctx, 0, 0, this._innerRadius, this._outerRadius);

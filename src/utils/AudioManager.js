@@ -26,6 +26,7 @@ export class AudioManager {
 class Music {
 
     _resources;
+    _paused = true;
     _audio = null;
     _volume = 1.0;
     _speed = 1.0;
@@ -40,8 +41,7 @@ class Music {
     }
 
     set volume(val) {
-        const volume = math.sat(val);
-        this._volume = volume;
+        this._volume = math.sat(val);
         this._set();
     }
 
@@ -76,23 +76,38 @@ class Music {
     }
 
     get paused() {
-        return this._audio ? this._audio.paused : true;
+        return this._paused;
     }
 
     set(name) {
+        if(!this._paused) {
+            this._audio.pause();
+        }
         this._audio = this._resources.get(name).cloneNode(true);
         this._set();
+        if(!this._paused) {
+            this.play();
+        }
     }
 
     play() {
+        this._paused = false;
         if(this._audio) {
-            this._audio.play();
+            const promise = this._audio.play();
+        if(promise) {
+            promise.then(_ => {}).catch((err) => console.log("fuck"));
+        }
         }
     }
 
     pause() {
+        this._paused = true;
         if(this._audio) {
-            this._audio.pause();
+            try {
+                this._audio.pause();
+            } catch(e) {
+                console.log(e);
+            }
         }
     }
 
@@ -120,14 +135,13 @@ class Effects {
     }
 
     set volume(val) {
-        const volume = math.sat(val);
-        this._volume = val;
+        this._volume = math.sat(val);
         for(let audio of this._arr) {
             audio.volume = this._volume;
         }
     }
 
-    play(name, params) {
+    play(name, params = {}) {
         const speed = paramParser.parseValue(params.speed, 1.0);
         const audioElem = this._resources.get(name).cloneNode(true);
         audioElem.addEventListener("ended", () => {
@@ -139,7 +153,10 @@ class Effects {
         audioElem.volume = this._volume;
         audioElem.playbackRate = speed;
         this._arr.push(audioElem);
-        audioElem.play();
+        const promise = audioElem.play();
+        if(promise) {
+            promise.then(_ => {}).catch((err) => console.log("fuck"));
+        }
     }
 
 }

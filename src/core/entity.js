@@ -11,7 +11,7 @@ export class Entity {
     _interactive = null;
     _body = null;
     _onUpdate = null;
-    _properties = new Map();
+    //_properties = new Map();
 
     get name() {
         return this._name;
@@ -40,11 +40,11 @@ export class Entity {
     get groupList() {
         return this._groupList;
     }
-
+    /*
     get props() {
         return this._properties;
     }
-
+    */
     constructor(scene, n) {
         scene.addEntity(this, n);
     }
@@ -73,7 +73,7 @@ export class Entity {
         return this._position.isMoving();
     }
 
-    add(c, n) {
+    addComponent(c, n) {
         if (n === undefined) {
             n = c.constructor.name;
         }
@@ -84,7 +84,7 @@ export class Entity {
         c.initComponent();
     }
 
-    get(n) {
+    getComponent(n) {
         return this._components.get(n);
     }
     
@@ -93,7 +93,7 @@ export class Entity {
     }
 
     remove() {
-        this._scene.remove(this);
+        this._scene.removeEntity(this);
     }
 
     update(elapsedTimeS) {

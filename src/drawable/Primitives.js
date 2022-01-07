@@ -66,3 +66,15 @@ export const star = function(ctx, x, y, r1, r2, c) {
     }
     polygon(ctx, ...points);
 }
+
+export const heart = function (ctx, x, y, w, h) {
+    ctx.moveTo(x, y + h / 4);
+    ctx.quadraticCurveTo(x, y, x + w / 4, y);
+    ctx.quadraticCurveTo(x + w / 2, y, x + w / 2, y + h / 4);
+    ctx.quadraticCurveTo(x + w / 2, y, x + w * 3 / 4, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + h / 4);
+    ctx.quadraticCurveTo(x + w, y + h / 2, x + w * 3 / 4, y + h * 3 / 4);
+    ctx.lineTo(x + w / 2, y + h);
+    ctx.lineTo(x + w / 4, y + h * 3 / 4);
+    ctx.quadraticCurveTo(x, y + h / 2, x, y + h / 4);
+}
