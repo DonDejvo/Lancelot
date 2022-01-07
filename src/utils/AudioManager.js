@@ -95,7 +95,7 @@ class Music {
         if(this._audio) {
             const promise = this._audio.play();
         if(promise) {
-            promise.then(_ => {}).catch((err) => console.log("fuck"));
+            promise.then(_ => {}).catch((err) => {});
         }
         }
     }
@@ -155,7 +155,7 @@ class Effects {
         this._arr.push(audioElem);
         const promise = audioElem.play();
         if(promise) {
-            promise.then(_ => {}).catch((err) => console.log("fuck"));
+            promise.then(_ => {}).catch((err) => {});
         }
     }
 
