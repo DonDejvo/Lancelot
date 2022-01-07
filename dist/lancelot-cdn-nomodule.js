@@ -2538,7 +2538,8 @@
         const promise = this._audio.play();
         if (promise) {
           promise.then((_) => {
-          }).catch((err) => console.log("fuck"));
+          }).catch((err) => {
+          });
         }
       }
     }
@@ -2591,7 +2592,8 @@
       const promise = audioElem.play();
       if (promise) {
         promise.then((_) => {
-        }).catch((err) => console.log("fuck"));
+        }).catch((err) => {
+        });
       }
     }
   };
