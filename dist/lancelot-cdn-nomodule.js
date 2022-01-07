@@ -4462,8 +4462,7 @@
     Component,
     utils: index_exports,
     drawable: index_exports2,
-    physics: index_exports3,
-    light
+    physics: index_exports3
   };
   if (typeof module === "object" && typeof module.exports === "object") {
     module.exports = __export2;

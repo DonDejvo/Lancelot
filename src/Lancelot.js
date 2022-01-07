@@ -17,8 +17,7 @@ let __export = {
     Component,
     utils,
     drawable,
-    physics,
-    light
+    physics
 };
 
 if (typeof module === 'object' && typeof module.exports === 'object') {
