@@ -5,7 +5,7 @@ import { Renderer } from "./Renderer.js";
 import { SceneManager } from "./SceneManager.js";
 import { Vector } from "../utils/Vector.js";
 import { TimeoutHandler } from "../utils/TimeoutHandler.js";
-import { Scene } from "./Scene.js";
+import { math } from "../utils/Math.js";
 import { AudioManager } from "../utils/AudioManager.js";
 
 /**
@@ -253,6 +253,7 @@ export class Game {
         const controls = paramParser.parseObject(this._config.controls, {
             active: false,
             joystick: false,
+            joystickRange: {min: 0, max: 100},
             theme: "dark",
             layout: {
                 DPad: { left: "ArrowLeft", right: "ArrowRight", up: "ArrowUp", down: "ArrowDown" },
@@ -408,13 +409,15 @@ export class Game {
             x = x - (boundingRect.x + boundingRect.width / 2);
             y = y - (boundingRect.y + boundingRect.height / 2);
             const v = new Vector(x, y);
-            if(v.mag() > 60) {
+            const d = v.mag();
+            if(d > 60) {
                 v.unit().mult(60);
             }
+            const v1 = v.unit().mult(math.lerp(math.sat(d / 60), controls.joystickRange.min, controls.joystickRange.max));
             joystickPad.style.left = (v.x + boundingRect.width / 4) + "px";
             joystickPad.style.top = (v.y + boundingRect.height / 4) + "px";
             const con = this._renderer._container.getBoundingClientRect();
-            this._handleSceneEvent(type, {x: x + con.x + con.width/2, y: y + con.y + con.height/2, id: -1});
+            this._handleSceneEvent(type, {x: v1.x + con.x + con.width/2, y: v1.y + con.y + con.height/2, id: -1});
         };
 
         joystick.addEventListener("touchstart", (e) => {
