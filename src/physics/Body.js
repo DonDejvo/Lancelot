@@ -197,7 +197,7 @@ export class Body extends Component {
         const controller = this.getComponent("QuadtreeController");
         const boundingRect = this.getBoundingRect();
         for(let behavior of this._behavior) {
-            const entities = controller.findNearby(boundingRect.width, boundingRect.height).filter(e => {
+            const entities = (controller === undefined ? this.parent.scene.world.findNearWithoutQuadtree([this.position.x, this.position.y], [boundingRect.width, boundingRect.height]) : controller.findNearby(boundingRect.width, boundingRect.height)).filter(e => {
                 return behavior.groups.map((g) => e.groupList.has(g)).some(_ => _);
             });
 

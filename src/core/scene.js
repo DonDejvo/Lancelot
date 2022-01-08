@@ -394,7 +394,9 @@ export class Scene {
         }
 
         if(this.debug) {
-            this.world.quadtree.draw(buffer);
+            if(this.world.quadtree) {
+                this.world.quadtree.draw(buffer);
+            }
 
             for(let body of this.world._bodies) {
                 body.draw(buffer);

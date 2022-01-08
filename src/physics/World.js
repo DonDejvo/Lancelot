@@ -1,7 +1,7 @@
 import { paramParser } from "../utils/ParamParser.js";
 import { QuadTree } from "../utils/Quadtree.js";
 import { Component } from "../core/Component.js";
-import { Ray, detectCollision } from "./Body.js";
+import { Vector } from "../utils/Vector.js";
 
 /**
  * 
@@ -18,7 +18,7 @@ export class World {
     _relaxationCount;
     _gravity;
     /** @type {QuadTree} */
-    _quadtree;
+    _quadtree = null;
     /** @type {Body[]} */
     _bodies = [];
     /** @type {Joint[]} */
@@ -33,11 +33,18 @@ export class World {
         this._relaxationCount = paramParser.parseValue(params.relaxationCount, 1);
         this._gravity = paramParser.parseValue(params.gravity, 0);
 
-        const bounds = paramParser.parseValue(params.bounds, [[-1000, -1000], [1000, 1000]]);
-        const cellDimension = paramParser.parseObject(params.cellDimension, { width: 100, height: 100 });
-        const cellLimit = paramParser.parseValue(params.cellLimit, 10);
+        this._isQuadtree = paramParser.parseValue(params.quadtree, false);
+
+        if(this._isQuadtree) {
+
+            const bounds = paramParser.parseValue(params.bounds, [[-1000, -1000], [1000, 1000]]);
+            const cellDimension = paramParser.parseObject(params.cellDimension, { width: 100, height: 100 });
+            const cellLimit = paramParser.parseValue(params.cellLimit, 10);
         
-        this._quadtree = new QuadTree(bounds, cellLimit);
+            this._quadtree = new QuadTree(bounds, cellLimit);
+
+        }
+  
     }
 
     get quadtree() {
@@ -45,7 +52,19 @@ export class World {
     }
 
     findNear(position, bounds) {
-        return this.quadtree.findNear(position, bounds).map(c => c.entity);
+        if(this._isQuadtree) {
+            return this.quadtree.findNear(position, bounds).map(c => c.entity);
+        }
+        return this.findNearWithoutQuadtree(position, bounds);
+    }
+
+    findNearWithoutQuadtree(position, bounds) {
+        const [w, h] = bounds;
+        const [x, y] = position;
+        return this._bodies.filter((body) => {
+            const bb = body.getBoundingRect();
+            return (x + w / 2 - (body.position.x - bb.width / 2)) * (x - w / 2 - (body.position.x + bb.width / 2)) <= 0 && (y + h / 2 - (body.position.y - bb.height / 2)) * (y - h / 2 - (body.position.y + bb.height / 2)) <= 0;
+        }).map((body) => body.parent);
     }
 
     addJoint(j) {
@@ -61,10 +80,11 @@ export class World {
 
     addBody(e, b) {
         e._body = b;
-        const treeController = new QuadtreeController({
-            quadtree: this._quadtree
-        });
-        e.addComponent(treeController);
+        if(this._isQuadtree) {
+            e.addComponent(new QuadtreeController({
+                quadtree: this._quadtree
+            }));
+        }
         this._bodies.push(b);
     }
 
@@ -102,12 +122,12 @@ export class World {
                 body.handleBehavior();
             }
         }
-        this._quadtree.clear();
-        for(let body of this._bodies) {
-            const treeController = body.getComponent("QuadtreeController");
-            treeController.updateClient();
+        if(this._isQuadtree) {
+            this._quadtree.clear();
+            for(let body of this._bodies) {
+                body.getComponent("QuadtreeController").updateClient();;
+            }
         }
-        
     }
 
     /*
