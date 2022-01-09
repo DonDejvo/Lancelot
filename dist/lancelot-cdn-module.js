@@ -835,7 +835,10 @@ var Game = class {
   _initControls() {
     const controls = paramParser.parseObject(this._config.controls, {
       active: false,
-      joystick: false,
+      left: 1,
+      right: 1,
+      sideButtons: true,
+      actionButtons: true,
       joystickRange: { min: 0, max: 100 },
       theme: "dark",
       layout: {
@@ -879,7 +882,7 @@ var Game = class {
     };
     const createButton = (right, bottom, text) => {
       const button = document.createElement("div");
-      button.classList.add("l_button", "l_controls");
+      button.classList.add("l_button", "l_element");
       button.style.width = "46px";
       button.style.height = "46px";
       button.style.right = right - 5 + "px";
@@ -893,7 +896,7 @@ var Game = class {
     };
     const createSideButton = (side) => {
       const button = document.createElement("div");
-      button.classList.add("l_side-button", "l_controls");
+      button.classList.add("l_side-button", "l_element");
       button.style.width = "46px";
       button.style.height = "46px";
       button.style.bottom = 190 + "px";
@@ -913,7 +916,7 @@ var Game = class {
     };
     const createActionButton = (text) => {
       const button = document.createElement("div");
-      button.classList.add("l_action-button", "l_controls");
+      button.classList.add("l_action-button", "l_element");
       button.style.width = "50px";
       button.style.height = "22px";
       if (text == "Start") {
@@ -940,7 +943,7 @@ var Game = class {
     controlsContainer.style.pointerEvents = "none";
     const controlsMap = {};
     const dpad = document.createElement("div");
-    dpad.classList.add("l_dpad", "l_controls");
+    dpad.classList.add("l_dpad", "l_element");
     dpad.style.width = "120px";
     dpad.style.height = "120px";
     dpad.style.left = "15px";
@@ -951,7 +954,6 @@ var Game = class {
     controlsContainer.appendChild(dpad);
     for (let i = 0; i < 4; ++i) {
       const box = document.createElement("div");
-      box.classList.add("l_controls");
       box.style.width = "120px";
       box.style.height = "120px";
       box.style.left = -75 + 150 * (i % 2) + "px";
@@ -960,7 +962,7 @@ var Game = class {
       dpad.appendChild(box);
     }
     const joystick = document.createElement("div");
-    joystick.classList.add("l_joystick", "l_controls");
+    joystick.classList.add("l_joystick", "l_element");
     joystick.style.width = "120px";
     joystick.style.height = "120px";
     joystick.style.right = "15px";
@@ -970,7 +972,6 @@ var Game = class {
     controlsContainer.appendChild(joystick);
     let joystickId = -1, dpadId = -1;
     const joystickPad = document.createElement("div");
-    joystickPad.classList.add("l_controls");
     joystickPad.style.width = "60px";
     joystickPad.style.height = "60px";
     joystickPad.style.left = "0";
@@ -1116,13 +1117,30 @@ var Game = class {
         });
       });
     }
-    if (controls.joystick) {
+    switch (controls.left) {
+      case 0:
+        dpad.style.display = "none";
+        break;
+    }
+    if (controls.left == 0) {
+      dpad.style.display = "none";
+    }
+    if (controls.right == 2 || controls.right == 0) {
       controlsMap.X_Button.style.display = "none";
       controlsMap.Y_Button.style.display = "none";
       controlsMap.A_Button.style.display = "none";
       controlsMap.B_Button.style.display = "none";
-    } else {
+    }
+    if (controls.right == 1 || controls.right == 0) {
       joystick.style.display = "none";
+    }
+    if (!controls.sideButtons) {
+      controlsMap.L_Button.style.display = "none";
+      controlsMap.R_Button.style.display = "none";
+    }
+    if (!controls.actionButtons) {
+      controlsMap.START_Button.style.display = "none";
+      controlsMap.SELECT_Button.style.display = "none";
     }
   }
 };

@@ -34,12 +34,12 @@ In this tutorial we're going to cover setting-up a development environment with 
 
 ## Get Lancelot
 
-Lancelot 0.15.3 is current version and was released on 9th January 2022.
+Lancelot 0.15.4 is current version and was released on 9th January 2022.
 
 Lancelot is on [jsDelivr](https://www.jsdelivr.com/package/gh/dondejvo/lancelot) CDN. Include one of following before all other scripts in your html:
 
 ``` html
-<script src="https://cdn.jsdelivr.net/gh/DonDejvo/Lancelot@0.15.3/dist/lancelot-cdn-nomodule.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/DonDejvo/Lancelot@0.15.4/dist/lancelot-cdn-nomodule.js"></script>
 ```
 
 Github provides the option to download the whole repository as a zip or tar file. However we would strongly recommend you learn to use git instead. It will allow you to easily update to the latest versions of Phaser as they are released.
