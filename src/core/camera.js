@@ -1,5 +1,6 @@
 import { Animator } from "../utils/Animator.js";
 import { math } from "../utils/Math.js";
+import { paramParser } from "../utils/ParamParser.js";
 import { Shaker } from "../utils/Shaker.js";
 import { Vector } from "../utils/Vector.js";
 import { Entity } from "./Entity.js";
@@ -8,6 +9,7 @@ export class Camera extends Entity {
     
     _scale = new Animator(1.0);
     _target = null;
+    _followOptions = null;
     _t = 4;
     _vel = new Vector();
     _shaker = new Shaker();
@@ -42,13 +44,18 @@ export class Camera extends Entity {
         return this._shaker;
     }
 
-    follow(target, t = 4) {
+    follow(target, options = {}) {
         this._target = target;
-        this._t = t;
+        this._followOptions = paramParser.parseObject(options, {
+            x: true,
+            y: true,
+            transition: 1.0
+        });
     }
 
     unfollow() {
         this._target = null;
+        this._followOptions = null;
     }
 
     isScaling() {
@@ -78,8 +85,16 @@ export class Camera extends Entity {
         if (this.isMoving()) {
             this._position.update(elapsedTimeS);
         } else if (this._target != null) {
-            let t = math.sat(this._t * elapsedTimeS * 60);
-            this.position.lerp(this._target.position, t);
+            let t = math.sat(this._followOptions.transition * elapsedTimeS * 60);
+            if(this._followOptions.x && this._followOptions.y) {
+                this.position.lerp(this._target.position, t);
+            } else {
+                if(this._followOptions.x) {
+                    this.position.x = math.lerp(t, this.position.x, this._target.position.x);
+                } else if(this._followOptions.y) {
+                    this.position.y = math.lerp(t, this.position.y, this._target.position.y);
+                }
+            }
         } else {
             const vel = this._vel.clone();
             vel.mult(elapsedTimeS);

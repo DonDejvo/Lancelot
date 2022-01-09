@@ -880,6 +880,7 @@
       };
       const createButton = (right, bottom, text) => {
         const button = document.createElement("div");
+        button.classList.add("l_button", "l_controls");
         button.style.width = "46px";
         button.style.height = "46px";
         button.style.right = right - 5 + "px";
@@ -893,6 +894,7 @@
       };
       const createSideButton = (side) => {
         const button = document.createElement("div");
+        button.classList.add("l_side-button", "l_controls");
         button.style.width = "46px";
         button.style.height = "46px";
         button.style.bottom = 190 + "px";
@@ -912,6 +914,7 @@
       };
       const createActionButton = (text) => {
         const button = document.createElement("div");
+        button.classList.add("l_action-button", "l_controls");
         button.style.width = "50px";
         button.style.height = "22px";
         if (text == "Start") {
@@ -938,6 +941,7 @@
       controlsContainer.style.pointerEvents = "none";
       const controlsMap = {};
       const dpad = document.createElement("div");
+      dpad.classList.add("l_dpad", "l_controls");
       dpad.style.width = "120px";
       dpad.style.height = "120px";
       dpad.style.left = "15px";
@@ -948,6 +952,7 @@
       controlsContainer.appendChild(dpad);
       for (let i = 0; i < 4; ++i) {
         const box = document.createElement("div");
+        box.classList.add("l_controls");
         box.style.width = "120px";
         box.style.height = "120px";
         box.style.left = -75 + 150 * (i % 2) + "px";
@@ -956,6 +961,7 @@
         dpad.appendChild(box);
       }
       const joystick = document.createElement("div");
+      joystick.classList.add("l_joystick", "l_controls");
       joystick.style.width = "120px";
       joystick.style.height = "120px";
       joystick.style.right = "15px";
@@ -965,6 +971,7 @@
       controlsContainer.appendChild(joystick);
       let joystickId = -1, dpadId = -1;
       const joystickPad = document.createElement("div");
+      joystickPad.classList.add("l_controls");
       joystickPad.style.width = "60px";
       joystickPad.style.height = "60px";
       joystickPad.style.left = "0";
@@ -982,7 +989,7 @@
         if (d > 60) {
           v.unit().mult(60);
         }
-        const v1 = v.unit().mult(math.lerp(math.sat(d / 60), controls.joystickRange.min, controls.joystickRange.max));
+        const v1 = v.clone().unit().mult(math.lerp(math.sat(d / 60), controls.joystickRange.min, controls.joystickRange.max));
         joystickPad.style.left = v.x + boundingRect.width / 4 + "px";
         joystickPad.style.top = v.y + boundingRect.height / 4 + "px";
         const con = this._renderer._container.getBoundingClientRect();
@@ -1816,6 +1823,7 @@
   var Camera = class extends Entity {
     _scale = new Animator(1);
     _target = null;
+    _followOptions = null;
     _t = 4;
     _vel = new Vector();
     _shaker = new Shaker();
@@ -1842,12 +1850,17 @@
     get shaker() {
       return this._shaker;
     }
-    follow(target, t = 4) {
+    follow(target, options = {}) {
       this._target = target;
-      this._t = t;
+      this._followOptions = paramParser.parseObject(options, {
+        x: true,
+        y: true,
+        transition: 1
+      });
     }
     unfollow() {
       this._target = null;
+      this._followOptions = null;
     }
     isScaling() {
       return this._scale.isAnimating();
@@ -1870,8 +1883,16 @@
       if (this.isMoving()) {
         this._position.update(elapsedTimeS);
       } else if (this._target != null) {
-        let t = math.sat(this._t * elapsedTimeS * 60);
-        this.position.lerp(this._target.position, t);
+        let t = math.sat(this._followOptions.transition * elapsedTimeS * 60);
+        if (this._followOptions.x && this._followOptions.y) {
+          this.position.lerp(this._target.position, t);
+        } else {
+          if (this._followOptions.x) {
+            this.position.x = math.lerp(t, this.position.x, this._target.position.x);
+          } else if (this._followOptions.y) {
+            this.position.y = math.lerp(t, this.position.y, this._target.position.y);
+          }
+        }
       } else {
         const vel = this._vel.clone();
         vel.mult(elapsedTimeS);

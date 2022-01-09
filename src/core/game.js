@@ -301,6 +301,7 @@ export class Game {
 
         const createButton = (right, bottom, text) => {
             const button = document.createElement("div");
+            button.classList.add("l_button", "l_controls");
             button.style.width = "46px";
             button.style.height = "46px";
             button.style.right = right - 5 + "px";
@@ -315,6 +316,7 @@ export class Game {
 
         const createSideButton = (side) => {
             const button = document.createElement("div");
+            button.classList.add("l_side-button", "l_controls");
             button.style.width = "46px";
             button.style.height = "46px";
             button.style.bottom = 190 + "px";
@@ -335,6 +337,7 @@ export class Game {
 
         const createActionButton = (text) => {
             const button = document.createElement("div");
+            button.classList.add("l_action-button", "l_controls");
             button.style.width = "50px";
             button.style.height = "22px";
             if(text == "Start") {
@@ -364,6 +367,7 @@ export class Game {
         const controlsMap = {};
 
         const dpad = document.createElement("div");
+        dpad.classList.add("l_dpad", "l_controls");
         dpad.style.width = "120px";
         dpad.style.height = "120px";
         dpad.style.left = "15px";
@@ -375,6 +379,7 @@ export class Game {
 
         for(let i = 0; i < 4; ++i) {
             const box = document.createElement("div");
+            box.classList.add("l_controls");
             box.style.width = "120px";
             box.style.height = "120px";
             box.style.left = (-75 + 150 * (i % 2)) + "px";
@@ -384,6 +389,7 @@ export class Game {
         }
 
         const joystick = document.createElement("div");
+        joystick.classList.add("l_joystick", "l_controls");
         joystick.style.width = "120px";
         joystick.style.height = "120px";
         joystick.style.right = "15px";
@@ -395,6 +401,7 @@ export class Game {
         let joystickId = -1, dpadId = -1;
 
         const joystickPad = document.createElement("div");
+        joystickPad.classList.add("l_controls");
         joystickPad.style.width = "60px";
         joystickPad.style.height = "60px";
         joystickPad.style.left = "0";
@@ -413,7 +420,7 @@ export class Game {
             if(d > 60) {
                 v.unit().mult(60);
             }
-            const v1 = v.unit().mult(math.lerp(math.sat(d / 60), controls.joystickRange.min, controls.joystickRange.max));
+            const v1 = v.clone().unit().mult(math.lerp(math.sat(d / 60), controls.joystickRange.min, controls.joystickRange.max));
             joystickPad.style.left = (v.x + boundingRect.width / 4) + "px";
             joystickPad.style.top = (v.y + boundingRect.height / 4) + "px";
             const con = this._renderer._container.getBoundingClientRect();
