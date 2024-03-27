@@ -510,7 +510,9 @@ export class Ball extends Body {
     draw(ctx) {
         ctx.beginPath();
         ctx.strokeStyle = "white";
-        ctx.arc(0, 0, this.radius, 0, 2 * Math.PI);
+        ctx.arc(this.position.x, this.position.y, this.radius, 0, 2 * Math.PI);
+        ctx.moveTo(this.position.x, this.position.y);
+        ctx.lineTo(this.position.x + Math.cos(this.angle) * this.radius, this.position.y + Math.sin(this.angle) * this.radius);
         ctx.stroke();
     }
 }

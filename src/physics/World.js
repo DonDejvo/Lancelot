@@ -31,7 +31,7 @@ export class World {
     constructor(params = {}) {
 
         this._relaxationCount = paramParser.parseValue(params.relaxationCount, 1);
-        this._gravity = paramParser.parseValue(params.gravity, 0);
+        this._gravity = paramParser.parseValue(params.gravity, new Vector());
 
         this._isQuadtree = paramParser.parseValue(params.quadtree, false);
 
@@ -49,6 +49,14 @@ export class World {
 
     get quadtree() {
         return this._quadtree;
+    }
+
+    get gravity() {
+        return this._gravity;
+    }
+
+    set gravity(value) {
+        this._gravity = value;
     }
 
     findNear(position, bounds) {
@@ -110,7 +118,7 @@ export class World {
         }
         for(let body of this._bodies) {
             if(body.mass != 0) {
-                body.velocity.y += this._gravity * elapsedTimeS;
+                body.velocity.add(this._gravity.clone().mult(elapsedTimeS));
             }
             body.updatePosition(elapsedTimeS);
         }

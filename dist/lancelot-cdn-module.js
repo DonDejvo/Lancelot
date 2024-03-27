@@ -1532,7 +1532,7 @@ var World = class {
   _joints = [];
   constructor(params = {}) {
     this._relaxationCount = paramParser.parseValue(params.relaxationCount, 1);
-    this._gravity = paramParser.parseValue(params.gravity, 0);
+    this._gravity = paramParser.parseValue(params.gravity, new Vector());
     this._isQuadtree = paramParser.parseValue(params.quadtree, false);
     if (this._isQuadtree) {
       const bounds = paramParser.parseValue(params.bounds, [[-1e3, -1e3], [1e3, 1e3]]);
@@ -1543,6 +1543,12 @@ var World = class {
   }
   get quadtree() {
     return this._quadtree;
+  }
+  get gravity() {
+    return this._gravity;
+  }
+  set gravity(value) {
+    this._gravity = value;
   }
   findNear(position, bounds) {
     if (this._isQuadtree) {
@@ -1597,7 +1603,7 @@ var World = class {
     }
     for (let body of this._bodies) {
       if (body.mass != 0) {
-        body.velocity.y += this._gravity * elapsedTimeS;
+        body.velocity.add(this._gravity.clone().mult(elapsedTimeS));
       }
       body.updatePosition(elapsedTimeS);
     }
@@ -4164,7 +4170,9 @@ var Ball = class extends Body {
   draw(ctx) {
     ctx.beginPath();
     ctx.strokeStyle = "white";
-    ctx.arc(0, 0, this.radius, 0, 2 * Math.PI);
+    ctx.arc(this.position.x, this.position.y, this.radius, 0, 2 * Math.PI);
+    ctx.moveTo(this.position.x, this.position.y);
+    ctx.lineTo(this.position.x + Math.cos(this.angle) * this.radius, this.position.y + Math.sin(this.angle) * this.radius);
     ctx.stroke();
   }
 };
